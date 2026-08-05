@@ -5998,6 +5998,56 @@ function portraitFor(kind,type,p){
   g.strokeStyle='rgba(255,240,190,.5)';g.lineWidth=.8;g.strokeRect(5,5,S-10,S-10);
   return PORTRAITS[key]=c.toDataURL();
 }
+/* Occluded-ally silhouettes: when a friendly unit walks behind a building or
+   tree canopy, redraw it as a flat team-color ghost so it never vanishes.
+   (The one engine-spec idea grafted into the old game — pure QoL, no balance.) */
+let ghostC=null,ghostG=null;
+function unitOccluded(u,px,py){
+  for(const b of G.blds){
+    if(!b.built)continue;
+    const hgt=IHT[b.type]||30;
+    if(hgt<30)continue;                       // walls and farms are too low to hide anyone
+    const fp=isoE(b.tx+b.size,b.ty+b.size);   // building sprite's lowest corner
+    if(fp.y<=py+2)continue;                   // painted before the unit — can't cover it
+    if(fp.y-py>hgt+b.size*13+6)continue;      // unit is above the sprite's top
+    const cx=isoE(b.tx+b.size/2,b.ty+b.size/2).x;
+    if(Math.abs(cx-px)<b.size*26+14)return true;
+  }
+  const ux=Math.floor(u.x),uy=Math.floor(u.y);
+  for(let dy=-3;dy<=4;dy++)for(let dx=-3;dx<=4;dx++){
+    const s=dx+dy;if(s<1||s>4)continue;       // only tiles painted after the unit
+    const r=G.res[(ux+dx)+','+(uy+dy)];
+    if(!r||r.type!=='wood')continue;
+    const rp=isoE(r.x+.5,r.y+.5);
+    if(Math.abs(rp.x-px)<=20&&rp.y>py+1&&rp.y-py<52)return true;
+  }
+  return false;
+}
+function drawGhosts(){
+  for(const u of G.units){
+    if(u.hp<=0||!allied(u.p,0))continue;
+    const pp=isoE(u.x,u.y),px=pp.x,py=pp.y;
+    if(px<cullX0||px>cullX1||py<cullY0||py>cullY1)continue;
+    if(!tileVis(u.x,u.y))continue;
+    if(!unitOccluded(u,px,py))continue;
+    if(!ghostC){ghostC=document.createElement('canvas');ghostC.width=110;ghostC.height=124;
+      ghostG=ghostC.getContext('2d');}
+    ghostG.setTransform(1,0,0,1,0,0);
+    ghostG.clearRect(0,0,110,124);
+    ghostG.translate(55,88);ghostG.scale(1.18,1.18);ghostG.lineCap='round';
+    const old=ctx;ctx=ghostG;
+    try{drawUnitBody(u,G.t*9+u.id*1.71,0,TEAMS[u.p]);}
+    finally{ctx=old;}
+    ghostG.setTransform(1,0,0,1,0,0);
+    ghostG.globalCompositeOperation='source-in';
+    ghostG.fillStyle=TEAMS[u.p].main;
+    ghostG.fillRect(0,0,110,124);
+    ghostG.globalCompositeOperation='source-over';
+    ctx.globalAlpha=.42;
+    ctx.drawImage(ghostC,px-55,py-88);
+    ctx.globalAlpha=1;
+  }
+}
 function drawUnit(u){
   const pp=isoE(u.x,u.y),px=pp.x,py=pp.y;
   if(px<cullX0||px>cullX1||py<cullY0||py>cullY1)return;
@@ -6897,6 +6947,7 @@ function draw(){
     else if(e.b)drawBld(e.b);
     else drawUnit(e.u);
   }
+  drawGhosts(); // occluded allies show through as team-color silhouettes
   for(const p of G.proj){
     if(!tileVis(p.x0,p.y0)&&!tileVis(p.x1,p.y1))continue;
     drawArrow(p);}
