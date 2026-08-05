@@ -3607,6 +3607,7 @@ function getResSpr(type,h){
     g.beginPath();g.moveTo(-8,-13);g.lineTo(-8,-10);
     g.moveTo(-9.5,-11.5);g.lineTo(-6.5,-11.5);g.stroke();
   }
+  spriteGrain(c,h*53+key.length*911,.8); // trees/gold/berries get the dither too
   const sp={c,ox:ax,oy:ay,w:W,h:Ht};
   RES_SPR[key]=sp;return sp;
 }
@@ -4028,6 +4029,24 @@ function hayAt(g,x,y){
   g.beginPath();g.moveTo(x-3.4,y-4.2);g.lineTo(x-1.2,y-2);
   g.moveTo(x+.4,y-5);g.lineTo(x+2.4,y-2.6);g.stroke();
 }
+/* Pre-render grain: seeded dither speckle composited 'source-atop' so it only
+   lands on painted pixels. Applied ONCE at sprite-cache build — this is what
+   turns smooth vector fills into surfaces that read like 90s pre-rendered art. */
+function spriteGrain(c,seed,strength){
+  const g=c.getContext('2d');
+  g.setTransform(1,0,0,1,0,0);
+  g.globalCompositeOperation='source-atop';
+  const gr=mulberry((seed|0)+7);
+  const n=Math.round(c.width*c.height/26);
+  const k=strength||1;
+  for(let i=0;i<n;i++){
+    g.fillStyle=gr()<.52
+      ?'rgba(28,20,10,'+((.05+gr()*.09)*k).toFixed(3)+')'
+      :'rgba(255,242,214,'+((.04+gr()*.07)*k).toFixed(3)+')';
+    g.fillRect(gr()*c.width,gr()*c.height,1.4,1.4);
+  }
+  g.globalCompositeOperation='source-over';
+}
 function mkIsoSpr(s,H,fn){
   const w=2*s*IW+56,h=H+2*s*IH+16;
   const c=document.createElement('canvas');
@@ -4035,6 +4054,7 @@ function mkIsoSpr(s,H,fn){
   const g=c.getContext('2d');
   g.setTransform(TREZ,0,0,TREZ,(s*IW+28)*TREZ,(H+2)*TREZ);
   g.lineJoin='round';fn(g,s);
+  spriteGrain(c,s*131+H*17+w);
   return{c,ox:s*IW+28,oy:H+2,w,h,H};
 }
 function dirtPad(g,s,alpha){
@@ -4844,12 +4864,12 @@ function drawManRig(u,t,TC,mc){
   const phi=octPhi(u),pr=rigProj(phi),s=pr.s,c=pr.c,sgn=c>=0?1:-1;
   const g=gaitOf(u,t);
   const ap=atkPhase(u);
-  const bob=g.mv?Math.abs(Math.sin(Math.PI*2*g.ph))*.55:0;
+  const bob=g.mv?Math.abs(Math.sin(Math.PI*2*g.ph))*.3:0; // stiffer, sprite-like gait
   const tunicC=mc.tunic==='team'?TC.main:mc.tunic==='dark'?TC.dark:mc.tunic;
   const working=u.state==='gather'||u.state==='farming'||u.state==='building';
   ctx.save();ctx.translate(0,-bob);
   if(ap&&(ap.k===2||ap.k===3)&&mc.weapon!=='bow'&&mc.weapon!=='javelin'&&mc.weapon!=='staff'){
-    const k=ap.k===2?4.2*ap.f:4.2*(1-ap.f)*.5; // directional melee lunge
+    const k=ap.k===2?2.4*ap.f:2.4*(1-ap.f)*.5; // directional melee lunge (restrained)
     ctx.translate(Math.cos(pr.a)*k,Math.sin(pr.a)*k);}
   /* legs (or robe hem) */
   if(mc.robe){
@@ -5769,7 +5789,7 @@ function drawShip(u,t,TC){
   let phi=octPhi(u);
   phi=Math.round((phi-Math.PI/4)/(Math.PI/2))*(Math.PI/2)+Math.PI/4;
   const pr=rigProj(phi),s=pr.s,c=pr.c,sgn=c>=0?1:-1;
-  const bob=Math.sin(t*.9+u.id*2.1)*.8;
+  const bob=Math.sin(t*.9+u.id*2.1)*.45; // gentler swell
   ctx.save();ctx.translate(0,bob);
   let P={ // per-type hull proportions
     fishing:{HL:3.4,HW:1.5,Z:3.4,hull:'#8a6538',sail:.6},
@@ -6923,7 +6943,7 @@ function draw(){
       if(e.r.type==='wood'&&swayOk){
         // gentle wind sway, phase per tree, pivot at the trunk base
         // (skipped when zoomed out — invisible there and rotate is costly x2500 trees)
-        const ang=Math.sin(G.t*1.2+((e.r.x*13+e.r.y*29)%63)/10)*.02;
+        const ang=Math.sin(G.t*.8+((e.r.x*13+e.r.y*29)%63)/10)*.007; // barely-there wind
         ctx.save();ctx.translate(rp.x,rp.y+8);ctx.rotate(ang);
         ctx.drawImage(sp.c,-sp.ox,-sp.oy,sp.w,sp.h);ctx.restore();
       }else ctx.drawImage(sp.c,rp.x-sp.ox,rp.y-sp.oy+8,sp.w,sp.h);
