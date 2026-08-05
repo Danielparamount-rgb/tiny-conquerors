@@ -52,7 +52,7 @@ A mobile-friendly, browser-based RTS inspired by Age of Empires II: The Conquero
 
 ## Render app deployment — ✅ LIVE
 - **https://tiny-conquerors.onrender.com** — Render static site `tiny-conquerors`, service ID `srv-d9pibf5bedkc73c5qumg`, connected to GitHub repo Danielparamount-rgb/tiny-conquerors, branch `main`, **publish directory `app`**, no build command. Auto-deploys on push to main.
-- Current live version: **sw `tq-v11`** (prerender-feel). Verified after every deploy by fetching sw.js + index.html from the shell (bypasses the cache-first SW).
+- Current live version: **sw `tq-v12`** (age-tier-art). Verified after every deploy by fetching sw.js + index.html from the shell (bypasses the cache-first SW).
 - First verified live 2026-08-05 (tq-v1): SW active, manifest served as `application/manifest+json` (installable), icons OK, zero console errors.
 - **GOTCHA — Render header rule for the manifest**: Render serves `.webmanifest` as `binary/octet-stream`, which can block Add-to-Home-Screen. Fixed with a dashboard Headers rule: path `/manifest.webmanifest`, name `Content-Type`, value `application/manifest+json`. Saving headers triggers a redeploy — during it files 404 inconsistently for ~30s; that's transient, re-check before diagnosing.
 - **GOTCHA — testing the live site**: the SW is cache-first, so `fetch()` from the page returns CACHED responses (including stale Content-Type). To test the origin, unregister the SW + delete caches first, or the header change looks like it did nothing.
@@ -73,6 +73,11 @@ A mobile-friendly, browser-based RTS inspired by Age of Empires II: The Conquero
 - IP boundary told to user (they asked for "exactly like AoE2", "just for friends"): imitate style with ORIGINAL art/sounds only; no ripped Microsoft assets, especially once hosted on Render.
 
 ## Recent fixes (last published state)
+- Label "age-tier-art" (2026-08-05, sw tq-v12, commit eeca4d8): user reference-shot feedback — "larger, much more textured, looks different per age."
+  - **Buildings draw 13% larger** (`BS=1.13` in drawBld, thin/farm exempt), anchored at the SOUTH corner (`southY=pt.y+2*size*IH`; top-left = `southY-(sp.oy+2*size*IH)*BS`) so bases/footprints stay put. Gameplay footprints unchanged.
+  - **Grain denser**: spriteGrain divisor 26→19, buildings pass strength 1.35.
+  - **3-tier age looks**: getBldSpr `ab` is now 0 (Dark/Feudal thatch) / 1 (Castle shingle) / 2 (Imperial). ISPR keys already carried ab; portraitFor's bucket updated to match. Imperial art: houses = STONE walls + masonry + HROOF[2] slate + chimney; tc = slate roof + gilded ridge cap/finials; barracks = slate + 3 team pennants on the ridge. **Pattern for future painters: take `ab` and branch; the cache handles the rest. Roof choice `ab===2?HROOF[2]:TERRA` is the house rule.**
+  - Verified: Dark-vs-Imperial comparison screenshots (age-dark/age-imp.jpg beside serve2), 0 errors.
 - Label "prerender-feel" (2026-08-05, sw tq-v11, commit 5705e9a): user (with a period-RTS screenshot as style reference) confirmed the palette is right but wanted less cartoon bounce + more pre-rendered surface texture. Two changes:
   - **`spriteGrain(c,seed,strength)`** (above mkIsoSpr): seeded dither speckle composited `source-atop` (only lands on painted pixels), applied ONCE at cache build in mkIsoSpr (all buildings) and getResSpr's billboard path (trees/gold/berries; fish branch returns early and is untouched). Density c.w*c.h/26, 1.4px specks, warm-dark/pale pairs. Runtime cost zero — warm frame 3.1ms.
   - **Motion damping** toward stiff sprite-era movement: drawManRig walk bob .55→.3, melee lunge 4.2→2.4, tree sway .02→.007 & slower (still gated by z>=.9 + <320 trees), ship bob .8→.45. Ram slam untouched (mechanical).

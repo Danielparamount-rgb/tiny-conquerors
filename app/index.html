@@ -97,7 +97,8 @@
     box-shadow:inset 0 0 20px rgba(120,85,40,.45), inset 0 0 2px rgba(60,40,20,.6);}
   #civLine{font-family:Georgia,serif;font-size:13.5px;display:flex;gap:10px;align-items:baseline;}
   #civLine span{font-style:italic;font-size:11px;color:#6b5330;}
-  #scrollHint{font-size:10.5px;color:#5c4a2e;margin-top:2px;line-height:1.35;}
+  #scrollHint{font-size:10.5px;color:#5c4a2e;margin-top:2px;line-height:1.35;
+    min-height:29px;} /* reserve two lines — hover tips must never resize the panel */
   #scrollLogo{position:absolute;left:0;right:0;bottom:2px;text-align:center;font-family:Georgia,serif;font-size:8.5px;letter-spacing:.4em;color:rgba(107,83,48,.45);pointer-events:none;}
   #unitCard{grid-area:card;display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 6px;min-width:0;
     background:linear-gradient(rgba(16,14,10,.55),rgba(16,14,10,.3));
@@ -3035,7 +3036,11 @@ window.addEventListener('resize',resize);
 let chkT=0;
 function chkView(){
   const wrap=document.getElementById('viewwrap');
-  if(wrap.clientWidth!==vw||wrap.clientHeight!==vh)resize();
+  if(wrap.clientWidth!==vw||wrap.clientHeight!==vh){
+    resize();
+    // reallocating the canvas blanks it — repaint NOW so no empty frame shows
+    if(G&&typeof draw==='function')try{draw();}catch(e){}
+  }
 }
 if(window.ResizeObserver)
   new ResizeObserver(chkView).observe(document.getElementById('viewwrap'));
