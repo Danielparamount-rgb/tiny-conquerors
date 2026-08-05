@@ -1,44 +1,46 @@
 # Tiny Conquerors — Session Handoff
 
 ## What this is
-A mobile-friendly, browser-based RTS inspired by Age of Empires II: The Conquerors (original code and art — no Microsoft assets or names). Built for Daniel across one long session; fully playable on phone (touch) and desktop (mouse + hotkeys).
+A mobile-friendly, browser-based RTS inspired by Age of Empires II: The Conquerors (original code and art — no Microsoft assets or names). Built for Daniel across many sessions; fully playable on phone (touch) and desktop (mouse + hotkeys). Since 2026-08-05 the game content is aligned to the REAL Conquerors manual (`C:\Users\deove\Downloads\Manual_AOE2_CONQ.pdf`, text pre-extracted to scratchpads via pdfplumber — Python 3.14 works on this machine now).
 
 ## Live artifact
 - **URL:** https://claude.ai/code/artifact/2f3b1c5f-bcf7-4580-b292-afecb4f0fcbb
 - **IMPORTANT for a new session:** to keep this URL when republishing, pass it as the `url` parameter to the Artifact tool (a conversation that didn't publish it otherwise mints a NEW url). Keep favicon "⚔️" and title "Tiny Conquerors".
 
 ## Source
-- **Canonical source:** `C:\Users\deove\.claude\tiny-conquerors\tiny-conquerors.html` (single self-contained file, ~3000 lines; the scratchpad copy from the old session is gone).
+- **Canonical source:** `C:\Users\deove\.claude\tiny-conquerors\tiny-conquerors.html` (single self-contained file, ~7,000 lines).
 - The file has NO doctype/html/head/body — the artifact publisher wraps it. Starts with `<title>`, then `<style>`, HTML fragments, one big `<script>`.
 
 ## How to test locally (this machine)
-- **No Python, no Node** (python.exe is the Microsoft Store stub). Use `serve.ps1` in this folder — a PowerShell HttpListener serving this folder on **http://localhost:8741/** (run in background via the PowerShell tool).
-- `serve.ps1` now serves `$PSScriptRoot` (it used to point at a dead session's scratchpad, which served a STALE test.html — if the page looks stale, check which folder the server banner says it's serving, and add a `?v=N` cache-buster when navigating).
+- Use **`serve2.ps1`** — PowerShell HttpListener, `-Port` param (default **8742**), serves this folder AND accepts **POST /save?name=x.jpg** (body = base64 → written beside the server; the page can `fetch('/save?...',{method:'POST',body:b64})` to hand canvas screenshots to the session even when the Browser pane is hidden and `computer screenshot` times out). `serve.ps1` is the older fixed-8741 version, no /save.
+- `.claude/launch.json` (at `C:\Users\deove\.claude\.claude\launch.json`) has a `tiny-conquerors` entry → `preview_start {name:'tiny-conquerors'}` starts serve2 on 8742.
 - The raw file needs a wrapper for local testing (artifact wrapper adds doctype/viewport). Build `test.html` like:
   `$c=[IO.File]::ReadAllText("...\tiny-conquerors.html"); [IO.File]::WriteAllText("...\test.html","<!doctype html><html><head><meta charset=`"utf-8`"><meta name=`"viewport`" content=`"width=device-width, initial-scale=1, user-scalable=no`"></head><body>"+$c+"</body></html>")`
-- Open http://localhost:8741/test.html in the Browser pane (`preview_start` with `{url}`), `resize_window` preset mobile.
-- **Headless testing pattern that works well:** `javascript_tool` → `document.getElementById('startBtn').click()` then call `step(0.05)` in loops to fast-forward the simulation (20k steps = ~17 game-min), inspect `G` directly. `draw()` renders one frame. `G.vis.fill(2); fogDirty=true` reveals the map for screenshots. Difficulty buttons: `.diff button[data-d="0|1|2"]`; civ select: set global `civSel` before clicking start.
+- Navigate to http://localhost:8742/test.html?v=N (bump N — cache-buster) in the Browser pane.
+- **Headless testing pattern that works well:** `javascript_tool` → `document.getElementById('startBtn').click()` then call `step(0.05)` in loops to fast-forward the simulation (12k steps = 10 game-min), inspect `G` directly. `draw()` renders one frame. `G.vis.fill(2); fogDirty=true` reveals the map for screenshots. Buttons: `.diff button[data-d=0|1|2]` difficulty, `[data-m=0|1]` map, `[data-n=2..8]` players, `[data-t]` teams; set global `civSel` before clicking start. **Screenshots while the pane is hidden**: force-size the view (`vw=1280;vh=760;dpr=1;view.width=...;vig=...`), `centerOn` math is screen-space top-left: `p=isoPt(tx,ty); cam.x=p.x-vw/z/2`, then `draw()` + toDataURL + POST /save. Gallery-scene buildings need `queue:[],qt:0,gar:[]` or drawBld throws. A 10-min UNATTENDED sim usually ends in a loss → `G.over=true` → `saveGame()` refuses; test save/load on live games.
 
 ## Architecture (all in the one <script>)
-- **Constants:** MAP=64, TILE=26 (logic tile), START positions, AGES/AGE_COST, UNITS (incl. 8 unique units), MILITIA_LINE names, CIVS (8 civilizations with bonuses; `civOf(p)`), BLDS (tc/house/farm/camp/barracks/range/stable/siege/castle/tower/wall/gate), DIFF (3 difficulties: trickle, wave timings, villager targets).
-- **State `G`:** units[], blds[], res{} (key "x,y"), map[][] (0/1 blocked), water{}, ford{}, elev (Uint8Array hills), wallMap/gateMap (thin buildings), vis (fog Uint8Array: 0 unexplored/1 explored/2 visible), P[2] (resources, age, civ), ai{}, fx/corpses/proj, cam{x,y,z}, sel[], placing/pend/wallA/pendLine.
-- **Sim:** fixed 0.05s steps in `step(dt)`; unit state machine in `updateUnit` (idle/move/toRes/gather/toFarm/farming/return/toBuild/building/attack). A* `findPath(sx,sy,tx,ty,team)` with binary heap, 7000-node cap; team-aware: own built gates passable, enemy walls passable at +30 cost (units auto-attack blocking walls via `followPath` check). Separation pushes only stationary units.
-- **AI (`aiThink`)**: villager job balancing, houses, storage camps near far resources, military buildings by age, castle + unique unit, banks resources for age-up (`saveForAge`), attack waves with persistent `u.wave` target (re-targets after breaching walls).
-- **Rendering:** ISOMETRIC. `isoPt/invIso` (IW=26, IH=13); `isoE` adds hill lift (elevF bilinear ×10px). Terrain painted flat in texture space then skewed via `ctx.transform(.5,.25,-.5,.25,0,0)`. Buildings = pre-rendered iso sprites (`ISO_ART` + `mkIsoSpr`, gradient faces via `isoBlock`/`roofGable`); NOTE: an older flat sprite system (`drawBldArt`/`mkSpr`) is DEAD CODE above the iso one — `getBldSpr` is redeclared later and wins. Units are procedural billboards (drawSword/drawSpear/drawArcher/drawScout/drawKnight/drawRam + per-unique-type flourishes), y-sorted with resources (trees are sprites, `getResSpr`). Fog canvas (MAP px) drawn skewed; diamond minimap via transform. Animated water shimmer from `G.waterList`.
-- **Sound:** WebAudio synth (`snd(kind)`) — chop/mine/sword/hit/arrow/click/done/train/age/horn/win/lose, throttled per kind, gated by fog visibility. `initAudio()` on start tap; 🔊/🔇 button `#sndBtn`.
-- **Input:** tap select/command; drag pans; mouse-drag = box select (touch: arm via `#boxBtn`); double-tap = select all of type on screen; pinch + wheel zoom; minimap tap (diamond inverse); wall placement = two taps → Bresenham line ghost → confirm. Hotkeys: H/C/A, `.`/`,` idle cycling, arrows pan, Space, Del, Esc; build letters in `BUILD_KEYS`; train letters in `TRAIN_KEYS_BY_BLD` (castle = U).
+- **Constants:** MAP=64/96 (let, by player count), TILE=26, AGES/AGE_COST (manual values; `ageCostOf(p,age)` applies civ discounts), **UNITS (~30 incl. 8 ships)** with `line:{}` per-age upgrade lines and `elite:{}` Imperial stats — **`statFor(type,p)` is the single stat resolver** (addUnit/atkOf/rangeOf/rofOf/unitName all use it), **CIVS (18, manual bonuses; first 12 order FROZEN for save compat)**, **UTECHS** (19 unique techs, castle-researched), **BS_TECHS** (blacksmith 5 lines × 3 tiers; armor = flat damage reduction via `bsArmorOf`), BLDS (tc/house/farm/camp/barracks/range/stable/siege/castle/tower/market/monastery/blacksmith/**dock**/walls/gates), DIFF, `IHT` sprite heights (**every new building type needs an entry or portraits crash**), `trainsFor(b,p)` = single source of trainable units.
+- **State `G`:** units[], blds[], res{} (types wood/food/gold/**fish**), map[][], water{}, ford{}, **navBlock{}** (dock footprints — ships route around), elev, wallMap/gateMap, vis, P[NP] (res, age, civ, **uts[], bs{}, pt**), ais[], teams[], relics[], groups{}, fx/corpses/rubble/stuck/pings/proj, cam, sel[], inspect, placing/pend/wallA/pendLine.
+- **Sim:** fixed 0.05s steps in `step(dt)`; `updateUnit` state machine (idle/move/attack/amove/toRes/gather/toFarm/farming/return/toBuild/building/toGar/toGarU/toHeal/heal/toRelic/toMon/**tradeOut/tradeBack**). A* `findPath(sx,sy,tx,ty,team,naval)` — **all unit repaths go through `uPath(u,tx,ty)`** (ships auto-naval via `passableW` = water/ford minus navBlock). Rams/transports carry passengers in `u.gar` (garrison finalized AFTER the unit loop — never splice mid-iteration).
+- **AI (`aiThink`)**: villager jobs, houses (skipped for Huns), camps, military buildings by age, blacksmith + tech buying, dock near closest `G.waterList` tile (25s cooldown), unique-tech research at castle, fishing ships auto-fish, attack waves with persistent targets.
+- **Rendering:** ISOMETRIC. Terrain flat-painted then skewed; buildings pre-rendered iso sprites (`ISO_ART`+`mkIsoSpr`); units procedural rigs (`drawManRig`/`drawHorseRig` + MAN_COSTUME/CAV_COSTUME, `drawWarWagon`/`drawShip` diagonal-snapped, `drawElephantRig`, `drawRam`), y-sorted with resource billboards (`getResSpr` incl. fish). Portraits render through drawUnitBody into cached dataURLs.
+- **Sound:** WebAudio synth (`snd(kind)`), compressor bus, ambient birds; `initAudio()` on start tap.
+- **Input:** tap select/command; right-click commands (mouse); box select; double-tap select-type; pinch/wheel zoom; minimap diamond tap; wall line placement; Ctrl+1-9 groups. `BUILD_KEYS` (blacksmith S, dock D), `TRAIN_KEYS_BY_BLD`, castle U = unique unit.
 
 ## Balance/behavior notes
-- High ground: +25% dmg attacking downhill, −20% uphill (`elevTile` compare in attack case).
-- Rams: building-only, arrows capped at 2 dmg vs them.
-- Spearman +10 vs cav; skirmisher +5 vs ranged; mameluke +9 vs cav.
+- Stats follow the manual's Unit Attributes tables (pp. 42-44); lines upgrade by age; unique units go Elite at Imperial.
+- High ground: +25% dmg attacking downhill, −20% uphill.
+- Rams: building-only (2 vs units), arrows capped at 2 vs them; garrisoned infantry add +8% speed/+5 atk each.
+- Counters: spearman +10 vs cav, skirmisher +5 vs ranged, mameluke +9 vs cav, jaguar +10 vs infantry, cataphract +6 vs infantry, samurai +5 vs unique units, fire ship +3 vs ships, huskarl/eagle arrowRes .5/.7, petard/demo self-destruct blasts.
+- Blacksmith armor lines = flat -1 dmg per tier taken (min 1); Parthian Tactics -2 more for mounted archers.
 - Wave pacing per DIFF; Squire deliberately gentle (firstWave 380s).
-- Win/lose = destroy Town Hall.
+- Win/lose = destroy all enemy Town Halls (allies may survive).
 
 ## Hard-won gotchas (do not regress)
 1. **Radius margins:** every "am I close enough" check needs slack for diagonal corners + crowd push (gather 1.8, farm 1.85, deposit size*.5+1.7, build size*.5+1.7, melee vs building 1.3). Tight radii caused villager deadlocks twice.
 2. `canPlace(tx,ty,size,margin,allowFord)` — AI uses margin 1 so it never walls itself in; walls/gates use allowFord.
-3. Don't call `Date.now/Math.random` alternatives needed — fine here (page runtime), but sprite caches key on type+team+built; bust `ISPR`/`RES_SPR` if art changes.
+3. Sprite caches (`ISPR`/`RES_SPR`/`PORTRAITS`/`CORPSE_SPR`) are per-page-load and key on type/team/built/stage — art changes take effect on reload, no busting needed at runtime; but a NEW key dimension (like house `vr`) must be added to the cache key or variants collide.
 4. Fog alphas tuned for phone visibility (unexplored 208, explored 84) after a "screen is all dark" complaint — don't darken again.
 5. The artifact CSP blocks all external requests — everything must stay inline.
 
@@ -50,7 +52,8 @@ A mobile-friendly, browser-based RTS inspired by Age of Empires II: The Conquero
 
 ## Render app deployment — ✅ LIVE
 - **https://tiny-conquerors.onrender.com** — Render static site `tiny-conquerors`, service ID `srv-d9pibf5bedkc73c5qumg`, connected to GitHub repo Danielparamount-rgb/tiny-conquerors, branch `main`, **publish directory `app`**, no build command. Auto-deploys on push to main.
-- Verified live 2026-08-05: SW ACTIVE (cache `tq-v1`, 6 files), manifest served as `application/manifest+json` (installable), icons 200/image/png, game starts, sim runs, clock + score ticker + unit card + 15 iconed build buttons all render, zero console errors.
+- Current live version: **sw `tq-v5`** (navy). Verified after every deploy by fetching sw.js + index.html from the shell (bypasses the cache-first SW).
+- First verified live 2026-08-05 (tq-v1): SW active, manifest served as `application/manifest+json` (installable), icons OK, zero console errors.
 - **GOTCHA — Render header rule for the manifest**: Render serves `.webmanifest` as `binary/octet-stream`, which can block Add-to-Home-Screen. Fixed with a dashboard Headers rule: path `/manifest.webmanifest`, name `Content-Type`, value `application/manifest+json`. Saving headers triggers a redeploy — during it files 404 inconsistently for ~30s; that's transient, re-check before diagnosing.
 - **GOTCHA — testing the live site**: the SW is cache-first, so `fetch()` from the page returns CACHED responses (including stale Content-Type). To test the origin, unregister the SW + delete caches first, or the header change looks like it did nothing.
 - **Git push now works non-interactively from this shell** — the GitHub credential is cached in Windows Credential Manager (verified `cmdkey /list` shows `LegacyGeneric:target=git:https://github.com`). Deploy updates without involving the user.
@@ -161,6 +164,7 @@ A mobile-friendly, browser-based RTS inspired by Age of Empires II: The Conquero
 - Prior label "visibility-fix": brighter fog/backdrop/vignette + `#homeBtn`. **CONFIRMED 2026-08-05: user says fog reads well on their phone** (after the prerendered-art-pass). Fog alphas remain protected by gotcha #4.
 - Visual overhaul roadmap: ① lighting+terrain (DONE), ② animation pass (DONE), ③ sprite rework (DONE), ④ prerendered-art-pass (DONE, user-approved on phone).
 
-## Ideas queued (user-approved direction: "more like the real game")
-- **QUEUE COMPLETE 2026-08-04**: garrisoning, formations & attack-move, save/load, campaign (now 5 missions), stone walls, market, monastery/monks/relics, control groups, 12 civs, second AI opponent.
-- Possible future: conversion for monks; AI uses walls/market/monks; team games (2v2); unit upgrades/blacksmith; naval; trade carts between markets.
+## Ideas queued (user-approved direction: "match the real game / the manual")
+- **DONE through 2026-08-05**: garrisoning (+ inside rams), attack-move, save/load, campaign (5 missions), stone walls, market, monastery/monks/relics, control groups, **all 18 civs w/ manual bonuses + unique techs**, up to 8 players/alliances, **blacksmith (5 upgrade lines) + Parthian Tactics**, **navy (dock + 8 ship types incl. Longboat/Turtle Ship)**, petards, eagle warriors, Hun houseless play, smarter villagers.
+- Remaining manual content not yet in the game: Monk **conversion** (+ monastery techs: Fervor/Sanctity/Redemption/Atonement/Block Printing/Illumination/Faith/Theocracy/Heresy/Herbal Medicine), **Scorpion/Mangonel/Trebuchet** siege lines + Siege Engineers, gunpowder siege (**Bombard Cannon, Cannon Galleon, Bombard Tower**, Hand Cannoneer as a generic unit, Chemistry gate), economy techs (Loom/Wheelbarrow/mining-lumber upgrades as researchables), Town Watch/Spies, Wonders + Wonder/Relic victory, team bonuses per civ, Fish Traps, farm expiry + auto-replant queue.
+- Other future: AI uses walls/monks/transports; naval attack waves; more campaign missions (Attila/El Cid/Montezuma themes from the manual's new campaigns).
