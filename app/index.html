@@ -4047,7 +4047,7 @@ function spriteGrain(c,seed,strength){
   g.setTransform(1,0,0,1,0,0);
   g.globalCompositeOperation='source-atop';
   const gr=mulberry((seed|0)+7);
-  const n=Math.round(c.width*c.height/26);
+  const n=Math.round(c.width*c.height/19);
   const k=strength||1;
   for(let i=0;i<n;i++){
     g.fillStyle=gr()<.52
@@ -4064,7 +4064,7 @@ function mkIsoSpr(s,H,fn){
   const g=c.getContext('2d');
   g.setTransform(TREZ,0,0,TREZ,(s*IW+28)*TREZ,(H+2)*TREZ);
   g.lineJoin='round';fn(g,s);
-  spriteGrain(c,s*131+H*17+w);
+  spriteGrain(c,s*131+H*17+w,1.35); // dense pre-render dither on every building
   return{c,ox:s*IW+28,oy:H+2,w,h,H};
 }
 function dirtPad(g,s,alpha){
@@ -4132,7 +4132,7 @@ function bannerAt(g,x,y,p,len){
   g.fillStyle='#e3b23c';g.beginPath();g.arc(x,y-len-1,1.1,0,7);g.fill();
 }
 const ISO_ART={
-  tc(g,s,p){
+  tc(g,s,p,ab){
     dirtPad(g,2,.45);
     const b1=isoBlock(g,.08,.08,1.84,1.84,0,18,STONE);
     masonry(g,b1.D,b1.C,18,4);
@@ -4140,8 +4140,16 @@ const ISO_ART={
     ivyAt(g,b1.D,b1.C,16,23);
     const b2=isoBlock(g,.2,.2,1.6,1.6,18,11,CREAMW);
     faceBeams(g,b2.D,b2.C,11);faceBeams(g,b2.C,b2.B,11);
-    const rf=roofGable(g,-.08,-.08,2.16,2.16,29,17,TERRA);
+    const rf=roofGable(g,-.08,-.08,2.16,2.16,29,17,ab===2?HROOF[2]:TERRA);
     roofLines(g,-.08,-.08,2.16,2.16,29,17,5);
+    if(ab===2){ // Imperial: gilded ridge cap + finials on the seat of power
+      g.strokeStyle='#c9971f';g.lineWidth=2.2;
+      g.beginPath();g.moveTo(rf.Rs.x,rf.Rs.y-1);g.lineTo(rf.Re.x,rf.Re.y-1);g.stroke();
+      g.strokeStyle='rgba(255,240,190,.55)';g.lineWidth=.9;
+      g.beginPath();g.moveTo(rf.Rs.x,rf.Rs.y-2);g.lineTo(rf.Re.x,rf.Re.y-2);g.stroke();
+      g.fillStyle='#e5c95c';
+      for(const q of [rf.Rs,rf.Re]){g.beginPath();g.arc(q.x,q.y-2,1.8,0,7);g.fill();}
+    }
     // arched door with team-color awning
     archWin(g,b1.C,b1.B,.36,.64,0,12,'#3a2a18','#6b5330');
     const d3=facePt(b1.C,b1.B,.5,0),d4=facePt(b1.C,b1.B,.5,11);
@@ -4157,16 +4165,32 @@ const ISO_ART={
     bannerAt(g,(rf.Rs.x+rf.Re.x)/2,(rf.Rs.y+rf.Re.y)/2,p,13);
   },
   house(g,s,p,ab,vr){
-    // thatch through Feudal, per-variant clay/timber/slate shingles from Castle on
+    // three age looks: thatch hut (Dark/Feudal) -> shingled cottage (Castle)
+    // -> stone townhouse with slate and a chimney (Imperial)
     vr=vr||0;
     dirtPad(g,1,.35);
-    const b=isoBlock(g,.06,.06,.88,.88,0,13,CREAMW);
-    faceBeams(g,b.C,b.B,13);
-    g.strokeStyle='#5f4526';g.lineWidth=1.2;
-    for(const t of [.1,.9]){
-      const a=facePt(b.D,b.C,t,0),b2=facePt(b.D,b.C,t,13);
-      g.beginPath();g.moveTo(a.x,a.y);g.lineTo(b2.x,b2.y);g.stroke();}
-    if(ab){
+    const b=isoBlock(g,.06,.06,.88,.88,0,13,ab===2?STONE:CREAMW);
+    if(ab===2){
+      masonry(g,b.D,b.C,13,3);
+      masonry(g,b.C,b.B,13,3);
+    }else{
+      faceBeams(g,b.C,b.B,13);
+      g.strokeStyle='#5f4526';g.lineWidth=1.2;
+      for(const t of [.1,.9]){
+        const a=facePt(b.D,b.C,t,0),b2=facePt(b.D,b.C,t,13);
+        g.beginPath();g.moveTo(a.x,a.y);g.lineTo(b2.x,b2.y);g.stroke();}
+    }
+    if(ab===2){
+      roofGable(g,-.1,-.1,1.2,1.2,13,12,HROOF[2]); // slate, a touch steeper
+      roofLines(g,-.1,-.1,1.2,1.2,13,12,4);
+      // stone chimney with a wisp of soot shading
+      const ch=ip(.24,.24);
+      g.fillStyle='#8e887d';g.fillRect(ch.x-2.2,ch.y-13-14,4.4,9);
+      g.strokeStyle='rgba(26,28,32,.5)';g.lineWidth=.8;
+      g.strokeRect(ch.x-2.2,ch.y-13-14,4.4,9);
+      g.fillStyle='#6f747a';g.fillRect(ch.x-2.8,ch.y-13-15.4,5.6,2);
+      g.fillStyle='rgba(30,28,26,.35)';g.fillRect(ch.x-1.4,ch.y-13-13.4,2.8,1.6);
+    }else if(ab===1){
       roofGable(g,-.1,-.1,1.2,1.2,13,11,HROOF[vr]);
       roofLines(g,-.1,-.1,1.2,1.2,13,11,4);
     }else{
@@ -4234,7 +4258,7 @@ const ISO_ART={
     crateAt(g,ip(.4,1.32).x-8,ip(.4,1.32).y);
     bannerAt(g,lift(b.A,17).x,lift(b.A,17).y,p,9);
   },
-  barracks(g,s,p){
+  barracks(g,s,p,ab){
     dirtPad(g,2,.45);
     // timber-framed hall: stone plinth, whitewashed plaster, terracotta roof
     const b=isoBlock(g,.06,.06,1.88,1.88,0,22,CREAMW);
@@ -4244,8 +4268,17 @@ const ISO_ART={
     masonry(g,b.D,b.C,7,2);
     masonry(g,b.C,b.B,7,2);
     faceBeams(g,b.D,b.C,22);faceBeams(g,b.C,b.B,22);
-    roofGable(g,-.08,-.08,2.16,2.16,22,15,TERRA);
+    const brf=roofGable(g,-.08,-.08,2.16,2.16,22,15,ab===2?HROOF[2]:TERRA);
     roofLines(g,-.08,-.08,2.16,2.16,22,15,5);
+    if(ab===2){ // Imperial: war pennants along the slate ridge
+      for(const f2 of [.2,.5,.8]){
+        const qx=brf.Rs.x+(brf.Re.x-brf.Rs.x)*f2,qy=brf.Rs.y+(brf.Re.y-brf.Rs.y)*f2;
+        g.strokeStyle='#4a3a24';g.lineWidth=1;
+        g.beginPath();g.moveTo(qx,qy);g.lineTo(qx,qy-7);g.stroke();
+        g.fillStyle=TEAMS[p].main;
+        g.beginPath();g.moveTo(qx,qy-7);g.lineTo(qx+5.5,qy-5.8);g.lineTo(qx,qy-4.6);g.closePath();g.fill();
+      }
+    }
     archWin(g,b.C,b.B,.4,.6,0,14,'#2c2013','#4a3a24');
     g.strokeStyle='#b9bec4';g.lineWidth=.9;
     for(const t of [.44,.5,.56]){
@@ -4673,7 +4706,8 @@ const ISO_ART={
 };
 function getBldSpr(type,p,built,stage,vr){
   stage=built?0:(stage||0);
-  const ab=(G?G.P[p].age:3)>=2?1:0; // thatch era vs shingle era
+  const age=G?G.P[p].age:3;
+  const ab=age>=3?2:age>=2?1:0; // 0 thatch era · 1 shingle era · 2 imperial stone-and-gold
   vr=type==='house'?(vr||0):0;      // variance only where the cache stays tiny
   const key=type+'_'+p+'_'+(built?1:0)+'_'+stage+'_'+ab+'_'+vr;
   if(ISPR[key])return ISPR[key];
@@ -4739,7 +4773,14 @@ function drawBld(b){
   }
   const stage=b.built?0:Math.min(2,Math.floor(3*b.prog/BLDS[b.type].bt));
   const sp=getBldSpr(b.type,b.p,b.built,stage,hash2(b.tx,b.ty)%3);
-  ctx.drawImage(sp.c,pt.x-sp.ox,pt.y-sp.oy,sp.w,sp.h);
+  // buildings draw 13% larger than their footprint art, anchored at the south
+  // corner so they gain presence (like the reference) without shifting their base
+  const BS=d.thin||d.farm?1:1.13;
+  if(BS===1)ctx.drawImage(sp.c,pt.x-sp.ox,pt.y-sp.oy,sp.w,sp.h);
+  else{
+    const southY=pt.y+2*b.size*IH;
+    ctx.drawImage(sp.c,pt.x-sp.ox*BS,southY-(sp.oy+2*b.size*IH)*BS,sp.w*BS,sp.h*BS);
+  }
   if(BLDS[b.type].gate&&b.built){
     let open=false;
     for(const u2 of G.units){if(!allied(u2.p,b.p))continue;
@@ -5971,7 +6012,8 @@ function drawManRigT(u,t,TC,key){drawManRig(u,t,TC,MAN_COSTUME[key]);}
 // AoE2-style square portraits, rendered once from the live painters and cached as dataURLs
 const PORTRAITS={};
 function portraitFor(kind,type,p){
-  const ab=(G?G.P[p].age:3)>=2?1:0; // building art shifts thatch->shingle at Castle Age
+  const pAge=G?G.P[p].age:3;
+  const ab=pAge>=3?2:pAge>=2?1:0; // building art has three age looks now
   const key=kind+'_'+type+'_'+p
     +(kind==='u'&&type==='militia'?'_'+(G?G.P[p].age:0):'')
     +(kind==='b'?'_'+ab:'');
