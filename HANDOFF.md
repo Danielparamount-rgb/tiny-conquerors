@@ -52,7 +52,7 @@ A mobile-friendly, browser-based RTS inspired by Age of Empires II: The Conquero
 
 ## Render app deployment — ✅ LIVE
 - **https://tiny-conquerors.onrender.com** — Render static site `tiny-conquerors`, service ID `srv-d9pibf5bedkc73c5qumg`, connected to GitHub repo Danielparamount-rgb/tiny-conquerors, branch `main`, **publish directory `app`**, no build command. Auto-deploys on push to main.
-- Current live version: **sw `tq-v12`** (age-tier-art). Verified after every deploy by fetching sw.js + index.html from the shell (bypasses the cache-first SW).
+- Current live version: **sw `tq-v13`** (hover-flicker-fix). Verified after every deploy by fetching sw.js + index.html from the shell (bypasses the cache-first SW).
 - First verified live 2026-08-05 (tq-v1): SW active, manifest served as `application/manifest+json` (installable), icons OK, zero console errors.
 - **GOTCHA — Render header rule for the manifest**: Render serves `.webmanifest` as `binary/octet-stream`, which can block Add-to-Home-Screen. Fixed with a dashboard Headers rule: path `/manifest.webmanifest`, name `Content-Type`, value `application/manifest+json`. Saving headers triggers a redeploy — during it files 404 inconsistently for ~30s; that's transient, re-check before diagnosing.
 - **GOTCHA — testing the live site**: the SW is cache-first, so `fetch()` from the page returns CACHED responses (including stale Content-Type). To test the origin, unregister the SW + delete caches first, or the header change looks like it did nothing.
@@ -73,6 +73,7 @@ A mobile-friendly, browser-based RTS inspired by Age of Empires II: The Conquero
 - IP boundary told to user (they asked for "exactly like AoE2", "just for friends"): imitate style with ORIGINAL art/sounds only; no ripped Microsoft assets, especially once hosted on Render.
 
 ## Recent fixes (last published state)
+- Label "hover-flicker-fix" (2026-08-05, sw tq-v13, commit f0b7e21): user — "very glitchy when I go over the lower portion." Cause was the click-offset fix's own recalibration in a feedback loop: mkBtn's hover tip writes into `#scrollHint`, a long tip wrapped to an extra line, the panel grew → `#viewwrap` shrank → chkView called resize() → canvas reallocated (blank for a frame) → tip cleared on mouseleave → panel shrank back → resize again. Sweeping the mouse across buttons ran that loop continuously. Fix: (1) `#scrollHint{min-height:29px}` reserves two lines so hover text can NEVER change panel height; (2) chkView() now calls draw() immediately after resize() so a reallocated canvas never presents empty. **Gotcha: any panel element whose content changes on hover/selection must have a reserved height, or it re-enters this loop.**
 - Label "age-tier-art" (2026-08-05, sw tq-v12, commit eeca4d8): user reference-shot feedback — "larger, much more textured, looks different per age."
   - **Buildings draw 13% larger** (`BS=1.13` in drawBld, thin/farm exempt), anchored at the SOUTH corner (`southY=pt.y+2*size*IH`; top-left = `southY-(sp.oy+2*size*IH)*BS`) so bases/footprints stay put. Gameplay footprints unchanged.
   - **Grain denser**: spriteGrain divisor 26→19, buildings pass strength 1.35.

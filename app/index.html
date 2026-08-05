@@ -61,6 +61,15 @@
     box-shadow:0 2px 4px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,230,180,.12);}
   #zoomBtns button:active{transform:translateY(1px);}
   #boxBtn.armed{border-color:var(--gold);color:var(--gold);background:rgba(60,45,20,.9);}
+  /* always-on deselect: dim when there's nothing to clear, red-hot when there is */
+  #deselBtn{opacity:.4;transition:opacity .12s,border-color .12s,color .12s;}
+  #deselBtn.live{opacity:1;border-color:#c25a48;color:#ffb9ad;
+    background:linear-gradient(rgba(96,42,32,.95),rgba(58,24,18,.95));
+    box-shadow:0 2px 4px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,190,170,.22);}
+  #deselBtn b{position:absolute;right:-3px;top:-4px;min-width:15px;padding:0 3px;
+    font-size:9.5px;line-height:14px;border-radius:8px;background:#c25a48;color:#fff;
+    border:1px solid #3a1812;font-weight:700;}
+  #zoomBtns button{position:relative;}
   .ovt{position:absolute;pointer-events:none;z-index:3;font-size:12.5px;line-height:1.35;
     color:#fff;text-shadow:-1px 0 0 #000,1px 0 0 #000,0 -1px 0 #000,0 1px 0 #000,1px 2px 3px rgba(0,0,0,.7);}
   #clock{left:8px;top:6px;}
@@ -214,6 +223,7 @@
       <button id="zout" aria-label="Zoom out">−</button>
       <button id="boxBtn" aria-label="Box select" title="Drag a box to select multiple units">⬚</button>
       <button id="homeBtn" aria-label="Go to Town Hall" title="Jump to your Town Hall">⌂</button>
+      <button id="deselBtn" aria-label="Deselect" title="Deselect everything (Esc)">✕</button>
     </div>
     <div id="clock" class="ovt"></div>
     <div id="feed" class="ovt"></div>
@@ -7203,6 +7213,23 @@ function zoomAt(nz,cx,cy){
   G.cam.x=wx-(cx-rect.left)/nz;G.cam.y=wy-(cy-rect.top)/nz;clampCam();
 }
 document.getElementById('homeBtn').onclick=()=>{if(G&&!G.over)selTC();};
+/* Always-visible deselect — same effect as Esc, one tap, never scrolls away.
+   Cancels placement first (so it doubles as "get me out of build mode"). */
+function clearSel(){
+  if(!G)return;
+  if(G.placing){G.placing=null;G.pend=null;G.wallA=null;G.pendLine=null;}
+  else{G.sel=[];G.inspect=null;G.amode=false;}
+  setBoxArm(false);snd('click');refreshPanel();
+}
+document.getElementById('deselBtn').onclick=clearSel;
+function updateDeselBtn(){
+  const b=document.getElementById('deselBtn');if(!b||!G)return;
+  const n=G.sel.length;
+  const live=!!(n||G.inspect||G.placing);
+  b.classList.toggle('live',live);
+  b.innerHTML='✕'+(n>1?'<b>'+n+'</b>':'');
+  b.title=G.placing?'Cancel placement (Esc)':n?'Deselect '+n+' selected (Esc)':'Nothing selected';
+}
 document.getElementById('zin').onclick=()=>{if(G)zoomAt(Math.min(2.2,G.cam.z*1.25),vw/2,vh/2);};
 document.getElementById('zout').onclick=()=>{if(G)zoomAt(Math.max(.45,G.cam.z/1.25),vw/2,vh/2);};
 mini.addEventListener('pointerdown',e=>{
@@ -7402,6 +7429,7 @@ function mkBtn(html,cls,fn,dis,icon){
 }
 function refreshPanel(){
   if(!G)return;
+  updateDeselBtn();
   btnRow.innerHTML='';selGrid.innerHTML='';setCiv();
   if(G.placing){
     const d=BLDS[G.placing];
@@ -7682,7 +7710,7 @@ function refreshPanel(){
       if(G.amode)toast('Now tap the destination');});
   }
   mkBtn('<b>Stop</b>',null,()=>{for(const u of ents)if(u.x!==undefined){u.state='idle';u.path=null;u.target=null;u.resKey=null;u.farm=null;u.am=null;u.spd=0;u.vx=0;u.vy=0;}G.amode=false;});
-  mkBtn('<b>Deselect</b>',null,()=>{G.sel=[];refreshPanel();});
+  // (Deselect lives on the always-visible ✕ button beside the zoom controls)
 }
 function updateCard(){ // light HP patcher — no DOM rebuild mid-press
   if(G.placing)return; // placement card shows no HP; don't overwrite it
