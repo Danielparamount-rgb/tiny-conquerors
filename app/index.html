@@ -254,11 +254,11 @@
     <p><b>Tips:</b> scout the fog of war with Scout Cavalry, drop resources at Storage Camps near far-off woods and gold, use Spearmen against cavalry and Skirmishers against archers, wall off the fords with Palisades and Gates, smash defenses with Battering Rams, and hold the high ground — units on hills deal +25% damage and take less in return.</p>
     <p><b>New:</b> tap your Town Hall, Tower or Castle with units selected to <b>garrison</b> them inside (each adds arrow damage — ungarrison from the building's panel). Soldiers have an <b>⚔ Attack-move</b> button: they'll fight their way to wherever you point. Save anytime from the pause menu, and try the <b>📜 Campaign</b> — now five missions.</p>
     <p><b>Also new:</b> upgrade to <b>Stone Walls</b> in the Castle Age, trade at the <b>Market</b>, and build a <b>Monastery</b> — its Monks heal your troops and can carry the golden <b>relics</b> scattered around the map back home for a steady gold income. On a keyboard, Ctrl+1–9 sets control groups.</p>
-    <p><b>The Conquerors update:</b> all <b>18 civilizations</b>, each with true bonuses, a unique unit, and a <b>unique technology</b> researched at the Castle. Units now upgrade through their lines as you age — Militia become Champions, Scouts become Hussars. Garrison infantry <b>inside Battering Rams</b> to speed and strengthen them, and blow gates open with the <b>Petard</b>. The Aztecs and Mayans field fleet <b>Eagle Warriors</b> instead of cavalry, and the Huns never build a single house.</p>
+    <p><b>The Conquerors update:</b> all <b>18 civilizations</b>, each with true bonuses, a unique unit, and a <b>unique technology</b> researched at the Castle. Units now upgrade through their lines as you age — Militia become Champions, Scouts become Hussars. Garrison infantry <b>inside Battering Rams</b> to speed and strengthen them, and blow gates open with the <b>Petard</b>. The Aztecs and Mayans field fleet <b>Eagle Warriors</b> instead of cavalry, and the Huns never build a single house. Raise a <b>Blacksmith</b> to forge attack and armor upgrades through the ages, and research <b>Parthian Tactics</b> at the Archery Range to harden your horse archers.</p>
     <div class="rule"></div>
     <p><b>Keyboard (when played on a computer)</b><br>
     <b>H</b> Town Hall · <b>C</b> create villager · <b>A</b> advance age · <b>.</b> idle villager · <b>,</b> idle soldier · <b>arrows</b> scroll · <b>+/−</b> zoom · <b>Space</b> go to selection · <b>Del</b> delete · <b>Esc</b> cancel<br>
-    With villagers selected: <b>E</b> House · <b>F</b> Farm · <b>C</b> Camp · <b>W</b> Wall · <b>O</b> Gate · <b>B</b> Barracks · <b>A</b> Range · <b>L</b> Stable · <b>G</b> Siege · <b>T</b> Tower. Train keys are shown on each button.</p>
+    With villagers selected: <b>E</b> House · <b>F</b> Farm · <b>C</b> Camp · <b>W</b> Wall · <b>O</b> Gate · <b>B</b> Barracks · <b>A</b> Range · <b>L</b> Stable · <b>S</b> Blacksmith · <b>G</b> Siege · <b>T</b> Tower. Train keys are shown on each button.</p>
     <div class="rule"></div>
     <p style="text-align:center;margin-bottom:0"><b>Choose your civilization</b></p>
     <div class="diff civgrid" id="civGrid"></div>
@@ -516,6 +516,38 @@ function trainTimeOf(b,ut){
   if(b.type==='siege'&&hasUt(b.p,'kataparuto'))t*=.67;
   return t;
 }
+/* Blacksmith upgrade lines (manual pp. 46-47). Armor becomes flat damage
+   reduction per hit — this game has no armor stat. Tiers gate on age II/III/IV. */
+const BS_TECHS={
+  atk:{names:['Forging','Iron Casting','Blast Furnace'],
+       costs:[{f:150},{f:220,g:120},{f:275,g:225}],icon:'⚒️',
+       desc:'+1/+1/+2 infantry & cavalry attack'},
+  arw:{names:['Fletching','Bodkin Arrow','Bracer'],
+       costs:[{f:100,g:50},{f:200,g:100},{f:300,g:200}],icon:'🏹',
+       desc:'+1 attack & range for archers and towers'},
+  ia:{names:['Scale Mail Armor','Chain Mail Armor','Plate Mail Armor'],
+      costs:[{f:100},{f:200,g:100},{f:300,g:150}],icon:'🥋',
+      desc:'Infantry take -1 damage per blow'},
+  aa:{names:['Padded Archer Armor','Leather Archer Armor','Ring Archer Armor'],
+      costs:[{f:100},{f:150,g:150},{f:250,g:250}],icon:'🧥',
+      desc:'Archers take -1 damage per blow'},
+  ca:{names:['Scale Barding Armor','Chain Barding Armor','Plate Barding Armor'],
+      costs:[{f:150},{f:250,g:150},{f:350,g:200}],icon:'🐴',
+      desc:'Cavalry take -1 damage per blow'},
+};
+const BS_ATK=[0,1,2,4],BS_ARW=[0,1,2,3];
+function bsOf(p){const st=G.P[p];
+  if(!st.bs)st.bs={atk:0,arw:0,ia:0,aa:0,ca:0};
+  return st.bs;}
+function bsArmorOf(u){ // flat damage reduction from armor research
+  const st=G.P[u.p],bs=bsOf(u.p),d=UNITS[u.type];
+  let a=0;
+  if(INF.has(u.type))a=bs.ia;
+  else if(d.cav&&d.ranged)a=bs.ca+(st.pt?2:0); // Parthian Tactics: mounted archers
+  else if(d.cav)a=bs.ca;
+  else if(d.ranged)a=bs.aa;
+  return a;
+}
 const BLDS={
   tc:{name:'Town Hall',hp:2200,size:2,cost:{w:300},bt:40,trains:['villager'],drop:true,atk:6,rng:5,garCap:10},
   house:{name:'House',hp:400,size:1,cost:{w:25},bt:8,pop:5},
@@ -532,6 +564,7 @@ const BLDS={
   swall:{name:'Stone Wall',hp:1500,size:1,cost:{w:5,g:10},bt:7,thin:true,age:2},
   sgate:{name:'Stone Gate',hp:2000,size:1,cost:{w:20,g:40},bt:11,thin:true,gate:true,age:2},
   market:{name:'Market',hp:800,size:2,cost:{w:150},bt:14,age:1},
+  blacksmith:{name:'Blacksmith',hp:1000,size:2,cost:{w:150},bt:14,age:1},
   monastery:{name:'Monastery',hp:900,size:2,cost:{w:175,g:100},bt:18,trains:['monk'],age:2},
 };
 const RES_META={food:{amt:175},wood:{amt:100},gold:{amt:450}};
@@ -595,7 +628,8 @@ function newGame(){
   else if(teamSel===2)teams=[0].concat(Array(NP-1).fill(1));
   else teams=Array.from({length:NP},(_,i)=>i);
   const mkP=c=>{const cv=CIVS[c]; // manual start bonuses/penalties
-    return{f:200+(cv.startF||0),w:200+(cv.startW||0),g:100,age:0,ageT:0,aging:false,civ:c,uts:[]};};
+    return{f:200+(cv.startF||0),w:200+(cv.startW||0),g:100,age:0,ageT:0,aging:false,civ:c,uts:[],
+      bs:{atk:0,arw:0,ia:0,aa:0,ca:0},pt:false};};
   const P=[mkP(civSel)];
   const used=[civSel];
   const ais=[null];
@@ -795,7 +829,11 @@ function addBld(p,type,tx,ty,done){
 function bldCenter(b){return{x:b.tx+b.size/2,y:b.ty+b.size/2};}
 function unitDef(u){return UNITS[u.type];}
 function atkOf(u){
+  const d=UNITS[u.type],bs=bsOf(u.p);
   let a=statFor(u.type,u.p).atk;
+  if((INF.has(u.type)||(d.cav&&!d.ranged))&&!d.ram&&!d.petard&&!d.monk)
+    a+=BS_ATK[bs.atk];                              // Forging line
+  if(d.ranged)a+=BS_ARW[bs.arw];                    // Fletching line
   if(INF.has(u.type)&&hasUt(u.p,'garland'))a+=4;   // Aztec Garland Wars
   if(u.type==='chukonu'&&hasUt(u.p,'rocketry'))a+=2;
   if(u.type==='villager'&&hasUt(u.p,'supremacy'))a=9; // Spanish Supremacy
@@ -805,6 +843,7 @@ function atkOf(u){
 function rangeOf(u){
   const d=UNITS[u.type],cv=civOf(u.p);
   let r=statFor(u.type,u.p).rng;
+  if(d.ranged&&r>1)r+=bsOf(u.p).arw;                // Fletching line: +1 range per tier
   if(d.ranged&&!d.cav&&cv.archerRange)r+=cv.archerRange;
   if(d.ranged&&!d.cav&&hasUt(u.p,'yeomen'))r+=1;
   if(u.type==='axeman'&&hasUt(u.p,'bearded'))r+=1;
@@ -1121,13 +1160,14 @@ function step(dt){
         if(b.cd<=0){
           const c=bldCenter(b);
           const cvB=civOf(b.p);
-          let rng=d.rng;
+          let rng=d.rng+bsOf(b.p).arw*.5; // Fletching line reaches the towers too
           if(b.type==='tower'&&cvB.towerRangeAge)rng+=cvB.towerRangeAge[G.P[b.p].age];
           if((b.type==='tower'||b.type==='castle')&&hasUt(b.p,'shinkichon'))rng+=2;
           if(b.type==='castle'&&hasUt(b.p,'crenellations'))rng+=3;
           if(b.type==='tower'&&hasUt(b.p,'artillery'))rng+=1.5;
           const e=nearestEnemy(b.p,c.x,c.y,rng,true);
           let tAtk=Math.round(d.atk*((b.type==='tower'||b.type==='castle')?(cvB.towerAtk||1):1))
+            +bsOf(b.p).arw
             +(b.gar?b.gar.length*2*(cvB.garArrow||1):0);
           if((b.type==='tower'||b.type==='castle')&&hasUt(b.p,'yeomen'))tAtk+=2;
           if(e){b.cd=1.6;dealDamage(e,tAtk,b.p,true);
@@ -1355,6 +1395,8 @@ function dealDamage(hit,amt,fromP,ranged){
   if(ranged&&!hit.bld&&hit.ent.type==='ram')amt=Math.min(amt,2);
   if(ranged&&!hit.bld&&UNITS[hit.ent.type]&&UNITS[hit.ent.type].arrowRes)
     amt=Math.max(1,Math.round(amt*UNITS[hit.ent.type].arrowRes)); // Huskarl .5, Eagle .7
+  if(!hit.bld&&UNITS[hit.ent.type])
+    amt=Math.max(1,amt-bsArmorOf(hit.ent)); // blacksmith armor: flat reduction
   hit.ent.hp-=amt;hit.ent.flash=.16;
   const hx=hit.bld?bldCenter(hit.ent).x:hit.ent.x,hy=hit.bld?bldCenter(hit.ent).y:hit.ent.y;
   if(fromP!==0&&hit.ent.p===0){ // minimap attack ping (separate from the toast throttle)
@@ -1655,6 +1697,7 @@ function aiThink(p,ai){
   if(G.t>75&&!myBld('barracks').length&&!G.blds.some(b=>b.p===p&&!b.built&&b.type==='barracks')&&st.w>=150)aiPlace('barracks',undefined,undefined,p);
   if(st.age>=1&&!myBld('range').length&&!G.blds.some(b=>b.p===p&&!b.built&&b.type==='range')&&st.w>=150)aiPlace('range',undefined,undefined,p);
   if(st.age>=1&&!CIVS[st.civ].noStable&&!myBld('stable').length&&!G.blds.some(b=>b.p===p&&!b.built&&b.type==='stable')&&st.w>=150)aiPlace('stable',undefined,undefined,p);
+  if(st.age>=1&&!myBld('blacksmith').length&&!G.blds.some(b=>b.p===p&&!b.built&&b.type==='blacksmith')&&st.w>=250)aiPlace('blacksmith',undefined,undefined,p);
   if(st.age>=2&&!myBld('siege').length&&!G.blds.some(b=>b.p===p&&!b.built&&b.type==='siege')&&st.w>=200)aiPlace('siege',undefined,undefined,p);
   if(st.age>=2&&!myBld('castle').length&&!G.blds.some(b=>b.p===p&&!b.built&&b.type==='castle')&&st.w>=350&&st.g>=200)aiPlace('castle',undefined,undefined,p);
   // storage camp near far-off resources
@@ -1676,6 +1719,19 @@ function aiThink(p,ai){
     const ut=nextUtFor(p);
     if(ut&&canAfford(p,UTECHS[ut].cost)&&st.f>UTECHS[ut].cost.f*1.4){
       pay(p,UTECHS[ut].cost);st.uts.push(ut);applyUt(p,ut);}
+  }
+  // blacksmith upgrades: buy the cheapest available tier when comfortably rich
+  if(myBld('blacksmith').some(b=>b.built)){
+    const bs=bsOf(p);let best=null,bc2=1e9;
+    for(const line of ['atk','arw','ia','aa','ca']){
+      const tier=bs[line];
+      if(tier>=3||st.age<tier+1)continue;
+      const cost=BS_TECHS[line].costs[tier],tot=(cost.f||0)+(cost.g||0);
+      if(tot<bc2){bc2=tot;best=line;}}
+    if(best){const cost=BS_TECHS[best].costs[bs[best]];
+      if(canAfford(p,cost)&&st.f>(cost.f||0)+250&&st.g>(cost.g||0)+120){pay(p,cost);bs[best]++;}}
+    if(!st.pt&&st.age>=3&&myBld('range').some(b=>b.built)
+       &&st.f>450&&st.g>500){pay(p,{f:200,g:250});st.pt=true;}
   }
   // train military (mixed composition) — but bank resources when an age-up is due
   const nextAge=ageCostOf(p,st.age+1);
@@ -1853,7 +1909,11 @@ function loadGame(){
     if(BLDS[b.type].thin)G.wallMap[b.tx+','+b.ty]=b;
     if(BLDS[b.type].gate)G.gateMap[b.tx+','+b.ty]=b;
   }
-  for(const st of G.P)if(!st.uts)st.uts=[]; // pre-manual saves lack unique-tech state
+  for(const st of G.P){ // pre-manual saves lack tech state
+    if(!st.uts)st.uts=[];
+    if(!st.bs)st.bs={atk:0,arw:0,ia:0,aa:0,ca:0};
+    if(st.pt===undefined)st.pt=false;
+  }
   // old saves lack motion state — default it (units + garrisoned units)
   const seedMot=u=>{if(u.hdg===undefined)u.hdg=Math.atan2(MAP/2-u.y,MAP/2-u.x);
     if(u.spd===undefined)u.spd=0;if(u.vx===undefined){u.vx=0;u.vy=0;}
@@ -3134,7 +3194,7 @@ const drawBldArt={
 };
 /* ---------- ISOMETRIC building sprites (supersede the flat set) ---------- */
 const ISPR={};
-const IHT={tc:56,house:36,farm:10,camp:28,barracks:48,range:38,stable:44,siege:42,castle:82,tower:74,wall:24,gate:34,swall:26,sgate:36,market:44,monastery:56};
+const IHT={tc:56,house:36,farm:10,camp:28,barracks:48,range:38,stable:44,siege:42,castle:82,tower:74,wall:24,gate:34,swall:26,sgate:36,market:44,monastery:56,blacksmith:48};
 const O2='rgba(58,42,26,.5)'; // soft warm edge tone — no black outlines
 const STONE={l:'#8e887d',r:'#716f6d',t:'#a39c90',o:O2};   // slate gray, cool shade side
 const CREAMW={l:'#e6dab8',r:'#c9baa5',t:'#dccfae',o:O2};  // whitewashed plaster
@@ -3678,6 +3738,59 @@ const ISO_ART={
     g.strokeStyle='#5f4526';g.lineWidth=1.4;
     g.beginPath();g.moveTo(sp2.x,sp2.y);g.lineTo(sp2.x,sp2.y-12);g.stroke();
     bannerAt(g,sp2.x,sp2.y-2,p,10);
+  },
+  blacksmith(g,s,p){
+    dirtPad(g,2,.5);
+    // stone workshop with an open smithing porch out front
+    const b=isoBlock(g,.06,.06,1.5,1.88,0,14,STONE);
+    masonry(g,b.D,b.C,14,3);
+    masonry(g,b.C,b.B,14,3);
+    roofGable(g,-.08,-.08,1.72,2.12,14,12,TERRA);
+    roofLines(g,-.08,-.08,1.72,2.12,14,12,4);
+    // squat chimney poking through the roof, smoke-stained at the mouth
+    const ch=lift(ip(.42,.5),30);
+    g.fillStyle='#8e887d';g.strokeStyle='rgba(58,42,26,.5)';g.lineWidth=.9;
+    g.fillRect(ch.x-2.6,ch.y-7,5.2,9);g.strokeRect(ch.x-2.6,ch.y-7,5.2,9);
+    g.fillStyle='#716f6d';g.fillRect(ch.x-3.2,ch.y-9,6.4,2.6);
+    g.fillStyle='rgba(30,26,22,.75)';
+    g.beginPath();g.ellipse(ch.x,ch.y-8.8,2.1,.9,0,0,7);g.fill();
+    // open porch: plank lean-to over the forge
+    const p1=lift(ip(1.56,.2),12),p2=lift(ip(1.56,1.8),12),
+          p3=lift(ip(2.3,1.8),7),p4=lift(ip(2.3,.2),7);
+    poly(g,[p1,p2,p3,p4],'#93744a','rgba(58,42,26,.5)',1);
+    g.strokeStyle='rgba(30,18,8,.3)';g.lineWidth=.9;
+    for(const tt of [.33,.66]){
+      const a=lerpP(p1,p2,tt),c2=lerpP(p4,p3,tt);
+      g.beginPath();g.moveTo(a.x,a.y);g.lineTo(c2.x,c2.y);g.stroke();}
+    // posts holding the lean-to
+    g.strokeStyle='#5f4526';g.lineWidth=1.6;
+    for(const py of [.35,1.65]){
+      const top=lift(ip(2.24,py),7),bot=ip(2.24,py);
+      g.beginPath();g.moveTo(top.x,top.y);g.lineTo(bot.x,bot.y);g.stroke();}
+    // the forge: brick hearth with a warm glow
+    const fh=ip(1.85,.62);
+    g.fillStyle='#7a5347';g.strokeStyle='rgba(58,42,26,.55)';g.lineWidth=.8;
+    g.fillRect(fh.x-3.4,fh.y-6.2,6.8,6.2);g.strokeRect(fh.x-3.4,fh.y-6.2,6.8,6.2);
+    g.fillStyle='#e2761e';
+    g.beginPath();g.ellipse(fh.x,fh.y-2.4,2.2,1.5,0,0,7);g.fill();
+    g.fillStyle='#ffd75e';
+    g.beginPath();g.ellipse(fh.x,fh.y-2.4,1.1,.8,0,0,7);g.fill();
+    // anvil on a stump
+    const an=ip(1.85,1.4);
+    g.fillStyle='#6b4a2a';g.fillRect(an.x-1.6,an.y-3,3.2,3);
+    g.fillStyle='#5c6066';g.strokeStyle='rgba(30,26,22,.6)';g.lineWidth=.7;
+    g.beginPath();
+    g.moveTo(an.x-3,an.y-3.4);g.lineTo(an.x+3.2,an.y-3.4);g.lineTo(an.x+2.2,an.y-4.8);
+    g.lineTo(an.x-1.8,an.y-4.8);g.closePath();g.fill();g.stroke();
+    g.strokeStyle='#9aa0a6';g.lineWidth=.7;
+    g.beginPath();g.moveTo(an.x-2.8,an.y-4.6);g.lineTo(an.x+2,an.y-4.6);g.stroke();
+    // barrel of tools + horseshoes on the wall
+    barrelAt(g,ip(1.2,2.3).x,ip(1.2,2.3).y);
+    g.strokeStyle='#8a8f96';g.lineWidth=1;
+    for(const tt of [.3,.5]){
+      const hs=facePt(b.C,b.B,tt,9);
+      g.beginPath();g.arc(hs.x,hs.y,1.5,Math.PI*.15,Math.PI*.85,true);g.stroke();}
+    bannerAt(g,lift(ip(.06,.06),26).x,lift(ip(.06,.06),26).y,p,10);
   },
   monastery(g,s,p){
     dirtPad(g,2,.45);
@@ -6078,6 +6191,33 @@ function refreshPanel(){
       const dep=G.relics.filter(r=>r.mon===b.id).length;
       if(dep)hint('✨ '+dep+' relic'+(dep>1?'s':'')+' enshrined (+'+(dep*33)+' gold/min)');
     }
+    if(b.type==='blacksmith'){
+      const bs=bsOf(0);
+      hint('Research upgrades — each line has three tiers, gated by age');
+      for(const line of ['atk','arw','ia','aa','ca']){
+        const tier=bs[line];
+        if(tier>=3)continue;
+        const T=BS_TECHS[line],cost=T.costs[tier],needAge=tier+1;
+        const locked=G.P[0].age<needAge;
+        mkBtn('<i>'+T.icon+'</i><b>'+T.names[tier]+'</b><span class="cost">'+costStr(cost)+'</span>','txt',
+          ()=>{if(G.P[0].age<needAge){toast('Requires the '+AGES[needAge]);return;}
+            if(!canAfford(0,cost)){toast('Not enough resources');return;}
+            pay(0,cost);bs[line]++;snd('done');
+            feed(T.names[tier]+' — researched');updateTop();refreshPanel();},
+          locked||!canAfford(0,cost));
+      }
+      if(['atk','arw','ia','aa','ca'].every(l=>bs[l]>=3))
+        hint('The forge is quiet — every upgrade is complete');
+    }
+    if(b.type==='range'&&!G.P[0].pt){
+      const cost={f:200,g:250},locked=G.P[0].age<3;
+      mkBtn('<i>🐴</i><b>Parthian Tactics</b><span class="cost">'+costStr(cost)+'</span>','txt',
+        ()=>{if(G.P[0].age<3){toast('Requires the '+AGES[3]);return;}
+          if(!canAfford(0,cost)){toast('Not enough resources');return;}
+          pay(0,cost);G.P[0].pt=true;snd('done');
+          feed('Parthian Tactics — researched');updateTop();refreshPanel();},
+        locked||!canAfford(0,cost));
+    }
     const trainsList=trainsFor(b,0);
     for(const ut of trainsList){
       const u=UNITS[ut];
@@ -6140,7 +6280,7 @@ function refreshPanel(){
     if(ents.length===1)hint(mouseSeen
       ?'Right-click resources to gather · right-click ground to move'
       :'Tap resources to gather · tap ground to move');
-    for(const bt of ['house','farm','camp','wall','gate','swall','sgate','market','barracks','range','stable','siege','monastery','castle','tower']){
+    for(const bt of ['house','farm','camp','wall','gate','swall','sgate','market','blacksmith','barracks','range','stable','siege','monastery','castle','tower']){
       if(bt==='stable'&&civOf(0).noStable)continue; // Aztecs/Mayans field no cavalry
       if(bt==='house'&&civOf(0).noHouse)continue;   // Huns need no Houses
       const d=BLDS[bt];
@@ -6214,9 +6354,9 @@ function updateTop(){
   document.getElementById('ageLbl').textContent=age;
 }
 /* ================= hotkeys ================= */
-const BUILD_KEYS={house:'e',farm:'f',camp:'c',barracks:'b',range:'a',stable:'l',siege:'g',castle:'v',tower:'t',wall:'w',gate:'o',swall:'x',sgate:'p',market:'k',monastery:'m'};
+const BUILD_KEYS={house:'e',farm:'f',camp:'c',barracks:'b',range:'a',stable:'l',siege:'g',castle:'v',tower:'t',wall:'w',gate:'o',swall:'x',sgate:'p',market:'k',monastery:'m',blacksmith:'s'};
 const BLD_ICONS={tc:'🏛️',house:'🏠',farm:'🌾',camp:'📦',wall:'🪵',gate:'🚪',swall:'🧱',sgate:'⛩️',
-  market:'⚖️',barracks:'⚔️',range:'🏹',stable:'🐎',siege:'⚙️',monastery:'⛪',castle:'🏰',tower:'🗼'};
+  market:'⚖️',barracks:'⚔️',range:'🏹',stable:'🐎',siege:'⚙️',monastery:'⛪',castle:'🏰',tower:'🗼',blacksmith:'🔨'};
 const UNIT_ICONS={villager:'🧑‍🌾',militia:'⚔️',spearman:'🔱',archer:'🏹',skirmisher:'🎯',
   scout:'🐎',knight:'🛡️',ram:'🐏',longbow:'🏹',axeman:'🪓',berserker:'🪓',mangudai:'🏹',
   teuton:'⚔️',woad:'🪓',cataphract:'🛡️',mameluke:'🐪',monk:'📿',huskarl:'🛡️',
