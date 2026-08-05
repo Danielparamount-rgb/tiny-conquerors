@@ -24,13 +24,13 @@
 
   /* ---------- top bar ---------- */
   #topbar{flex:0 0 auto;position:relative;display:flex;align-items:center;gap:5px;padding:3px 6px;
-    background:linear-gradient(#3a2415,#221306 45%,#180e05);
-    border-bottom:2px solid #000;
+    background:linear-gradient(#5d5850,#403c34 45%,#2c2922);
+    border-bottom:2px solid #191713;
     box-shadow:0 2px 8px rgba(0,0,0,.5), inset 0 1px 0 rgba(201,162,39,.4), inset 0 -1px 0 rgba(201,162,39,.28);
     font-variant-numeric:tabular-nums;font-size:13px;flex-wrap:wrap;}
   .res{display:flex;align-items:center;gap:4px;
-    background:linear-gradient(#0d0803,#1c1108);
-    border:1px solid #52401f;border-radius:2px;padding:1px 7px 1px 4px;min-width:56px;
+    background:linear-gradient(#14110c,#221c12);
+    border:1px solid #6a5a35;border-radius:2px;padding:1px 7px 1px 4px;min-width:56px;
     color:#f2ede2;text-shadow:0 1px 1px #000;
     box-shadow:inset 0 1px 3px rgba(0,0,0,.7), 0 1px 0 rgba(201,162,39,.12);}
   .res svg{width:14px;height:14px;flex:0 0 auto;filter:drop-shadow(0 1px 1px rgba(0,0,0,.5));}
@@ -38,7 +38,7 @@
     font-family:Georgia,"Palatino Linotype",serif;letter-spacing:.1em;
     font-size:13.5px;color:#e5c95c;white-space:nowrap;text-shadow:0 1px 2px #000;}
   #sndBtn{margin-left:auto;}
-  #menuBtn,#sndBtn{background:linear-gradient(#31210f,#1a0f06);border:1px solid #52401f;
+  #menuBtn,#sndBtn{background:linear-gradient(#514c43,#2f2c25);border:1px solid #6a6355;
     color:var(--parch);border-radius:3px;padding:1px 9px;font-size:12.5px;
     box-shadow:0 1px 2px rgba(0,0,0,.35), inset 0 1px 0 rgba(201,162,39,.2);}
   #menuBtn:active,#sndBtn:active{transform:translateY(1px);}
@@ -55,8 +55,8 @@
     background:transparent;
     filter:drop-shadow(0 3px 8px rgba(0,0,0,.55));}
   #zoomBtns{position:absolute;top:114px;right:8px;display:flex;flex-direction:column;gap:6px;}
-  #zoomBtns button{width:34px;height:34px;border-radius:7px;border:1px solid #5a4527;
-    background:linear-gradient(rgba(61,46,28,.92),rgba(28,21,12,.92));
+  #zoomBtns button{width:34px;height:34px;border-radius:7px;border:1px solid #6a6355;
+    background:linear-gradient(rgba(78,74,66,.92),rgba(42,39,33,.92));
     color:var(--parch);font-size:18px;line-height:1;
     box-shadow:0 2px 4px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,230,180,.12);}
   #zoomBtns button:active{transform:translateY(1px);}
@@ -84,10 +84,11 @@
     grid-template-columns:auto 118px minmax(0,1fr) auto;
     padding:9px 8px calc(9px + env(safe-area-inset-bottom));
     background:
-      radial-gradient(circle at 12px 4px,rgba(240,205,110,.55) 1.6px,rgba(0,0,0,0) 3.4px) 0 0/44px 9px repeat-x,
-      radial-gradient(circle at 12px 5px,rgba(240,205,110,.5) 1.6px,rgba(0,0,0,0) 3.4px) 22px 100%/44px 9px repeat-x,
-      linear-gradient(#7a3d1f,#5c2c15 30%,#421f0e 80%,#31160a);
-    border-top:3px solid #1c0d05;
+      radial-gradient(circle at 12px 4px,rgba(214,152,74,.6) 1.6px,rgba(0,0,0,0) 3.4px) 0 0/44px 9px repeat-x,
+      radial-gradient(circle at 12px 5px,rgba(214,152,74,.55) 1.6px,rgba(0,0,0,0) 3.4px) 22px 100%/44px 9px repeat-x,
+      radial-gradient(ellipse at 50% 120%,rgba(214,150,70,.14),rgba(0,0,0,0) 65%),
+      linear-gradient(#635e54,#484338 30%,#343026 80%,#27241c);
+    border-top:3px solid #17150f;
     box-shadow:0 -2px 10px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,210,130,.28), inset 0 -1px 0 rgba(0,0,0,.5);}
   #scrollArea{grid-area:scroll;position:relative;border-radius:3px;padding:6px 10px 14px;min-width:0;overflow:hidden;color:var(--ink);
     background:
@@ -99,8 +100,9 @@
   #scrollHint{font-size:10.5px;color:#5c4a2e;margin-top:2px;line-height:1.35;}
   #scrollLogo{position:absolute;left:0;right:0;bottom:2px;text-align:center;font-family:Georgia,serif;font-size:8.5px;letter-spacing:.4em;color:rgba(107,83,48,.45);pointer-events:none;}
   #unitCard{grid-area:card;display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 6px;min-width:0;
-    background:linear-gradient(rgba(18,10,5,.55),rgba(18,10,5,.3));
-    border:1px solid rgba(201,162,39,.45);border-radius:4px;}
+    background:linear-gradient(rgba(16,14,10,.55),rgba(16,14,10,.3));
+    border:1px solid rgba(199,141,66,.55);border-radius:4px;
+    box-shadow:inset 0 1px 0 rgba(255,220,160,.1);}
   #cardName{font-family:Georgia,serif;font-size:11.5px;color:#f0d878;letter-spacing:.05em;text-shadow:0 1px 2px #000;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   #cardPort{width:54px;height:54px;border-radius:2px;}
   .hpbar{width:62px;height:7px;background:#120d07;border:1px solid #000;border-radius:2px;overflow:hidden;}
@@ -121,8 +123,8 @@
     border:1px solid #c9a227;box-shadow:0 1px 2px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,230,180,.2);}
   #btnRow{grid-area:cmd;display:grid;grid-template-columns:repeat(5,46px);grid-auto-rows:46px;gap:4px;align-content:start;max-height:152px;overflow-y:auto;padding:2px;width:266px;scrollbar-width:thin;}
   .cmd{position:relative;padding:0;border-radius:3px;overflow:hidden;color:var(--parch);
-    background:linear-gradient(#454c53,#23282c);border:1px solid #15100b;
-    outline:1px solid rgba(201,162,39,.6);outline-offset:-2px;
+    background:linear-gradient(#5a554c,#2e2b25);border:1px solid #15100b;
+    outline:1px solid rgba(199,141,66,.7);outline-offset:-2px;
     box-shadow:0 1px 2px rgba(0,0,0,.5),
       inset 1px 1px 0 rgba(255,255,255,.16), inset -1px -1px 0 rgba(0,0,0,.55);
     transition:transform .05s ease, outline-color .08s ease;}
@@ -137,7 +139,7 @@
   .cmd b{position:absolute;left:0;right:0;bottom:0;font-size:7.5px;font-weight:600;line-height:1.15;padding:5px 1px 2px;color:#efe2bd;background:linear-gradient(transparent,rgba(0,0,0,.78) 55%);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .cmd .cost{position:absolute;top:1px;left:2px;right:2px;text-align:right;font-size:7px;color:#f2d267;text-shadow:0 1px 1px #000;pointer-events:none;}
   .cmd:disabled{opacity:1;filter:grayscale(.7) brightness(.5);pointer-events:auto;}
-  .cmd.txt,.cmd.go,.cmd.warn{grid-column:1/-1;height:32px;font-size:11px;background:linear-gradient(#3d2e1c,#241a10);border-color:#120d07;}
+  .cmd.txt,.cmd.go,.cmd.warn{grid-column:1/-1;height:32px;font-size:11px;background:linear-gradient(#4a453c,#28251f);border-color:#120d07;}
   .cmd.txt b,.cmd.go b,.cmd.warn b{position:static;background:none;padding:0;font-size:11px;display:inline;}
   .cmd.txt i,.cmd.go i,.cmd.warn i{display:inline;font-size:13px;line-height:1;margin-right:3px;}
   .cmd.txt .cost,.cmd.go .cost,.cmd.warn .cost{position:static;font-size:9.5px;margin-left:5px;}
@@ -156,7 +158,7 @@
   .overlay{position:fixed;inset:0;background:rgba(14,10,5,.9);display:flex;align-items:center;
     justify-content:center;z-index:20;padding:16px;}
   .scroll{background:linear-gradient(#f2e6c4,#e0cf9f);color:var(--ink);border-radius:12px;
-    border:3px solid #6b5330;outline:2px solid rgba(201,162,39,.55);outline-offset:-8px;
+    border:3px solid #5a554b;outline:2px solid rgba(201,162,39,.55);outline-offset:-8px;
     max-width:420px;width:100%;padding:22px 20px;text-align:center;
     box-shadow:0 12px 40px rgba(0,0,0,.65), inset 0 0 40px rgba(160,120,60,.14);
     max-height:92dvh;overflow-y:auto;}
@@ -167,7 +169,7 @@
   .scroll p{font-size:13.5px;line-height:1.55;margin:8px 0;text-align:left;}
   .scroll .rule{height:2px;background:#6b533055;margin:12px 0;}
   .bigbtn{display:block;width:100%;margin:8px 0 0;padding:11px;border-radius:9px;font-size:15px;
-    border:2px solid #120d07;background:linear-gradient(#4a3826,#241a10);
+    border:2px solid #120d07;background:linear-gradient(#66492a,#2c2013);
     color:var(--parch);font-family:Georgia,serif;letter-spacing:.05em;
     box-shadow:0 2px 5px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,230,180,.16);
     transition:transform .05s ease;}
@@ -1885,7 +1887,9 @@ const TEAMS=[ // high-chroma AoE2 player colors — the loudest signal on screen
   {main:'#9b3fd4',dark:'#63268c',trim:'#cf9af2'},  // purple
   {main:'#8c8c8c',dark:'#565656',trim:'#c9c9c9'},  // gray
   {main:'#e8801f',dark:'#9c5212',trim:'#f5b87a'}]; // orange
-const OUT='rgba(14,9,4,.9)',SKIN='#e0b78e';
+// no black outlines — forms read through value contrast; edges are a soft warm
+// shadow tone (late-90s pre-rendered look: warm key upper-left, cool ambient fill)
+const OUT='rgba(64,44,26,.62)',SKIN='#e0b78e';
 /* ---------- isometric projection ---------- */
 const IW=26,IH=13; // half-diamond extents per tile
 function isoPt(x,y){return{x:(x-y)*IW,y:(x+y)*IH};}
@@ -1932,6 +1936,9 @@ function isoBlock(g,x0,y0,w,d,hb,h,cols){
   const A2=lift(A,h),B2=lift(B,h),C2=lift(C,h),D2=lift(D,h);
   poly(g,[D,C,C2,D2],faceGrad(g,cols.l,C2.y,C.y,.05,-.1),cols.o);
   poly(g,[C,B,B2,C2],faceGrad(g,cols.r,C2.y,C.y,.02,-.14),cols.o);
+  // warm key light on the west face, cool ambient fill on the shaded east face
+  poly(g,[D,C,C2,D2],'rgba(255,224,166,.09)');
+  poly(g,[C,B,B2,C2],'rgba(46,54,74,.12)');
   poly(g,[A2,B2,C2,D2],cols.t,cols.o);
   // ambient occlusion band along the ground line + crisp corner shadow
   g.strokeStyle='rgba(20,14,6,.13)';g.lineWidth=4.5;
@@ -1951,11 +1958,25 @@ function roofGable(g,x0,y0,w,d,hb,rh,cols){
   poly(g,[A,B,Re,Rs],cols.shade,cols.o);
   poly(g,[D,C,Re,Rs],faceGrad(g,cols.slope,Rs.y,C.y,.07,-.09),cols.o);
   poly(g,[C,B,Re],faceGrad(g,cols.shade,Re.y,C.y,.02,-.1),cols.o);
+  // warm key on the sunlit slope, cool ambient on the shaded gable end
+  poly(g,[D,C,Re,Rs],'rgba(255,224,166,.08)');
+  poly(g,[C,B,Re],'rgba(46,54,74,.12)');
   return{Rs,Re};
+}
+const TERRA={slope:'#b26a49',shade:'#8d5138',end:'#a05c40',o:'rgba(74,40,26,.5)'}; // terracotta tile
+function archWin(g,P,Q,t0,t1,h0,h1,fill,stroke){
+  // small round-arched opening on an iso face (spec: arched windows/doors)
+  const bl=facePt(P,Q,t0,h0),br=facePt(P,Q,t1,h0),tr=facePt(P,Q,t1,h1),tl=facePt(P,Q,t0,h1);
+  const rise=(h1-h0)*.45;
+  g.fillStyle=fill;g.beginPath();
+  g.moveTo(bl.x,bl.y);g.lineTo(tl.x,tl.y);
+  g.quadraticCurveTo((tl.x+tr.x)/2,(tl.y+tr.y)/2-rise,tr.x,tr.y);
+  g.lineTo(br.x,br.y);g.closePath();g.fill();
+  if(stroke){g.strokeStyle=stroke;g.lineWidth=.8;g.stroke();}
 }
 function facePt(P,Q,t,h){return{x:P.x+(Q.x-P.x)*t,y:P.y+(Q.y-P.y)*t-h};}
 function groundShadow(g,cx,cy,rx){
-  g.fillStyle='rgba(20,24,10,.3)';
+  g.fillStyle='rgba(24,27,36,.26)';
   g.beginPath();g.ellipse(cx,cy,rx,rx*.5,0,0,7);g.fill();
 }
 function teamColor(p){return TEAMS[p].main;}
@@ -2030,8 +2051,9 @@ function refreshTerrain(){
   tctx.setTransform(TREZT,0,0,TREZT,0,0);
   // AoE2-style ground: tightly-spaced warm olive tones so no tile checkerboard
   // shows — the texture comes from the fine grain pass below, not tile contrast
-  const GR=['#6e7f45','#6f8043','#6d7e46','#718247','#6e8044','#6c7d44','#728148','#707f46','#75824a','#6a7b41'];
-  const GRH=['#75874b','#768849','#74864c','#78894d','#75884a','#73854a','#798a4e','#77884c','#7d8e50','#79894b'];
+  // muted dry-grass olives (desaturated, low contrast so units read on top)
+  const GR=['#79804f','#7a814d','#787f50','#7c8351','#79814e','#777e4e','#7d8452','#7b8250','#808653','#757c4b'];
+  const GRH=['#808755','#818853','#7f8656','#838a57','#808954','#7e8654','#848b58','#828956','#888f5a','#848a55'];
   for(let y=0;y<MAP;y++)for(let x=0;x<MAP;x++){
     const k=x+','+y;
     if(G.water[k]||G.ford[k])continue;
@@ -2042,7 +2064,7 @@ function refreshTerrain(){
     const hsp=hash2(x*31+3,y*17+11);
     for(let i=0;i<8;i++){
       const sx=x*TILE+1+((hsp>>>(i*2))%24),sy=y*TILE+1+((hsp>>>(i*2+9))%24);
-      tctx.fillStyle=i%2?'rgba(28,48,18,.24)':'rgba(196,214,152,.2)';
+      tctx.fillStyle=i%2?'rgba(42,52,26,.18)':'rgba(200,208,156,.15)';
       tctx.fillRect(sx,sy,2,1.8);
     }
   }
@@ -2054,8 +2076,8 @@ function refreshTerrain(){
     const gr2=mulberry(777);
     for(let i=0;i<1100;i++){
       ng.fillStyle=gr2()<.52
-        ?'rgba(30,42,16,'+(.05+gr2()*.13).toFixed(3)+')'
-        :'rgba(218,226,158,'+(.04+gr2()*.1).toFixed(3)+')';
+        ?'rgba(42,50,24,'+(.04+gr2()*.1).toFixed(3)+')'
+        :'rgba(216,222,166,'+(.03+gr2()*.08).toFixed(3)+')';
       ng.fillRect(gr2()*96,gr2()*96,1+gr2()*1.6,1+gr2()*1.6);
     }
     grainPat=tctx.createPattern(nc,'repeat');
@@ -2813,9 +2835,9 @@ const drawBldArt={
 /* ---------- ISOMETRIC building sprites (supersede the flat set) ---------- */
 const ISPR={};
 const IHT={tc:56,house:36,farm:10,camp:28,barracks:48,range:38,stable:44,siege:42,castle:82,tower:74,wall:24,gate:34,swall:26,sgate:36,market:44,monastery:56};
-const O2='rgba(22,15,7,.62)';
-const STONE={l:'#8f877a',r:'#7b7366',t:'#a29a8d',o:O2};
-const CREAMW={l:'#ddcfa9',r:'#c6b48c',t:'#d3c39c',o:O2};
+const O2='rgba(58,42,26,.5)'; // soft warm edge tone — no black outlines
+const STONE={l:'#8e887d',r:'#716f6d',t:'#a39c90',o:O2};   // slate gray, cool shade side
+const CREAMW={l:'#e6dab8',r:'#c9baa5',t:'#dccfae',o:O2};  // whitewashed plaster
 function lerpP(a,b,t){return{x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t};}
 /* --- surface texture + prop helpers (AoE2-style detail) --- */
 function masonry(g,P,Q,h,courses){
@@ -2961,10 +2983,13 @@ function dirtPad(g,s,alpha){
   // two-pass cast shadow to the south-east (sun from the north-west):
   // a long faint throw plus a denser contact shadow weld the building down
   const M=ip(s/2,s/2);
-  g.fillStyle='rgba(15,20,8,.13)';
-  g.beginPath();g.ellipse(M.x+s*IW*.4,M.y+s*IH*.3,s*IW*1.1,s*IH*.8,.18,0,7);g.fill();
-  g.fillStyle='rgba(15,20,8,.22)';
-  g.beginPath();g.ellipse(M.x+s*IW*.34,M.y+s*IH*.26,s*IW*.95,s*IH*.64,.16,0,7);g.fill();
+  // soft cool baked drop shadow (three fading passes read as a blur)
+  g.fillStyle='rgba(22,25,34,.08)';
+  g.beginPath();g.ellipse(M.x+s*IW*.42,M.y+s*IH*.32,s*IW*1.18,s*IH*.88,.18,0,7);g.fill();
+  g.fillStyle='rgba(22,25,34,.11)';
+  g.beginPath();g.ellipse(M.x+s*IW*.4,M.y+s*IH*.3,s*IW*1.05,s*IH*.76,.18,0,7);g.fill();
+  g.fillStyle='rgba(22,25,34,.16)';
+  g.beginPath();g.ellipse(M.x+s*IW*.34,M.y+s*IH*.26,s*IW*.9,s*IH*.6,.16,0,7);g.fill();
   poly(g,[ip(-.08,-.08),ip(s+.08,-.08),ip(s+.08,s+.08),ip(-.08,s+.08)],
     'rgba(122,98,58,'+(alpha||.4)+')');
 }
@@ -3027,22 +3052,18 @@ const ISO_ART={
     ivyAt(g,b1.D,b1.C,16,23);
     const b2=isoBlock(g,.2,.2,1.6,1.6,18,11,CREAMW);
     faceBeams(g,b2.D,b2.C,11);faceBeams(g,b2.C,b2.B,11);
-    const rf=roofGable(g,-.08,-.08,2.16,2.16,29,17,
-      {slope:'#a8523a',shade:'#8d4330',end:'#96482f',o:'rgba(40,16,8,.5)'});
+    const rf=roofGable(g,-.08,-.08,2.16,2.16,29,17,TERRA);
     roofLines(g,-.08,-.08,2.16,2.16,29,17,5);
-    // door with team-color awning
-    const d1=facePt(b1.C,b1.B,.36,0),d2=facePt(b1.C,b1.B,.64,0),
-          d3=facePt(b1.C,b1.B,.64,12),d4=facePt(b1.C,b1.B,.36,12);
-    poly(g,[d1,d2,d3,d4],'#332414','#6b5330',1.2);
+    // arched door with team-color awning
+    archWin(g,b1.C,b1.B,.36,.64,0,12,'#3a2a18','#6b5330');
+    const d3=facePt(b1.C,b1.B,.5,0),d4=facePt(b1.C,b1.B,.5,11);
     g.strokeStyle='#93744a';g.lineWidth=.8;
-    g.beginPath();g.moveTo((d1.x+d2.x)/2,(d1.y+d2.y)/2);
-    g.lineTo((d3.x+d4.x)/2,(d3.y+d4.y)/2);g.stroke();
+    g.beginPath();g.moveTo(d3.x,d3.y);g.lineTo(d4.x,d4.y);g.stroke();
     poly(g,[facePt(b1.C,b1.B,.32,13),facePt(b1.C,b1.B,.68,13),
       facePt(b1.C,b1.B,.66,16),facePt(b1.C,b1.B,.34,16)],TEAMS[p].main,TEAMS[p].dark,1);
-    // shuttered windows on the west face
-    for(const t of [.22,.62]){
-      poly(g,[facePt(b1.D,b1.C,t,8),facePt(b1.D,b1.C,t+.14,8),
-        facePt(b1.D,b1.C,t+.14,14),facePt(b1.D,b1.C,t,14)],'#332414','#6b5330',.8);}
+    // small arched windows on the west face
+    for(const t of [.22,.62])
+      archWin(g,b1.D,b1.C,t,t+.14,8,14,'#3a2a18','#6b5330');
     barrelAt(g,ip(2.28,1.3).x,ip(2.28,1.3).y);
     crateAt(g,ip(1.2,2.34).x,ip(1.2,2.34).y);
     bannerAt(g,(rf.Rs.x+rf.Re.x)/2,(rf.Rs.y+rf.Re.y)/2,p,13);
@@ -3066,10 +3087,8 @@ const ISO_ART={
         {slope:hp2.top,shade:hp2.bot,end:hp2.top,o:'rgba(60,45,18,.5)'});
       thatch(g,-.1,-.1,1.2,1.2,13,11,hp2);
     }
-    poly(g,[facePt(b.C,b.B,.4,0),facePt(b.C,b.B,.62,0),
-      facePt(b.C,b.B,.62,9),facePt(b.C,b.B,.4,9)],'#332414','#6b5330',1);
-    poly(g,[facePt(b.D,b.C,.35,5),facePt(b.D,b.C,.55,5),
-      facePt(b.D,b.C,.55,9),facePt(b.D,b.C,.35,9)],'#332414');
+    archWin(g,b.C,b.B,.4,.62,0,9,'#3a2a18','#6b5330');
+    archWin(g,b.D,b.C,.35,.55,5,9,'#3a2a18',null);
     crateAt(g,ip(1.28,.55).x,ip(1.28,.55).y);
   },
   farm(g,s,p){
@@ -3129,19 +3148,23 @@ const ISO_ART={
   },
   barracks(g,s,p){
     dirtPad(g,2,.45);
-    const b=isoBlock(g,.06,.06,1.88,1.88,0,22,STONE);
-    masonry(g,b.D,b.C,22,5);
-    masonry(g,b.C,b.B,22,5);
-    for(const [e1,e2] of [[b.D2,b.C2],[b.C2,b.B2]])
-      for(let i=0;i<4;i++){
-        const E=lerpP(e1,e2,(i+.32)/4);
-        poly(g,[{x:E.x-3,y:E.y+1},{x:E.x+3,y:E.y+1},{x:E.x+3,y:E.y-5},{x:E.x-3,y:E.y-5}],'#7e7668',O2);}
-    poly(g,[facePt(b.C,b.B,.4,0),facePt(b.C,b.B,.6,0),
-      facePt(b.C,b.B,.6,14),facePt(b.C,b.B,.4,14)],'#2c2013','#4a3a24',1);
+    // timber-framed hall: stone plinth, whitewashed plaster, terracotta roof
+    const b=isoBlock(g,.06,.06,1.88,1.88,0,22,CREAMW);
+    // stone plinth over the bottom of both faces
+    poly(g,[b.D,b.C,facePt(b.D,b.C,1,7),facePt(b.D,b.C,0,7)],'#8e887d');
+    poly(g,[b.C,b.B,facePt(b.C,b.B,1,7),facePt(b.C,b.B,0,7)],'#716f6d');
+    masonry(g,b.D,b.C,7,2);
+    masonry(g,b.C,b.B,7,2);
+    faceBeams(g,b.D,b.C,22);faceBeams(g,b.C,b.B,22);
+    roofGable(g,-.08,-.08,2.16,2.16,22,15,TERRA);
+    roofLines(g,-.08,-.08,2.16,2.16,22,15,5);
+    archWin(g,b.C,b.B,.4,.6,0,14,'#2c2013','#4a3a24');
     g.strokeStyle='#b9bec4';g.lineWidth=.9;
     for(const t of [.44,.5,.56]){
-      const a=facePt(b.C,b.B,t,0),c2=facePt(b.C,b.B,t,13);
+      const a=facePt(b.C,b.B,t,0),c2=facePt(b.C,b.B,t,12);
       g.beginPath();g.moveTo(a.x,a.y);g.lineTo(c2.x,c2.y);g.stroke();}
+    for(const t of [.2,.66]) // small arched windows above the plinth, west face
+      archWin(g,b.D,b.C,t,t+.12,10,15,'#3a2a18','#6b5330');
     // two team shields flanking the gate
     for(const st of [.24,.76]){
       const sh=facePt(b.C,b.B,st,15);
@@ -3194,8 +3217,7 @@ const ISO_ART={
     const b=isoBlock(g,.06,.06,1.88,1.88,0,15,{l:'#8f5f3a',r:'#7c4f2e',t:'#9a6a42',o:O2});
     planks(g,b.D,b.C,15,6);
     planks(g,b.C,b.B,15,6);
-    roofGable(g,-.1,-.1,2.2,2.2,15,13,
-      {slope:'#6e4c28',shade:'#5c3f21',end:'#654423',o:'rgba(30,18,8,.5)'});
+    roofGable(g,-.1,-.1,2.2,2.2,15,13,TERRA);
     roofLines(g,-.1,-.1,2.2,2.2,15,13,4);
     poly(g,[facePt(b.C,b.B,.32,0),facePt(b.C,b.B,.68,0),
       facePt(b.C,b.B,.68,12),facePt(b.C,b.B,.32,12)],'#2c2013','#6b5330',1.2);
@@ -3364,7 +3386,7 @@ const ISO_ART={
     masonry(g,b.C,b.B,20,4);
     ivyAt(g,b.C,b.B,17,41);ivyAt(g,b.D,b.C,17,97);
     const rf=roofGable(g,-.08,-.08,2.12,2.12,20,14,
-      {slope:'#8a5a7a',shade:'#6f4762',end:'#7c516e',o:'rgba(40,20,35,.5)'});
+      {slope:'#7d8288',shade:'#61666c',end:'#6f747a',o:'rgba(26,28,32,.5)'}); // slate
     roofLines(g,-.08,-.08,2.12,2.12,20,14,4);
     // bell gable + cross
     const mx=(rf.Rs.x+rf.Re.x)/2,my=(rf.Rs.y+rf.Re.y)/2;
@@ -3376,11 +3398,9 @@ const ISO_ART={
     g.beginPath();g.moveTo(mx,my-13);g.lineTo(mx,my-20);
     g.moveTo(mx-2.6,my-17.5);g.lineTo(mx+2.6,my-17.5);g.stroke();
     // arched door + windows
-    poly(g,[facePt(b.C,b.B,.42,0),facePt(b.C,b.B,.58,0),
-      facePt(b.C,b.B,.58,12),facePt(b.C,b.B,.42,12)],'#332414','#6b5330',1);
-    for(const t of [.2,.8]){
-      poly(g,[facePt(b.C,b.B,t,7),facePt(b.C,b.B,t+.1,7),
-        facePt(b.C,b.B,t+.1,13),facePt(b.C,b.B,t,13)],'#332414');}
+    archWin(g,b.C,b.B,.42,.58,0,12,'#3a2a18','#6b5330');
+    for(const t of [.2,.8])
+      archWin(g,b.C,b.B,t,t+.1,7,13,'#3a2a18',null);
   },
   gate(g,s,p){
     poly(g,[ip(0,.3),ip(1,.3),ip(1,.7),ip(0,.7)],'rgba(122,98,58,.4)');
@@ -3613,7 +3633,7 @@ function drawManRig(u,t,TC,mc){
     const legDraw=(L,near)=>{
       const lp=g.mv?legPose(g.ph+L.off,2.4,1.5,.58):{dy:L.x<0?-.22:.22,dz:0};
       const hip=pr(L.x,0,6.1),knee=pr(L.x,lp.dy*.45+.6,3.1+lp.dz*.5),ft=pr(L.x,lp.dy,lp.dz);
-      ctx.strokeStyle='rgba(14,9,4,.82)';ctx.lineWidth=near?3:2.6;
+      ctx.strokeStyle='rgba(64,44,26,.52)';ctx.lineWidth=near?3:2.6;
       ctx.beginPath();ctx.moveTo(hip.x,hip.y);ctx.quadraticCurveTo(knee.x,knee.y,ft.x,ft.y);ctx.stroke();
       ctx.strokeStyle=mc.legC;ctx.lineWidth=near?1.9:1.5;
       ctx.beginPath();ctx.moveTo(hip.x,hip.y);ctx.quadraticCurveTo(knee.x,knee.y,ft.x,ft.y);ctx.stroke();
@@ -3901,7 +3921,7 @@ function drawHorseRig(u,t,TC,cs){
     const top=pr(J.x,J.hy,8),knee=pr(J.x,(J.hy+J.fy)/2+(J.front?.5:-.6),3.6+J.fz*.5),ft=pr(J.x,J.fy,J.fz);
     if(!near){ctx.strokeStyle='rgba(24,15,6,.85)';ctx.lineWidth=2.1;
       ctx.beginPath();ctx.moveTo(top.x,top.y);ctx.quadraticCurveTo(knee.x,knee.y,ft.x,ft.y);ctx.stroke();return;}
-    ctx.strokeStyle='rgba(14,9,4,.8)';ctx.lineWidth=2.6;
+    ctx.strokeStyle='rgba(64,44,26,.5)';ctx.lineWidth=2.6;
     ctx.beginPath();ctx.moveTo(top.x,top.y);ctx.quadraticCurveTo(knee.x,knee.y,ft.x,ft.y);ctx.stroke();
     ctx.strokeStyle=cs.leg;ctx.lineWidth=1.7;
     ctx.beginPath();ctx.moveTo(top.x,top.y);ctx.quadraticCurveTo(knee.x,knee.y,ft.x,ft.y);ctx.stroke();
@@ -4062,7 +4082,7 @@ function drawElephantRig(u,t,TC){
   const legsJ=[[-2.6,-3.8,0],[-2.5,3.4,.25],[2.6,-3.8,.5],[2.5,3.4,.75]];
   const col=(lx,ly,lp,near)=>{
     const top=pr(lx,ly,8.8),ft=pr(lx,ly+lp.dy,lp.dz);
-    ctx.strokeStyle='rgba(14,9,4,.8)';ctx.lineWidth=near?4.2:3.6;
+    ctx.strokeStyle='rgba(64,44,26,.5)';ctx.lineWidth=near?4.2:3.6;
     ctx.beginPath();ctx.moveTo(top.x,top.y);ctx.lineTo(ft.x,ft.y);ctx.stroke();
     if(near){ctx.strokeStyle='#7e7e86';ctx.lineWidth=3.2;
       ctx.beginPath();ctx.moveTo(top.x,top.y);ctx.lineTo(ft.x,ft.y);ctx.stroke();}
@@ -4269,8 +4289,10 @@ function drawUnit(u){
     ctx.strokeStyle=G.inspect&&G.inspect.id===u.id?'rgba(230,230,230,.7)':'rgba(255,255,255,.95)';ctx.lineWidth=1.4;
     ctx.beginPath();ctx.ellipse(px,py+4,big?12:9,big?5.5:4.2,0,0,7);ctx.stroke();
   }
-  ctx.fillStyle='rgba(20,24,10,.32)';
-  ctx.beginPath();ctx.ellipse(px+(big?3:2),py+4.3,big?11:7.5,big?4:2.9,.14,0,7);ctx.fill();
+  ctx.fillStyle='rgba(24,27,36,.16)'; // soft baked shadow: two passes fake a blur
+  ctx.beginPath();ctx.ellipse(px+(big?3:2),py+4.3,big?12:8.4,big?4.5:3.3,.14,0,7);ctx.fill();
+  ctx.fillStyle='rgba(24,27,36,.2)';
+  ctx.beginPath();ctx.ellipse(px+(big?3:2),py+4.3,big?9.5:6.5,big?3.4:2.5,.14,0,7);ctx.fill();
   ctx.save();ctx.translate(px,py);
   ctx.scale(1.18,1.18); // rigs orient, bob, and lunge themselves — AoE2 upright walk
   ctx.lineCap='round';
@@ -4289,16 +4311,19 @@ function drawUnit(u){
   }
 }
 function limb(x1,y1,x2,y2,col,w){
-  ctx.strokeStyle='rgba(14,9,4,.8)';ctx.lineWidth=w+1;
+  ctx.strokeStyle='rgba(64,44,26,.5)';ctx.lineWidth=w+1;
   ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
   ctx.strokeStyle=col;ctx.lineWidth=w;
   ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
 }
 function volShade(pathFn){
-  // clip to the shape: darken the shaded flank, warm the sunlit flank
+  // clip to the shape: cool ambient fill on the shaded flank, warm key light on
+  // the sunlit flank, plus a pale rim along the lit edge — replaces outlines
   ctx.save();ctx.beginPath();pathFn();ctx.clip();
-  ctx.fillStyle='rgba(22,13,5,.2)';ctx.fillRect(.8,-34,22,44);
-  ctx.fillStyle='rgba(255,244,212,.15)';ctx.fillRect(-22,-34,21.2,44);
+  ctx.fillStyle='rgba(42,48,66,.22)';ctx.fillRect(.8,-34,22,44);
+  ctx.fillStyle='rgba(255,240,204,.16)';ctx.fillRect(-22,-34,21.2,44);
+  ctx.strokeStyle='rgba(255,244,214,.28)';ctx.lineWidth=1.6;
+  ctx.beginPath();pathFn();ctx.stroke(); // clipped: reads as a thin inner rim
   ctx.restore();
 }
 function hand(x,y){ctx.fillStyle=SKIN;ctx.strokeStyle=OUT;ctx.lineWidth=.6;
@@ -4312,7 +4337,7 @@ function faceEye(hx,hy,r){
 function legs(sw,col){
   const one=(x0,dx)=>{
     const bend=Math.abs(sw)*.9+.2;
-    ctx.strokeStyle='rgba(14,9,4,.82)';ctx.lineWidth=3;
+    ctx.strokeStyle='rgba(64,44,26,.52)';ctx.lineWidth=3;
     ctx.beginPath();ctx.moveTo(x0,-3.4);ctx.quadraticCurveTo(x0+dx*.45+bend,.4,x0+dx,4);ctx.stroke();
     ctx.strokeStyle=col;ctx.lineWidth=1.9;
     ctx.beginPath();ctx.moveTo(x0,-3.4);ctx.quadraticCurveTo(x0+dx*.45+bend,.4,x0+dx,4);ctx.stroke();
@@ -4497,7 +4522,7 @@ function drawSpear_legacy(u,t,sw,TC){
 function drawHorse(u,t,sw,col,legC,maneC,camel){
   const g2=u.path&&u.path.length?Math.sin(t+2.2):0;
   const leg=(x,ph)=>{
-    ctx.strokeStyle='rgba(14,9,4,.8)';ctx.lineWidth=2.6;
+    ctx.strokeStyle='rgba(64,44,26,.5)';ctx.lineWidth=2.6;
     ctx.beginPath();ctx.moveTo(x,-4);ctx.lineTo(x+ph,4);ctx.stroke();
     ctx.strokeStyle=legC;ctx.lineWidth=1.7;
     ctx.beginPath();ctx.moveTo(x,-4);ctx.lineTo(x+ph,4);ctx.stroke();
@@ -4884,7 +4909,7 @@ function drawElephant(u,t,sw,TC){drawElephantRig(u,t,TC);}
 function drawElephant_legacy(u,t,sw,TC){
   const g2=u.path&&u.path.length?Math.sin(t+2.2):0;
   const leg=(x,ph)=>{
-    ctx.strokeStyle='rgba(14,9,4,.8)';ctx.lineWidth=3.6;
+    ctx.strokeStyle='rgba(64,44,26,.5)';ctx.lineWidth=3.6;
     ctx.beginPath();ctx.moveTo(x,-5);ctx.lineTo(x+ph,4);ctx.stroke();
     ctx.strokeStyle='#7e7e86';ctx.lineWidth=2.8;
     ctx.beginPath();ctx.moveTo(x,-5);ctx.lineTo(x+ph,4);ctx.stroke();};
