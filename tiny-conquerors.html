@@ -2785,7 +2785,7 @@ const TEAMS=[ // high-chroma AoE2 player colors — the loudest signal on screen
   {main:'#e8801f',dark:'#9c5212',trim:'#f5b87a'}]; // orange
 // no black outlines — forms read through value contrast; edges are a soft warm
 // shadow tone (late-90s pre-rendered look: warm key upper-left, cool ambient fill)
-const OUT='rgba(64,44,26,.62)',SKIN='#e0b78e';
+const OUT='rgba(50,33,17,.72)',SKIN='#e0b78e'; // a notch darker/crisper, still warm — the reference sprites pop harder
 /* ---------- isometric projection ---------- */
 const IW=26,IH=13; // half-diamond extents per tile
 function isoPt(x,y){return{x:(x-y)*IW,y:(x+y)*IH};}
@@ -2859,7 +2859,7 @@ function roofGable(g,x0,y0,w,d,hb,rh,cols){
   poly(g,[C,B,Re],'rgba(46,54,74,.12)');
   return{Rs,Re};
 }
-const TERRA={slope:'#b26a49',shade:'#8d5138',end:'#a05c40',o:'rgba(74,40,26,.5)'}; // terracotta tile
+const TERRA={slope:'#9a5a3e',shade:'#75422c',end:'#8a4f36',o:'rgba(58,30,18,.55)'}; // deep brick tile (ref roofs are darker/browner)
 function archWin(g,P,Q,t0,t1,h0,h1,fill,stroke){
   // small round-arched opening on an iso face (spec: arched windows/doors)
   const bl=facePt(P,Q,t0,h0),br=facePt(P,Q,t1,h0),tr=facePt(P,Q,t1,h1),tl=facePt(P,Q,t0,h1);
@@ -2958,8 +2958,10 @@ function refreshTerrain(){
   // AoE2-style ground: tightly-spaced warm olive tones so no tile checkerboard
   // shows — the texture comes from the fine grain pass below, not tile contrast
   // muted dry-grass olives (desaturated, low contrast so units read on top)
-  const GR=['#79804f','#7a814d','#787f50','#7c8351','#79814e','#777e4e','#7d8452','#7b8250','#808653','#757c4b'];
-  const GRH=['#808755','#818853','#7f8656','#838a57','#808954','#7e8654','#848b58','#828956','#888f5a','#848a55'];
+  // yellow-olive grass calibrated against the reference frames (f600/f1500):
+  // brighter and yellower than the old dry olive, still tightly spaced
+  const GR=['#7e8946','#7f8a44','#7d8847','#818c48','#7e8a45','#7c8745','#828d49','#808b47','#859048','#7a8542'];
+  const GRH=['#858f4c','#86904a','#848e4d','#88934e','#85904b','#838d4b','#89944f','#87924d','#8c964e','#818b48'];
   for(let y=0;y<MAP;y++)for(let x=0;x<MAP;x++){
     const k=x+','+y;
     if(G.water[k]||G.ford[k])continue;
@@ -2996,14 +2998,16 @@ function refreshTerrain(){
   for(let i=0,nP=Math.round(26*MAP*MAP/4096);i<nP;i++){
     let mx=rnd()*MAP*TILE,my=rnd()*MAP*TILE;
     const dark=i%3!==2;let a=rnd()*6.283;
-    for(let s=0,st=5+(rnd()*6|0);s<st;s++){
-      const mr=TILE*(1.6+rnd()*2.2);
-      tctx.fillStyle=dark?'rgba(46,66,30,.16)':'rgba(178,188,116,.11)';
+    for(let s=0,st=6+(rnd()*7|0);s<st;s++){
+      const mr=TILE*(2.0+rnd()*2.8); // the reference grass patches are FIELDS, not spots
+      // faint solid core + heavy dither so the union reads as one ragged field,
+      // not a chain of stamped ellipses
+      tctx.fillStyle=dark?'rgba(40,60,24,.11)':'rgba(188,196,118,.08)';
       tctx.beginPath();tctx.ellipse(mx,my,mr,mr*.55,0,0,7);tctx.fill();
-      tctx.fillStyle=dark?'rgba(30,46,20,.25)':'rgba(205,214,140,.2)';
-      for(let d=0;d<16;d++){
+      tctx.fillStyle=dark?'rgba(26,42,16,.26)':'rgba(210,218,140,.2)';
+      for(let d=0;d<34;d++){
         const t2=Math.sqrt(rnd()),an=rnd()*6.283;
-        tctx.fillRect(mx+Math.cos(an)*mr*t2,my+Math.sin(an)*mr*.55*t2,2.2,2);
+        tctx.fillRect(mx+Math.cos(an)*mr*t2,my+Math.sin(an)*mr*.55*t2,2.4,2);
       }
       a+=(rnd()-.5)*1.4;
       mx+=Math.cos(a)*mr*.8;my+=Math.sin(a)*mr*.5;
@@ -3013,7 +3017,7 @@ function refreshTerrain(){
   // with solid tan cores and heavy dithered grass fringes (skips water/fords)
   const wet=(px,py)=>{const tx2=(px/TILE)|0,ty2=(py/TILE)|0,kk=tx2+','+ty2;
     return G.water[kk]||G.ford[kk];};
-  const DIRT=['#b39a66','#a8925f','#c2ab79','#95804f'];
+  const DIRT=['#c0a266','#b4975c','#d0b276','#a1874f']; // warmer orange-tan, per reference
   const dirtSpots=[];
   dirtPatches.length=0; // minimap mirrors the same blobs (tile units)
   for(let i=0,nB=Math.round(9*MAP*MAP/4096);i<nB;i++){
@@ -3139,8 +3143,8 @@ function refreshTerrain(){
     const px=wx*TILE,py=wy*TILE,h=hash2(wx*11,wy*7);
     const edge=isLand(wx,wy-1)||isLand(wx,wy+1)||isLand(wx-1,wy)||isLand(wx+1,wy);
     const grad=tctx.createLinearGradient(px,py,px,py+TILE);
-    if(edge){grad.addColorStop(0,'#4b7d99');grad.addColorStop(1,'#3c6884');}
-    else{grad.addColorStop(0,'#35607c');grad.addColorStop(1,'#2a4f68');}
+    if(edge){grad.addColorStop(0,'#41749e');grad.addColorStop(1,'#335f8a');}
+    else{grad.addColorStop(0,'#2c567f');grad.addColorStop(1,'#22456a');} // bluer, deeper water
     tctx.fillStyle=grad;
     tctx.fillRect(px,py,TILE,TILE);
     // soft depth variation
@@ -3359,8 +3363,8 @@ function getResSpr(type,h){
       g.quadraticCurveTo(0,-28.6,-2.6,-27);g.closePath();g.fill();
       g.strokeStyle='rgba(12,22,8,.4)';g.lineWidth=.7;g.stroke();
     }else{ // broadleaf — clumped, dappled canopy over a real trunk
-      const oc=dark?['#1c3216','#27441d','#345826','#446e31','#578740','#6fa050']
-                   :['#223c1a','#2f5023','#3d662c','#4f7f39','#639849','#7cb25c'];
+      const oc=dark?['#15280f','#1f3915','#2b4c1d','#3a6128','#4d7a36','#628f45']
+                   :['#1b3212','#28451b','#365c25','#487531','#5b8e41','#729f52']; // deeper forest mass, per reference
       // trunk with root flare and a fork
       g.fillStyle='#54381e';
       g.beginPath();g.moveTo(-4,1);g.quadraticCurveTo(-1.8,-2,-2,-9);
@@ -3839,10 +3843,10 @@ const HROOF=[ // castle+ house shingles, per-instance (clay/timber/slate)
   {slope:'#a8674a',shade:'#8a5138',end:'#99593f',o:'rgba(40,16,8,.5)'},
   {slope:'#8d7355',shade:'#715a41',end:'#7f664b',o:'rgba(30,20,10,.5)'},
   {slope:'#7d8288',shade:'#61666c',end:'#6f747a',o:'rgba(20,22,26,.5)'}];
-const HTHATCH=[ // dark/feudal thatch bleach states
-  {top:'#c8a75f',bot:'#a3853f',rid:'#d9bc75'},
-  {top:'#bd9a52',bot:'#987a38',rid:'#cfae66'},
-  {top:'#d2b26c',bot:'#ac8c46',rid:'#e2c680'}];
+const HTHATCH=[ // dark/feudal thatch — grey-straw like the reference, less golden
+  {top:'#bda878',bot:'#96824e',rid:'#cebd8c'},
+  {top:'#b09b6a',bot:'#8a7647',rid:'#c1ac7c'},
+  {top:'#c7b284',bot:'#a08c58',rid:'#d7c696'}];
 function thatch(g,x0,y0,w,d,hb,rh,pal){
   // combed straw down the visible slope + ragged eave tufts + tied ridge cap
   const Dc=lift(ip(x0,y0+d),hb),Cc=lift(ip(x0+w,y0+d),hb);
