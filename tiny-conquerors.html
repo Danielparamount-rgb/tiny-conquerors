@@ -352,6 +352,14 @@ const UNITS={
   ram:{name:'Battering Ram',hp:175,atk:40,range:.7,speed:.85,cost:{w:160,g:75},train:14,age:2,ram:true,garCap:4,
     line:{name:[,,'Battering Ram','Capped Ram'],hp:[,,175,200],atk:[,,40,45]}},
   petard:{name:'Petard',hp:50,atk:25,range:.6,speed:1.25,cost:{f:80,g:20},train:6,age:2,petard:true},
+  /* ---- siege engines (manual p. 44; CD TECHTREE) — ranges scaled ~.75 like the rest ---- */
+  scorpion:{name:'Scorpion',hp:40,atk:12,range:5.5,speed:.9,cost:{w:75,g:75},train:12,age:2,ranged:true,siege:true,rof:3.6,pierce:1,
+    line:{name:[,,'Scorpion','Heavy Scorpion'],hp:[,,40,50],atk:[,,12,16]}},
+  mangonel:{name:'Mangonel',hp:50,atk:40,range:6,speed:.9,cost:{w:160,g:135},train:14,age:2,ranged:true,siege:true,rof:6,blast:1.6,
+    line:{name:[,,'Mangonel','Onager'],hp:[,,50,60],atk:[,,40,50],rng:[,,6,6.5]}},
+  treb:{name:'Trebuchet',hp:150,atk:200,range:12,speed:.6,cost:{w:200,g:200},train:18,age:3,ranged:true,siege:true,treb:true,rof:10},
+  bombard:{name:'Bombard Cannon',hp:80,atk:40,range:9,speed:.8,cost:{w:225,g:225},train:16,age:3,ranged:true,siege:true,gun:true,rof:6.5,vsBld:160,chem:true},
+  handcannon:{name:'Hand Cannoneer',hp:35,atk:17,range:6,speed:1.2,cost:{f:45,g:50},train:9,age:3,ranged:true,gun:true,rof:2.2,vsInf:10,chem:true},
   monk:{name:'Monk',hp:30,atk:0,range:2.2,speed:1.15,cost:{g:100},train:12,age:2,monk:true},
   missionary:{name:'Missionary',hp:30,atk:0,range:1.8,speed:1.55,cost:{g:100},train:11,age:2,monk:true,noRelic:true,cav:true},
   /* ---- unique units ---- */
@@ -407,6 +415,7 @@ const UNITS={
     elite:{name:'Elite Longboat',hp:160,atk:8,rng:5.5}},
   turtle:{name:'Turtle Ship',hp:200,atk:50,range:3,speed:1.2,cost:{w:200,g:200},train:14,age:2,ship:true,ranged:true,rof:2.6,arrowRes:.5,
     elite:{name:'Elite Turtle Ship',hp:300,atk:50}},
+  cannongalleon:{name:'Cannon Galleon',hp:120,atk:35,range:7,speed:1.5,cost:{w:200,g:150},train:15,age:3,ship:true,ranged:true,gun:true,rof:6,vsBld:165,chem:true},
 };
 const INF=new Set(['militia','spearman','berserker','teuton','woad','axeman','huskarl','samurai','jaguar','eagle']);
 const UU_SET=new Set(); // filled after CIVS below — samurai's manual bonus targets these
@@ -453,6 +462,18 @@ const CIVS=[
    blurb:'Builders work 30% faster; Monastery trains swift Missionaries. Unique: Conquistador, mounted gunner. Tech: Supremacy (fighting villagers).'},
 ];
 for(const cv of CIVS)UU_SET.add(cv.uu);
+/* Team bonuses (CD TECHTREE.PDF) — each civ grants its `tb` key to every ally. */
+const TEAM_BONUS={britons:'rangeFast',franks:'knightLos',vikings:'dockCheap',mongols:'scoutLos',
+  teutons:'convResist',celts:'siegeFast',byzantines:'healFast',saracens:'archVsBld',
+  goths:'barracksFast',chinese:'farmFood',persians:'knightVsArcher',turks:'gunFast',
+  japanese:'galleyLos',aztecs:'relicGold',mayans:'wallCheap',huns:'stableFast',
+  koreans:'mangonelRng',spanish:'tradeGold'};
+function teamHas(p,key){
+  if(!G||!G.P)return false;
+  for(let q=0;q<G.P.length;q++)
+    if(allied(q,p)&&TEAM_BONUS[CIVS[G.P[q].civ||0].id]===key)return true;
+  return false;
+}
 function civOf(p){return CIVS[G.P[p].civ||0];}
 function allied(a,b){return a===b||(G&&G.teams&&G.teams[a]!=null&&G.teams[a]===G.teams[b]);}
 /* stat resolution: line by age, elite at Imperial, else base (manual values) */
@@ -518,6 +539,12 @@ function trainTimeOf(b,ut){
   if(ut!=='villager'&&civOf(b.p).trainFast)t*=civOf(b.p).trainFast;
   if(b.type==='barracks'&&hasUt(b.p,'perfusion'))t*=.5;
   if(b.type==='siege'&&hasUt(b.p,'kataparuto'))t*=.67;
+  // team bonuses: whole workshops hum when the right ally is at the table
+  if(b.type==='range'&&teamHas(b.p,'rangeFast'))t*=.8;      // Britons
+  if(b.type==='siege'&&teamHas(b.p,'siegeFast'))t*=.8;      // Celts
+  if(b.type==='barracks'&&teamHas(b.p,'barracksFast'))t*=.8;// Goths
+  if(b.type==='stable'&&teamHas(b.p,'stableFast'))t*=.8;    // Huns
+  if(UNITS[ut].gun&&teamHas(b.p,'gunFast'))t*=.8;           // Turks
   return t;
 }
 /* Blacksmith upgrade lines (manual pp. 46-47). Armor becomes flat damage
@@ -540,6 +567,70 @@ const BS_TECHS={
       desc:'Cavalry take -1 damage per blow'},
 };
 const BS_ATK=[0,1,2,4],BS_ARW=[0,1,2,3];
+/* University technologies (manual pp. 47-49; stone costs -> wood/gold). `req`
+   gates on another university tech; effects are read via hasUni() hooks. */
+const UNI_TECHS={
+  mas:{name:'Masonry',cost:{w:175,g:75},age:2,icon:'🧱',desc:'Buildings +10% HP'},
+  arch:{name:'Architecture',cost:{w:200,g:150},age:3,req:'mas',icon:'🏛️',desc:'Buildings +10% more HP'},
+  tread:{name:'Treadmill Crane',cost:{w:200,g:100},age:2,icon:'🏗️',desc:'Villagers build 20% faster'},
+  bal:{name:'Ballistics',cost:{w:300,g:175},age:2,icon:'🎯',desc:'Arrows lead moving targets'},
+  heat:{name:'Heated Shot',cost:{f:350,g:100},age:2,icon:'🔥',desc:'Towers +50% attack vs. ships'},
+  chem:{name:'Chemistry',cost:{f:300,g:200},age:3,icon:'⚗️',desc:'+1 missile attack; unlocks gunpowder'},
+  se:{name:'Siege Engineers',cost:{f:500,w:600},age:3,icon:'⚙️',desc:'Siege +1 range, +20% vs. buildings'},
+  btower:{name:'Bombard Tower',cost:{f:800,w:200,g:200},age:3,req:'chem',icon:'💣',desc:'Towers mount cannon'},
+};
+const UNI_ORDER=['mas','tread','bal','heat','arch','chem','se','btower'];
+/* Economy & line technologies (manual pp. 47-49), researched at their home
+   buildings. Tiered entries carry names/costs/ages arrays; flat entries max out
+   at 1. State lives in G.P[p].eco as small counters. */
+const ECO_TECHS={
+  loom:{name:'Loom',bld:'tc',age:0,cost:{g:50},icon:'🧵',desc:'Villagers +15 HP, take -1 damage'},
+  cart:{names:['Wheelbarrow','Hand Cart'],bld:'tc',ages:[1,2],costs:[{f:175,w:50},{f:300,w:200}],icon:'🛒',desc:'Villagers move faster, carry more'},
+  watch:{names:['Town Watch','Town Patrol'],bld:'tc',ages:[1,2],costs:[{f:75},{f:300,g:200}],icon:'👁️',desc:'Buildings see farther'},
+  wood:{names:['Double-Bit Axe','Bow Saw','Two-Man Saw'],bld:'camp',ages:[1,2,3],costs:[{f:100,w:50},{f:150,w:100},{f:300,w:200}],icon:'🪓',desc:'Lumberjacks work faster'},
+  gold:{names:['Gold Mining','Gold Shaft Mining'],bld:'camp',ages:[1,2],costs:[{f:100,w:75},{f:200,w:150}],icon:'⛏️',desc:'Gold miners work faster'},
+  farm:{names:['Horse Collar','Heavy Plow','Crop Rotation'],bld:'camp',ages:[1,2,3],costs:[{f:75,w:75},{f:125,w:125},{f:250,w:250}],icon:'🌾',desc:'Farms yield more before replanting'},
+  caravan:{name:'Caravan',bld:'market',age:2,cost:{f:200,g:200},icon:'🐫',desc:'Trade Cogs earn +30% gold'},
+  careen:{name:'Careening',bld:'dock',age:2,cost:{f:250,g:150},icon:'🛡️',desc:'Ships take -1 damage'},
+  dry:{name:'Dry Dock',bld:'dock',age:3,cost:{f:600,g:400},icon:'⛵',desc:'Ships +15% speed'},
+  shipw:{name:'Shipwright',bld:'dock',age:3,cost:{f:1000,g:300},icon:'🔨',desc:'Ships cost -20% wood'},
+  bloodlines:{name:'Bloodlines',bld:'stable',age:1,cost:{f:150,g:100},icon:'🐎',desc:'Mounted units +20 HP'},
+  husb:{name:'Husbandry',bld:'stable',age:2,cost:{f:250},icon:'🏇',desc:'Cavalry +10% speed'},
+  track:{name:'Tracking',bld:'barracks',age:1,cost:{f:75},icon:'👣',desc:'Infantry see farther'},
+  squires:{name:'Squires',bld:'barracks',age:2,cost:{f:200},icon:'🥾',desc:'Infantry march 10% faster'},
+  thumb:{name:'Thumb Ring',bld:'range',age:2,cost:{f:300,w:250},icon:'💍',desc:'Archers fire faster and never miss'},
+  /* monastery scriptorium (manual p. 48) */
+  ferv:{name:'Fervor',bld:'monastery',age:2,cost:{g:140},icon:'🕊️',desc:'Monks walk 15% faster'},
+  sanc:{name:'Sanctity',bld:'monastery',age:2,cost:{g:120},icon:'✨',desc:'Monks +50% HP'},
+  red:{name:'Redemption',bld:'monastery',age:2,cost:{g:475},icon:'🕯️',desc:'Convert buildings and siege engines'},
+  aton:{name:'Atonement',bld:'monastery',age:2,cost:{g:325},icon:'📿',desc:'Convert enemy Monks'},
+  her:{name:'Heresy',bld:'monastery',age:2,cost:{g:1000},icon:'🔥',desc:'Your units die rather than turn'},
+  herb:{name:'Herbal Medicine',bld:'monastery',age:2,cost:{g:350},icon:'🌿',desc:'Garrisoned units heal 4x faster'},
+  illum:{name:'Illumination',bld:'monastery',age:3,cost:{g:120},icon:'💡',desc:'Monks recover faith 2x faster'},
+  faith:{name:'Faith',bld:'monastery',age:3,cost:{f:750,g:1000},icon:'🙏',desc:'Your units resist conversion'},
+  bp:{name:'Block Printing',bld:'monastery',age:3,cost:{g:200},icon:'📜',desc:'+2 conversion range'},
+};
+function ecoOf(p){const st=G.P[p];if(!st.eco)st.eco={};return st.eco;}
+function ecoTier(p,id){return ecoOf(p)[id]||0;}
+function ecoMax(id){const T=ECO_TECHS[id];return T.names?T.names.length:1;}
+const WOOD_RATE=[1,1.2,1.44,1.58],GOLD_RATE=[1,1.15,1.32];
+function farmFoodOf(p){
+  return 175+[0,75,200,375][ecoTier(p,'farm')]+(teamHas(p,'farmFood')?45:0); // Chinese TB
+}
+function applyEco(p,id){
+  const bump=(cond,dHp)=>{for(const u of G.units){if(u.p!==p||!cond(u))continue;
+    u.maxhp+=dHp;u.hp+=dHp;}};
+  if(id==='loom')bump(u=>u.type==='villager',15);
+  if(id==='bloodlines')bump(u=>UNITS[u.type].cav&&!UNITS[u.type].monk,20);
+  if(id==='sanc')for(const u of G.units)if(u.p===p&&UNITS[u.type].monk){
+    u.maxhp=Math.round(u.maxhp*1.5);u.hp=Math.round(u.hp*1.5);}
+  if(p===0){snd('done');updateTop();refreshPanel();}
+}
+function applyUni(p,id){
+  if(id==='mas'||id==='arch') // retroactive: standing walls thicken too
+    for(const b of G.blds)if(b.p===p){b.maxhp=Math.round(b.maxhp*1.1);b.hp=Math.round(b.hp*1.1);}
+  if(p===0){snd('done');feed(UNI_TECHS[id].name+' — researched');updateTop();refreshPanel();}
+}
 function bsOf(p){const st=G.P[p];
   if(!st.bs)st.bs={atk:0,arw:0,ia:0,aa:0,ca:0};
   return st.bs;}
@@ -550,6 +641,8 @@ function bsArmorOf(u){ // flat damage reduction from armor research
   else if(d.cav&&d.ranged)a=bs.ca+(st.pt?2:0); // Parthian Tactics: mounted archers
   else if(d.cav)a=bs.ca;
   else if(d.ranged)a=bs.aa;
+  if(u.type==='villager'&&ecoTier(u.p,'loom'))a+=1; // Loom
+  if(d.ship&&ecoTier(u.p,'careen'))a+=1;            // Careening
   return a;
 }
 const BLDS={
@@ -558,9 +651,9 @@ const BLDS={
   farm:{name:'Farm',hp:250,size:1,cost:{w:60},bt:6,farm:true},
   camp:{name:'Storage Camp',hp:600,size:1,cost:{w:75},bt:9,drop:true},
   barracks:{name:'Barracks',hp:1000,size:2,cost:{w:150},bt:16,trains:['militia','spearman']},
-  range:{name:'Archery Range',hp:1000,size:2,cost:{w:150},bt:16,trains:['archer','skirmisher'],age:1},
+  range:{name:'Archery Range',hp:1000,size:2,cost:{w:150},bt:16,trains:['archer','skirmisher','handcannon'],age:1},
   stable:{name:'Stable',hp:1000,size:2,cost:{w:150},bt:16,trains:['scout','knight'],age:1},
-  siege:{name:'Siege Works',hp:1200,size:2,cost:{w:200},bt:18,trains:['ram'],age:2},
+  siege:{name:'Siege Works',hp:1200,size:2,cost:{w:200},bt:18,trains:['ram','scorpion','mangonel','bombard'],age:2},
   castle:{name:'Castle',hp:3200,size:2,cost:{w:350,g:200},bt:40,trains:[],atk:11,rng:7,age:2,garCap:10},
   tower:{name:'Watch Tower',hp:700,size:1,cost:{w:100,g:75},bt:18,atk:7,rng:5,age:1,garCap:4},
   wall:{name:'Palisade Wall',hp:300,size:1,cost:{w:5},bt:4,thin:true},
@@ -569,8 +662,10 @@ const BLDS={
   sgate:{name:'Stone Gate',hp:2000,size:1,cost:{w:20,g:40},bt:11,thin:true,gate:true,age:2},
   market:{name:'Market',hp:800,size:2,cost:{w:150},bt:14,age:1},
   blacksmith:{name:'Blacksmith',hp:1000,size:2,cost:{w:150},bt:14,age:1},
+  university:{name:'University',hp:1200,size:2,cost:{w:200},bt:16,age:2},
+  wonder:{name:'Wonder',hp:4800,size:2,cost:{w:1000,g:1000},bt:100,age:3},
   dock:{name:'Dock',hp:1000,size:2,cost:{w:150},bt:14,drop:true,
-    trains:['fishing','cog','transport','galley','fireship','demo']},
+    trains:['fishing','cog','transport','galley','fireship','demo','cannongalleon']},
   monastery:{name:'Monastery',hp:900,size:2,cost:{w:175,g:100},bt:18,trains:['monk'],age:2},
 };
 const RES_META={food:{amt:175},wood:{amt:100},gold:{amt:450},fish:{amt:350}};
@@ -635,7 +730,7 @@ function newGame(){
   else teams=Array.from({length:NP},(_,i)=>i);
   const mkP=c=>{const cv=CIVS[c]; // manual start bonuses/penalties
     return{f:200+(cv.startF||0),w:200+(cv.startW||0),g:100,age:0,ageT:0,aging:false,civ:c,uts:[],
-      bs:{atk:0,arw:0,ia:0,aa:0,ca:0},pt:false};};
+      bs:{atk:0,arw:0,ia:0,aa:0,ca:0},pt:false,uni:{},eco:{},mon:{}};};
   const P=[mkP(civSel)];
   const used=[civSel];
   const ais=[null];
@@ -794,6 +889,8 @@ function genMapRiver(){
 }
 /* ================= entities ================= */
 function hasUt(p,id){const uts=G.P[p].uts;return !!(uts&&uts.includes(id));}
+function uniOf(p){const st=G.P[p];if(!st.uni)st.uni={};return st.uni;}
+function hasUni(p,id){return !!(G.P[p].uni&&G.P[p].uni[id]);}
 function addUnit(p,type,tx,ty){
   const d=UNITS[type];
   const cv=CIVS[G.P[p].civ||0];
@@ -801,13 +898,16 @@ function addUnit(p,type,tx,ty){
   if(d.cav&&cv.cavHp&&type!=='missionary')hp*=cv.cavHp;
   if(INF.has(type)&&cv.infHpAge)hp*=cv.infHpAge[G.P[p].age];
   if(type==='scout'&&cv.scoutHp)hp*=cv.scoutHp;
-  if(type==='janissary'&&cv.gunHp)hp*=cv.gunHp;
+  if((type==='janissary'||d.gun)&&cv.gunHp)hp*=cv.gunHp; // Turks: hardy gunpowder
   if(type==='fishing'&&cv.fishHp)hp*=cv.fishHp; // Japanese fishing fleet
   if(d.monk&&cv.monkHp)hp+=cv.monkHp;
   if(type==='ram'&&hasUt(p,'furor'))hp*=1.5;
   if(type==='eagle'&&hasUt(p,'eldorado'))hp+=40;
   if(type==='mameluke'&&hasUt(p,'zealotry'))hp+=30;
   if(type==='villager'&&hasUt(p,'supremacy'))hp+=40;
+  if(type==='villager'&&ecoTier(p,'loom'))hp+=15;             // Loom
+  if(d.cav&&!d.monk&&ecoTier(p,'bloodlines'))hp+=20;          // Bloodlines
+  if(d.monk&&ecoTier(p,'sanc'))hp=Math.round(hp*1.5);         // Sanctity (monastery)
   hp=Math.round(hp);
   const u={id:uid++,p,type,x:tx+.5,y:ty+.5,hp,maxhp:hp,face:p===0?1:-1,flash:0,
     hdg:Math.atan2(MAP/2-(ty+.5),MAP/2-(tx+.5)),spd:0,vx:0,vy:0,gaitPh:0,
@@ -819,8 +919,13 @@ function speedOf(u){
   const d=UNITS[u.type],cv=civOf(u.p);
   let s=d.speed*(d.cav&&cv.cavSpd?cv.cavSpd:1);
   if(INF.has(u.type)&&cv.infSpd)s*=cv.infSpd;
+  if(INF.has(u.type)&&ecoTier(u.p,'squires'))s*=1.1;          // Squires
   if(u.type==='villager'&&cv.vilSpd)s*=cv.vilSpd;
-  if(u.type==='ram'){
+  if(u.type==='villager')s*=1+.1*ecoTier(u.p,'cart');         // Wheelbarrow / Hand Cart
+  if(d.cav&&!d.monk&&ecoTier(u.p,'husb'))s*=1.1;              // Husbandry
+  if(d.ship&&ecoTier(u.p,'dry'))s*=1.15;                      // Dry Dock
+  if(d.monk&&ecoTier(u.p,'ferv'))s*=1.15;                     // Fervor
+  if(u.type==='ram'||d.siege){
     if(hasUt(u.p,'drill'))s*=1.5;
     if(u.gar&&u.gar.length)s*=1+.08*u.gar.length; // manual: garrisoned rams move faster
   }
@@ -832,6 +937,8 @@ function addBld(p,type,tx,ty,done){
   const cv=CIVS[G.P[p].civ||0];
   let bhpM=cv.bldHpAge?cv.bldHpAge[G.P[p].age]:(cv.bldHp||1);
   if(type==='tc'&&cv.tcHp)bhpM=cv.tcHp;
+  if(hasUni(p,'mas'))bhpM*=1.1;   // Masonry
+  if(hasUni(p,'arch'))bhpM*=1.1;  // Architecture
   const mhp=Math.round(d.hp*bhpM);
   const b={id:uid++,p,type,tx,ty,size:d.size,hp:done?mhp:1,maxhp:mhp,
     built:!!done,prog:done?d.bt:0,queue:[],qt:0,cd:0,occ:null,gar:[]};
@@ -850,7 +957,8 @@ function atkOf(u){
   let a=statFor(u.type,u.p).atk;
   if((INF.has(u.type)||(d.cav&&!d.ranged))&&!d.ram&&!d.petard&&!d.monk)
     a+=BS_ATK[bs.atk];                              // Forging line
-  if(d.ranged)a+=BS_ARW[bs.arw];                    // Fletching line
+  if(d.ranged&&!d.siege&&!d.gun)a+=BS_ARW[bs.arw];  // Fletching line (not siege/gunpowder)
+  if(d.ranged&&!d.gun&&hasUni(u.p,'chem'))a+=1;     // Chemistry: +1 missile attack
   if(INF.has(u.type)&&hasUt(u.p,'garland'))a+=4;   // Aztec Garland Wars
   if(u.type==='chukonu'&&hasUt(u.p,'rocketry'))a+=2;
   if(u.type==='villager'&&hasUt(u.p,'supremacy'))a=9; // Spanish Supremacy
@@ -860,11 +968,15 @@ function atkOf(u){
 function rangeOf(u){
   const d=UNITS[u.type],cv=civOf(u.p);
   let r=statFor(u.type,u.p).rng;
-  if(d.ranged&&r>1)r+=bsOf(u.p).arw;                // Fletching line: +1 range per tier
-  if(d.ranged&&!d.cav&&cv.archerRange)r+=cv.archerRange;
-  if(d.ranged&&!d.cav&&hasUt(u.p,'yeomen'))r+=1;
+  if(d.ranged&&r>1&&!d.siege&&!d.gun)r+=bsOf(u.p).arw; // Fletching line: +1 range per tier
+  if(d.ranged&&!d.cav&&!d.siege&&!d.gun&&cv.archerRange)r+=cv.archerRange;
+  if(d.ranged&&!d.cav&&!d.siege&&!d.gun&&hasUt(u.p,'yeomen'))r+=1;
   if(u.type==='axeman'&&hasUt(u.p,'bearded'))r+=1;
   if(u.type==='janissary'&&hasUt(u.p,'artillery'))r+=1.5;
+  if((u.type==='bombard'||u.type==='cannongalleon')&&hasUt(u.p,'artillery'))r+=1.5;
+  if(u.type==='mangonel'&&hasUt(u.p,'shinkichon'))r+=2; // Korean unique tech
+  if(u.type==='mangonel'&&teamHas(u.p,'mangonelRng'))r+=1; // Korean team bonus
+  if(d.siege&&!d.ram&&hasUni(u.p,'se'))r+=1;        // Siege Engineers
   return r;
 }
 function rofOf(u){
@@ -872,15 +984,14 @@ function rofOf(u){
   let c=d.ram?2.4:(d.rof||1.5);
   if(INF.has(u.type)&&cv.infRofAge)c*=cv.infRofAge[G.P[u.p].age];
   if(u.type==='mangudai'&&cv.mangRof)c*=cv.mangRof;
-  if(u.type==='ram'){
-    if(cv.siegeRof)c*=cv.siegeRof;
-    if(hasUt(u.p,'kataparuto'))c*=.67;
-  }
+  if(d.ranged&&!d.siege&&!d.gun&&!d.ship&&ecoTier(u.p,'thumb'))c*=.85; // Thumb Ring
+  if((d.ram||d.siege)&&cv.siegeRof)c*=cv.siegeRof;  // Celts: siege fires faster
+  if((u.type==='ram'||d.treb)&&hasUt(u.p,'kataparuto'))c*=.67;
   return c;
 }
 function carryCap(u){
   if(UNITS[u.type].fisher)return 15;
-  return 10+(civOf(u.p).vilCarry||0);}
+  return Math.round((10+(civOf(u.p).vilCarry||0))*(1+.25*ecoTier(u.p,'cart')));}
 
 /* ================= pathfinding ================= */
 function passable(x,y){return x>=0&&y>=0&&x<MAP&&y<MAP&&!G.map[y][x];}
@@ -1046,6 +1157,7 @@ function latShove(u,dx,dy,mag){
 }
 /* ================= commands ================= */
 function cmdMove(u,tx,ty){u.state='move';u.target=null;u.resKey=null;u.farm=null;u.am=null;
+  u.setup=null; // a moving trebuchet packs its arm away
   u.path=uPath(u,tx,ty,u.p)||[];}
 function cmdAmove(u,tx,ty){
   if(u.type==='villager'||UNITS[u.type].monk)return cmdMove(u,tx,ty);
@@ -1078,7 +1190,58 @@ function cmdGather(u,resKey){
 function cmdFarm(u,b){if(u.type!=='villager')return;
   u.state='toFarm';u.farm=b.id;u.resKey=null;
   const c=bldCenter(b);u.path=uPath(u,c.x,c.y,u.p)||[];}
+/* ---- conversion (manual pp. 12, 48) ---- */
+function convRange(p){return 5+2*ecoTier(p,'bp');} // Block Printing reaches further
+function monkReady(u){return u.faithReady===undefined||G.t>=u.faithReady;}
+function canConvert(u,ent,isBld){
+  if(!UNITS[u.type].monk)return false;
+  if(isBld)return !!ecoTier(u.p,'red')
+    &&!['tc','castle','wall','gate','swall','sgate','farm','monastery','wonder'].includes(ent.type);
+  const td=UNITS[ent.type];
+  if(td.monk&&!ecoTier(u.p,'aton'))return false;      // Atonement: convert monks
+  if((td.siege||td.ram)&&!ecoTier(u.p,'red'))return false; // Redemption: convert siege
+  return true;
+}
+function convTimeFor(u,tgt,isBld){
+  let T=isBld?8:5;
+  if(!isBld){
+    if(tgt.type==='scout')T*=1.5;                    // the scout line resists (manual)
+    if(ecoTier(tgt.p,'faith'))T*=1.5;                // Faith
+    if(teamHas(tgt.p,'convResist'))T*=1.6;           // Teuton team bonus
+  }
+  return T;
+}
+function finishConvert(u,t,isBld){
+  u.faithReady=G.t+(ecoTier(u.p,'illum')?15:30);     // the monk must rest his voice
+  const c=isBld?bldCenter(t):t;
+  if(!isBld&&ecoTier(t.p,'her')){                    // Heresy: death before betrayal
+    t.hp=0;
+    if(t.p===0)feed('Your soldier chose death over conversion',true);
+  }else if(isBld){
+    ejectGarrison(t);                                // the old garrison flees its post
+    t.queue=[];t.qt=0;
+    if(t.p===0)feed('Warning! Your '+BLDS[t.type].name+' has been converted!',true);
+    t.p=u.p;
+    if(u.p===0)feed(BLDS[t.type].name+' converted!');
+  }else{
+    if(t.p===0)feed('Warning! A monk has converted your '+unitName(t.type,t.p)+'!',true);
+    t.p=u.p;t.state='idle';t.path=null;t.target=null;t.resKey=null;t.farm=null;
+    t.am=null;t.wave=null;t.relic=null;
+    if(u.p===0)feed(unitName(t.type,t.p)+' converted!');
+  }
+  for(let i=0;i<7;i++)G.fx.push({x:c.x+(Math.random()-.5),y:c.y-.4-Math.random(),
+    vx:(Math.random()-.5)*.6,vy:-.7-Math.random()*.5,life:.7,max:.7,r:1.6,kind:'chip',col:'#f0e29a'});
+  if(tileVis(c.x,c.y))snd('age');
+}
+function cmdConvert(u,ent,isBld){
+  u.state='toConv';u.target={id:ent.id,bld:isBld};u.convT=0;
+  const c=isBld?bldCenter(ent):ent;u.path=uPath(u,c.x,c.y,u.p)||[];
+}
 function cmdAttack(u,ent,isBld){
+  if(UNITS[u.type].monk){
+    if(canConvert(u,ent,isBld)&&monkReady(u))return cmdConvert(u,ent,isBld);
+    return cmdMove(u,isBld?ent.tx:ent.x,isBld?ent.ty:ent.y);
+  }
   if(UNITS[u.type].passive)return cmdMove(u,isBld?ent.tx:ent.x,isBld?ent.ty:ent.y);
   if(u.type==='ram'&&!isBld)return cmdMove(u,ent.x,ent.y);
   u.state='attack';u.target={id:ent.id,bld:isBld};u.am=null;
@@ -1124,14 +1287,19 @@ function unitCostOf(p,type){
   if(cv.archCost&&(type==='archer'||type==='skirmisher'||type==='plumed'))m=cv.archCost;
   if(cv.counterCost&&(type==='spearman'||type==='skirmisher'))m=cv.counterCost;
   if(cv.shipCost&&d.ship&&!d.passive)m=cv.shipCost; // Vikings: warships -20%
-  if(m===1)return base;
-  const c={};for(const k in base)c[k]=Math.round(base[k]*m);return c;
+  const shipw=d.ship&&ecoTier(p,'shipw');           // Shipwright: -20% ship wood
+  if(m===1&&!shipw)return base;
+  const c={};for(const k in base)c[k]=Math.round(base[k]*m);
+  if(shipw&&c.w)c.w=Math.round(c.w*.8);
+  return c;
 }
 function bldCostOf(p,type){
   const cv=civOf(p),base=BLDS[type].cost;let m=1;
   if(type==='castle'&&cv.castleCost)m=cv.castleCost;
   if(type==='tower'&&cv.towerCost)m=cv.towerCost;
   if(type==='camp'&&cv.campCost)m=cv.campCost;
+  if(BLDS[type].thin&&teamHas(p,'wallCheap'))m*=.5;   // Mayan team bonus
+  if(type==='dock'&&teamHas(p,'dockCheap'))m*=.75;    // Viking team bonus
   if(m===1)return base;
   const c={};for(const k in base)c[k]=Math.round(base[k]*m);return c;
 }
@@ -1146,8 +1314,9 @@ function trainsFor(b,p){
   // manual tech-tree adjustments: Eagle Warriors for the meso civs, Anarchy
   // Huskarls, Spanish Missionaries, Petards at every Castle, naval unique units
   const cv=civOf(p),def=BLDS[b.type];
-  if(b.type==='castle')return[cv.uu,'petard'];
+  if(b.type==='castle')return[cv.uu,'petard','treb'].filter(tt=>tt!=='treb'||G.P[p].age>=3);
   let list=(def.trains||[]).slice();
+  list=list.filter(tt=>!UNITS[tt].chem||hasUni(p,'chem')); // gunpowder needs Chemistry
   if(b.type==='barracks'){
     if(cv.eagles)list.push('eagle');
     if(hasUt(p,'anarchy'))list.push('huskarl');
@@ -1196,6 +1365,11 @@ function step(dt){
           if(b.p===0){snd('train');refreshPanel();feed(unitName(ut,0)+' Created');}
         }
       }
+      // the garrison mends inside safe walls; Herbal Medicine works wonders
+      if(b.gar&&b.gar.length){
+        const hr=(ecoTier(b.p,'herb')?4:1)*dt;
+        for(const gu of b.gar)if(gu.hp<gu.maxhp)gu.hp=Math.min(gu.maxhp,gu.hp+hr);
+      }
       // tower / TC arrows
       if(d.atk){
         b.cd-=dt;
@@ -1208,15 +1382,20 @@ function step(dt){
           if(b.type==='castle'&&hasUt(b.p,'crenellations'))rng+=3;
           if(b.type==='tower'&&hasUt(b.p,'artillery'))rng+=1.5;
           const e=nearestEnemy(b.p,c.x,c.y,rng,true);
+          const bt=b.type==='tower'&&hasUni(b.p,'btower'); // Bombard Tower upgrade
           let tAtk=Math.round(d.atk*((b.type==='tower'||b.type==='castle')?(cvB.towerAtk||1):1))
             +bsOf(b.p).arw
             +(b.gar?b.gar.length*2*(cvB.garArrow||1):0);
           if((b.type==='tower'||b.type==='castle')&&hasUt(b.p,'yeomen'))tAtk+=2;
-          if(e){b.cd=1.6;dealDamage(e,tAtk,b.p,true);
-            const ms=!e.bld&&Math.random()<.28;
+          if(bt)tAtk+=6;
+          if(e&&e.ent&&!e.bld&&UNITS[e.ent.type].ship&&hasUni(b.p,'heat'))
+            tAtk=Math.round(tAtk*1.5); // Heated Shot: towers scorch ships
+          if(e){b.cd=1.6;dealDamage(e,tAtk,b.p,bt?'siege':true);
+            const ms=!bt&&!e.bld&&Math.random()<missChance(b.p);
             G.proj.push({x0:c.x,y0:c.y-1.2,
               x1:e.ex+(ms?(Math.random()-.5)*.9:0),y1:e.ey+(ms?(Math.random()-.5)*.9:0),t:0,
-              dur:Math.max(.16,Math.hypot(e.ex-c.x,e.ey-c.y)*.07),miss:ms});}
+              dur:Math.max(.16,Math.hypot(e.ex-c.x,e.ey-c.y)*(bt?.045:.07)),miss:ms,
+              kind:bt?'ball':null});}
         }
       }
     }
@@ -1259,6 +1438,12 @@ function step(dt){
         G.stuck.push({x:pr.x1,y:pr.y1,t:8,max:8,a:(Math.random()-.5)*.6});
         if(G.stuck.length>50)G.stuck.shift();
         G.fx.push({x:pr.x1,y:pr.y1,vx:0,vy:-.8,life:.3,max:.3,r:1.2,kind:'chip',col:'#9b8a66'});
+      }else if(pr.kind==='stone'||pr.kind==='ball'){ // siege impact: dust and rubble chips
+        for(let di=0;di<4;di++)G.fx.push({x:pr.x1+(Math.random()-.5)*.6,y:pr.y1+(Math.random()-.5)*.4,
+          vx:(Math.random()-.5)*.9,vy:-.5-Math.random()*.7,life:.7,max:.7,
+          r:3+Math.random()*2.5,kind:'smoke',col:'150,136,104'});
+        for(let di=0;di<3;di++)G.fx.push({x:pr.x1,y:pr.y1,vx:(Math.random()-.5)*3,
+          vy:-1-Math.random()*1.4,life:.4,max:.4,r:1.4,kind:'chip',col:'#a89878'});
       }else G.fx.push({x:pr.x1,y:pr.y1,vx:0,vy:0,life:.18,max:.18,r:2,kind:'spark'});
       G.proj.splice(i,1);}}
   // particles / flashes / corpses / smoke
@@ -1314,7 +1499,35 @@ function step(dt){
     if(!r.mon)continue;
     const mb=G.blds.find(b=>b.id===r.mon);
     if(!mb){r.mon=null;continue;}
-    G.P[mb.p].g+=.55*dt;
+    G.P[mb.p].g+=.55*dt*(teamHas(mb.p,'relicGold')?1.33:1); // Aztec team bonus
+  }
+  // Wonder victory countdown (skirmish games)
+  if(!mission&&G.wonderT){
+    const wb=G.blds.find(b=>b.id===G.wonderT.id&&b.built&&b.hp>0);
+    if(!wb){
+      feed(allied(G.wonderT.p,0)?'Your Wonder has fallen!':'The enemy Wonder has fallen!',!allied(G.wonderT.p,0)?false:true);
+      snd('horn');G.wonderT=null;updateTop();
+    }else if(G.t>=G.wonderT.end)return endGame(allied(G.wonderT.p,0));
+  }
+  // Relic victory: one team holds every relic long enough
+  if(!mission&&G.relics.length>=3){
+    let team=null,all=true;
+    for(const r of G.relics){
+      const mb=r.mon&&G.blds.find(b=>b.id===r.mon);
+      if(!mb){all=false;break;}
+      const tt=G.teams[mb.p];
+      if(team===null)team=tt;
+      else if(tt!==team){all=false;break;}
+    }
+    if(all&&team!==null){
+      if(!G.relicT||G.relicT.team!==team){
+        const bonus=G.P.some((st2,q)=>hasUt(q,'atheism'))?100:0;
+        G.relicT={team,end:G.t+300+bonus};
+        feed(team===G.teams[0]?'You hold every relic! Victory approaches…'
+          :'The enemy holds every relic! Recover one before the countdown ends!',team!==G.teams[0]);
+        snd('horn');updateTop();
+      }else if(G.t>=G.relicT.end)return endGame(G.relicT.team===G.teams[0]);
+    }else if(G.relicT){G.relicT=null;updateTop();}
   }
   // win/lose
   if(mission&&mission.win.type==='survive'&&G.t>=mission.win.time)return endGame(true);
@@ -1326,6 +1539,13 @@ function step(dt){
   const pTC=G.blds.find(b=>b.p===0&&b.type==='tc');
   const eTC=G.blds.find(b=>!allied(b.p,0)&&b.type==='tc');
   if(!eTC)endGame(true);else if(!pTC)endGame(false);
+}
+function wonderRaised(b){
+  const bonus=G.P.some((st,q)=>hasUt(q,'atheism'))?100:0; // Hun Atheism stretches the clock
+  G.wonderT={p:b.p,id:b.id,end:G.t+300+bonus};
+  if(allied(b.p,0))feed('Your Wonder is complete! Defend it until the countdown ends!');
+  else feed('Warning! The '+CIVS[G.P[b.p].civ].name+' have raised a Wonder — destroy it!',true);
+  snd('horn');updateTop();
 }
 function ejectGarrison(b){
   let n=0;
@@ -1443,9 +1663,12 @@ function nearestEnemy(p,x,y,r,unitsOnly){
     if(d<bd){bd=d;best={ent:b,bld:true,ex:c.x,ey:c.y};}}
   return best;
 }
+function missChance(p){return hasUni(p,'bal')?.08:.28;} // Ballistics: hit moving targets
 function dealDamage(hit,amt,fromP,ranged){
-  if(ranged&&!hit.bld&&hit.ent.type==='ram')amt=Math.min(amt,2);
-  if(ranged&&!hit.bld&&UNITS[hit.ent.type]&&UNITS[hit.ent.type].arrowRes)
+  // `ranged` is true for arrows, 'siege' for stones/bolts/cannonballs (which
+  // ignore the anti-arrow cap on rams and Huskarl/Eagle arrow resistance)
+  if(ranged===true&&!hit.bld&&hit.ent.type==='ram')amt=Math.min(amt,2);
+  if(ranged===true&&!hit.bld&&UNITS[hit.ent.type]&&UNITS[hit.ent.type].arrowRes)
     amt=Math.max(1,Math.round(amt*UNITS[hit.ent.type].arrowRes)); // Huskarl .5, Eagle .7
   if(!hit.bld&&UNITS[hit.ent.type])
     amt=Math.max(1,amt-bsArmorOf(hit.ent)); // blacksmith armor: flat reduction
@@ -1474,7 +1697,7 @@ function updateUnit(u,dt){
           if(dd<bd){bd=dd;bb=b2;}}
         if(bb)cmdAttack(u,bb,true);
       }else if(d.monk){
-        // monks drift toward wounded allies and heal them
+        // monks drift toward wounded allies and heal them; AI monks also preach
         u.scanT=(u.scanT||0)-dt;
         if(u.scanT<=0){u.scanT=.8;
           let best=null,bd=7;
@@ -1484,6 +1707,14 @@ function updateUnit(u,dt){
             if(dd<bd){bd=dd;best=f;}}
           if(best){u.state='toHeal';u.target={id:best.id,bld:false};
             u.path=uPath(u,best.x,best.y,u.p)||[];}
+          else if(u.p>0&&monkReady(u)){
+            let foe=null,fd=7.5;
+            for(const f of G.units){
+              if(allied(f.p,u.p)||f.hp<=0||!canConvert(u,f,false))continue;
+              const dd=Math.hypot(f.x-u.x,f.y-u.y);
+              if(dd<fd){fd=dd;foe=f;}}
+            if(foe)cmdConvert(u,foe,false);
+          }
         }
       }else if(u.type==='cog'){
         // idle Trade Cog: run a route between our dock and the nearest foreign dock
@@ -1519,12 +1750,39 @@ function updateUnit(u,dt){
       if(!home){u.state='idle';break;}
       const done=followPath(u,dt);const c=bldCenter(home);
       if(Math.hypot(c.x-u.x,c.y-u.y)<home.size*.5+1.9){
-        const gold=Math.round(8+(u.tradeDist||0)*1.2); // manual: profit scales with distance
+        let gold=Math.round(8+(u.tradeDist||0)*1.2); // manual: profit scales with distance
+        if(ecoTier(u.p,'caravan'))gold=Math.round(gold*1.3);   // Caravan
+        if(teamHas(u.p,'tradeGold'))gold=Math.round(gold*1.33); // Spanish team bonus
         G.P[u.p].g+=gold;
         if(u.p===0){updateTop();
           G.fx.push({x:u.x,y:u.y-.6,vx:0,vy:-.8,life:.5,max:.5,r:2,kind:'chip',col:'#ffd75e'});}
         u.state='idle';u.scanT=.5; // brief rest, then sail again
       }else if(done){u.path=uPath(u,c.x,c.y)||[];if(!u.path.length)u.state='idle';}
+      break;}
+    case 'toConv':{
+      const t=targetEnt(u.target);
+      if(!t||t.hp<=0||allied(t.p,u.p)){u.state='idle';u.target=null;break;}
+      const done=followPath(u,dt);
+      const c=u.target.bld?bldCenter(t):t;
+      if(Math.hypot(c.x-u.x,c.y-u.y)<convRange(u.p)){u.state='convert';u.convT=0;u.path=null;}
+      else if(done){u.path=uPath(u,c.x,c.y,u.p)||[];if(!u.path.length)u.state='idle';}
+      break;}
+    case 'convert':{
+      const t=targetEnt(u.target);
+      if(!t||t.hp<=0||allied(t.p,u.p)){u.state='idle';u.target=null;break;}
+      const c=u.target.bld?bldCenter(t):t;
+      if(Math.hypot(c.x-u.x,c.y-u.y)>convRange(u.p)+1){u.state='toConv';
+        u.path=uPath(u,c.x,c.y,u.p)||[];break;}
+      slewHdg(u,c.x,c.y,dt);
+      u.convT=(u.convT||0)+dt;
+      // golden rings pulse over the wavering target
+      u.convFx=(u.convFx||0)-dt;
+      if(u.convFx<=0&&tileVis(c.x,c.y)){u.convFx=.5;
+        G.fx.push({x:c.x,y:c.y-.8,vx:0,vy:-.9,life:.5,max:.5,r:2.2,kind:'chip',col:'#f0e29a'});}
+      if(u.convT>=convTimeFor(u,t,u.target.bld)){
+        finishConvert(u,t,u.target.bld);
+        u.state='idle';u.target=null;u.convT=0;
+      }
       break;}
     case 'toHeal':{
       const t=targetEnt(u.target);
@@ -1539,7 +1797,7 @@ function updateUnit(u,dt){
       if(Math.hypot(t.x-u.x,t.y-u.y)>2.6*(civOf(u.p).healRange||1)){u.state='toHeal';
         u.path=uPath(u,t.x,t.y,u.p)||[];break;}
       slewHdg(u,t.x,t.y,dt);
-      t.hp=Math.min(t.maxhp,t.hp+6*dt);
+      t.hp=Math.min(t.maxhp,t.hp+(teamHas(u.p,'healFast')?9:6)*dt); // Byzantine TB
       break;}
     case 'toRelic':{
       const r=G.relics.find(x=>x.id===u.relicT);
@@ -1602,7 +1860,9 @@ function updateUnit(u,dt){
       if(u.gatherT>=1){u.gatherT=0;
         const cv=civOf(u.p);
         const rate=(r.type==='fish'?1.35:1.1)
-          *(r.type==='wood'&&cv.woodMult?cv.woodMult:1)*(r.type==='gold'&&cv.goldMult?cv.goldMult:1);
+          *(r.type==='wood'&&cv.woodMult?cv.woodMult:1)*(r.type==='gold'&&cv.goldMult?cv.goldMult:1)
+          *(r.type==='wood'?WOOD_RATE[ecoTier(u.p,'wood')]:1)   // axe/saw line
+          *(r.type==='gold'?GOLD_RATE[ecoTier(u.p,'gold')]:1);  // mining line
         const take=Math.min(rate,r.amt);
         r.amt-=take/(cv.resLast||1);u.carry+=take;u.carryType=r.type; // Mayans: resources last longer
         if(tileVis(r.x,r.y))snd(r.type==='gold'?'mine':'chop');
@@ -1630,6 +1890,16 @@ function updateUnit(u,dt){
       {const fc=bldCenter(b);slewHdg(u,fc.x,fc.y,dt);}
       u.gatherT+=dt;
       if(u.gatherT>=1.25/(civOf(u.p).farmFast||1)){u.gatherT=0;u.carry+=1;u.carryType='food';
+        // farms exhaust (manual); replant automatically while wood allows
+        if(b.food===undefined)b.food=farmFoodOf(u.p);
+        b.food-=1;
+        if(b.food<=0){
+          const rc=bldCostOf(u.p,'farm');
+          if(canAfford(u.p,rc)){pay(u.p,rc);b.food=farmFoodOf(u.p);
+            if(u.p===0){updateTop();feed('Farm replanted');}}
+          else{b.hp=0; // the field lies fallow
+            if(u.p===0)feed('A farm has gone fallow — no wood to replant',true);}
+        }
         if(u.carry>=carryCap(u)){const dp=dropoffFor(u);if(!dp){u.state='idle';break;}
           u.state='return';const c=bldCenter(dp);u.path=uPath(u,c.x,c.y,u.p)||[];}}
       break;}
@@ -1663,11 +1933,12 @@ function updateUnit(u,dt){
         if(b.type==='farm')cmdFarm(u,b);
         break;}
       const def=BLDS[b.type];
-      const bRate=dt*(civOf(u.p).buildFast||1); // Spanish: builders 30% faster
+      const bRate=dt*(civOf(u.p).buildFast||1)*(hasUni(u.p,'tread')?1.2:1); // Spanish / Treadmill Crane
       b.prog+=bRate;b.hp=Math.min(b.maxhp,b.hp+b.maxhp*bRate/def.bt);
       if(b.prog>=def.bt){b.built=true;b.hp=b.maxhp;b.pendCost=null;
         if(!def.thin&&b.type!=='farm'&&b.type!=='dock')stampWorn(b);
         if(b.p===0&&!def.thin){feed('— '+def.name+' Built —');snd('done');refreshPanel();}
+        if(b.type==='wonder')wonderRaised(b);
         if(b.type==='farm')cmdFarm(u,b);
         else{
           let site=null,sd=8;
@@ -1704,21 +1975,28 @@ function updateUnit(u,dt){
       if(dist<=rng){
         u.path=null;u.spd=0;u.vx=0;u.vy=0;
         slewHdg(u,c.x,c.y,dt); // face the victim so the windup aims right
+        if(d.treb&&!u.setup){ // a trebuchet unpacks before its first shot
+          u.setup=true;u.cd=Math.max(u.cd,hasUt(u.p,'kataparuto')?1.5:3);}
         if(u.cd<=0){u.cd=rofOf(u);
           let dmg=atkOf(u);
           if(u.target.bld){
-            dmg+=statFor(u.type,u.p).vsBld; // elephants, Tarkans
+            dmg+=statFor(u.type,u.p).vsBld; // elephants, Tarkans, bombards
             if(d.petard)dmg=60;             // demolition charge
+            if(d.siege&&hasUni(u.p,'se'))dmg=Math.round(dmg*1.2); // Siege Engineers
+            if(d.petard&&hasUni(u.p,'se'))dmg=Math.round(dmg*1.4);
+            if(d.ranged&&!d.cav&&!d.siege&&!d.gun&&!d.ship&&teamHas(u.p,'archVsBld'))dmg+=1; // Saracen TB
           }else{
             const td=UNITS[t.type];
             if(d.ram)dmg=2;
             else if(d.petard)dmg=25;
+            else if(d.treb)dmg=12; // trebuchets are wretched against troops
             else if(td){
               if(d.vsCav&&td.cav)dmg+=d.vsCav;
               if(d.vsRanged&&td.ranged)dmg+=d.vsRanged;
               if(d.vsInf&&INF.has(t.type))dmg+=d.vsInf;      // Jaguar, Cataphract
               if(d.vsUnique&&UU_SET.has(t.type))dmg+=d.vsUnique; // Samurai
               if(d.vsShip&&td.ship)dmg+=d.vsShip;            // Fire Ship
+              if(u.type==='knight'&&td.ranged&&teamHas(u.p,'knightVsArcher'))dmg+=2; // Persian TB
               const eu=elevTile(u.x,u.y),et=elevTile(t.x,t.y);
               if(eu>et)dmg=Math.round(dmg*1.25);
               else if(eu<et)dmg=Math.max(1,Math.round(dmg*.8));}
@@ -1735,11 +2013,29 @@ function updateUnit(u,dt){
               vy:-.6-Math.random(),life:.6,max:.6,r:5+Math.random()*4,kind:'smoke',col:'#e8b45a'});
             snd('hit');break;
           }
-          dealDamage({ent:t,bld:u.target.bld},dmg,u.p,d.range>1);
+          const rangedKind=d.range>1?((d.siege||d.gun)?'siege':true):false;
+          dealDamage({ent:t,bld:u.target.bld},dmg,u.p,rangedKind);
           if(d.petard){ // hoisted by its own petard — the charge consumes the unit
             u.hp=0;
             G.fx.push({x:u.x,y:u.y-.3,vx:0,vy:-.4,life:.5,max:.5,r:9,kind:'smoke',col:'#e8b45a'});
             snd('hit');break;
+          }
+          if(d.blast){ // mangonel line: the stone shatters across everyone near the impact
+            for(const o of G.units){
+              if(allied(o.p,u.p)||o.hp<=0||o.id===t.id)continue;
+              if(Math.hypot(o.x-c.x,o.y-c.y)<d.blast)
+                dealDamage({ent:o,bld:false},Math.max(2,Math.round(dmg*.6)),u.p,'siege');
+            }
+          }
+          if(d.pierce&&!u.target.bld){ // scorpion bolts pass through the ranks
+            const L=Math.hypot(c.x-u.x,c.y-u.y)||1,nx=(c.x-u.x)/L,ny=(c.y-u.y)/L;
+            for(const o of G.units){
+              if(allied(o.p,u.p)||o.hp<=0||o.id===t.id)continue;
+              const px2=o.x-u.x,py2=o.y-u.y,along=px2*nx+py2*ny;
+              if(along<0||along>L+1.5)continue;
+              const off=Math.abs(px2*ny-py2*nx);
+              if(off<.8)dealDamage({ent:o,bld:false},Math.max(1,Math.round(dmg*.5)),u.p,'siege');
+            }
           }
           if(u.type==='cataphract'&&hasUt(u.p,'logistica')&&!u.target.bld){
             // Logistica: trample damage to enemies pressed around the target
@@ -1748,11 +2044,18 @@ function updateUnit(u,dt){
               if(Math.hypot(o.x-c.x,o.y-c.y)<1.4)dealDamage({ent:o,bld:false},5,u.p,false);
             }
           }
-          if(d.range>1){const ms=!u.target.bld&&Math.random()<.28;
+          if(d.range>1){
+            const kind=d.gun?'ball':(d.treb||d.blast)?'stone':d.pierce?'bolt':null;
+            const noMiss=ecoTier(u.p,'thumb')&&!d.siege&&!d.gun; // Thumb Ring: true flight
+            const ms=!kind&&!noMiss&&!u.target.bld&&Math.random()<missChance(u.p);
             G.proj.push({x0:u.x,y0:u.y-.4,
               x1:c.x+(ms?(Math.random()-.5)*.9:0),y1:c.y+(ms?(Math.random()-.5)*.9:0),t:0,
-              dur:Math.max(.14,Math.hypot(c.x-u.x,c.y-u.y)*.07),miss:ms});}}
+              dur:Math.max(.14,Math.hypot(c.x-u.x,c.y-u.y)*(kind==='ball'?.045:kind==='stone'?.11:.07)),
+              miss:ms,kind});
+            if(kind==='ball')G.fx.push({x:u.x,y:u.y-.5,vx:0,vy:-.3,life:.3,max:.3,r:3.5,kind:'smoke',col:'200,196,186'});
+          }}
       }else{
+        u.setup=null; // rolling toward the target packs the trebuchet
         if(!u.path||!u.path.length)u.path=uPath(u,c.x,c.y,u.p)||[];
         followPath(u,dt);
       }
@@ -1826,7 +2129,13 @@ function aiThink(p,ai){
     }
   }
   if(st.age>=2&&!myBld('siege').length&&!G.blds.some(b=>b.p===p&&!b.built&&b.type==='siege')&&st.w>=200)aiPlace('siege',undefined,undefined,p);
+  if(st.age>=2&&!myBld('university').length&&!G.blds.some(b=>b.p===p&&!b.built&&b.type==='university')&&st.w>=300)aiPlace('university',undefined,undefined,p);
+  if(st.age>=2&&!myBld('monastery').length&&!G.blds.some(b=>b.p===p&&!b.built&&b.type==='monastery')&&st.w>=250&&st.g>=180)aiPlace('monastery',undefined,undefined,p);
   if(st.age>=2&&!myBld('castle').length&&!G.blds.some(b=>b.p===p&&!b.built&&b.type==='castle')&&st.w>=350&&st.g>=200)aiPlace('castle',undefined,undefined,p);
+  // a rich Imperial AI reaches for a Wonder (manual strategic number 37)
+  if(!mission&&st.age>=3&&!G.wonderT&&st.f>1500&&st.w>1400&&st.g>1300
+     &&!myBld('wonder').length&&!G.blds.some(b=>b.p===p&&!b.built&&b.type==='wonder'))
+    aiPlace('wonder',undefined,undefined,p);
   // storage camp near far-off resources
   if(st.w>=75&&!G.blds.some(b=>b.p===p&&!b.built&&b.type==='camp')&&myBld('camp').length<3){
     const far=vills.find(v=>{
@@ -1860,12 +2169,36 @@ function aiThink(p,ai){
     if(!st.pt&&st.age>=3&&myBld('range').some(b=>b.built)
        &&st.f>450&&st.g>500){pay(p,{f:200,g:250});st.pt=true;}
   }
+  // economy techs: cheapest available first, bought when comfortable
+  {let bestE=null,bcE=1e9;
+   for(const id in ECO_TECHS){const T=ECO_TECHS[id];
+     const tier=ecoTier(p,id);if(tier>=ecoMax(id))continue;
+     const needAge=T.ages?T.ages[tier]:T.age;if(st.age<needAge)continue;
+     if(!myBld(T.bld).some(b=>b.built))continue;
+     const cost=T.costs?T.costs[tier]:T.cost;
+     const tot=(cost.f||0)+(cost.w||0)+(cost.g||0);
+     if(tot<bcE){bcE=tot;bestE=id;}}
+   if(bestE){const T=ECO_TECHS[bestE],tier=ecoTier(p,bestE);
+     const cost=T.costs?T.costs[tier]:T.cost;
+     if(canAfford(p,cost)&&st.f>(cost.f||0)+200&&st.w>(cost.w||0)+150&&st.g>(cost.g||0)+80){
+       pay(p,cost);ecoOf(p)[bestE]=tier+1;applyEco(p,bestE);}}
+  }
+  // university sciences: chemistry first (it unlocks gunpowder), then the rest
+  if(myBld('university').some(b=>b.built)){
+    const un=uniOf(p);
+    const want=['chem','bal','mas','se','arch','tread','heat','btower']
+      .find(id=>!un[id]&&(!UNI_TECHS[id].req||un[UNI_TECHS[id].req])&&st.age>=UNI_TECHS[id].age);
+    if(want){const cost=UNI_TECHS[want].cost;
+      if(canAfford(p,cost)&&st.f>(cost.f||0)+200&&st.w>(cost.w||0)+150&&st.g>(cost.g||0)+100){
+        pay(p,cost);un[want]=1;applyUni(p,want);}}
+  }
   // train military (mixed composition) — but bank resources when an age-up is due
   const nextAge=ageCostOf(p,st.age+1);
   const ageGate=st.age<3?[0,120,330,620][st.age+1]-cfg.trickle*40:1e9;
   const saveForAge=!st.aging&&st.age<3&&G.t>ageGate&&vills.length>=cfg.vT[st.age]-1
     &&(st.f<(nextAge.f||0)+150||st.g<(nextAge.g||0)+80);
   const ramCount=G.units.filter(u=>u.p===p&&u.type==='ram').length;
+  const nOf=tt=>G.units.filter(u=>u.p===p&&u.type===tt&&u.hp>0).length;
   for(const b of G.blds){
     if(saveForAge)break;
     if(b.p!==p||!b.built)continue;const def=BLDS[b.type];
@@ -1876,6 +2209,9 @@ function aiThink(p,ai){
     const opts=baseTrains.filter(tt=>{const ud=UNITS[tt];
       if(ud.age!==undefined&&st.age<ud.age)return false;
       if(tt==='ram'&&ramCount>=3)return false;
+      if((tt==='scorpion'||tt==='mangonel'||tt==='bombard')&&nOf(tt)>=2)return false;
+      if(tt==='treb'&&nOf(tt)>=2)return false;   // SAMPLEAI keeps a small treb park
+      if(tt==='monk'&&nOf('monk')>=[1,2,4][diffSel])return false; // monks scale with difficulty
       if(tt==='petard'||tt==='missionary')return false; // AI keeps it simple
       if(tt==='cog'||tt==='transport'||tt==='fireship'||tt==='demo')return false;
       if(tt==='fishing'&&fisherCount>=2)return false;
@@ -1896,7 +2232,10 @@ function aiThink(p,ai){
       if(x.resKey&&G.res[x.resKey])return G.res[x.resKey].type===t;
       return x.carryType===t&&x.carry>0;}).length;
     const nF=gathering('food'),nW=gathering('wood'),nG=gathering('gold');
-    const wantF=Math.ceil(vills.length*.4),wantW=Math.ceil(vills.length*.3);
+    // gatherer split by age, straight from the CD's SAMPLEAI.PER
+    // (Dark 60F/40W, Feudal 35F/25W/40G, Castle+ 30F/30W/40G)
+    const AIG=[[.6,.4],[.35,.25],[.3,.3],[.3,.3]][st.age];
+    const wantF=Math.ceil(vills.length*AIG[0]),wantW=Math.ceil(vills.length*AIG[1]);
     let want='gold';
     if(nF<wantF)want='food';else if(nW<wantW)want='wood';
     if(want==='food'){const f=freeFarm(v);
@@ -1943,6 +2282,11 @@ function aiThink(p,ai){
   }
 }
 function nearestEnemyBld(fromB,p){
+  // a rising enemy Wonder outranks every other target
+  if(G.wonderT&&!allied(G.wonderT.p,p)){
+    const wb=G.blds.find(b=>b.id===G.wonderT.id&&b.hp>0);
+    if(wb)return{ent:wb,bld:true};
+  }
   const c=bldCenter(fromB);let best=null,bd=1e9;
   for(const b of G.blds){if(allied(b.p,p))continue;
     const bc=bldCenter(b),d=Math.hypot(bc.x-c.x,bc.y-c.y);
@@ -2031,10 +2375,20 @@ function updateFog(){
       const dx=x+.5-cx,dy=y+.5-cy;
       if(dx*dx+dy*dy<=r2)V[y*MAP+x]=2;}};
   const spy=hasUt(0,'atheism'); // Huns: spies — see what your enemies see
-  for(const u of G.units)if(allied(u.p,0)||spy)
-    mark(u.x,u.y,u.type==='scout'?9:6+(u.type==='villager'&&allied(u.p,0)?(civOf(u.p).vilLos||0):0));
+  for(const u of G.units)if(allied(u.p,0)||spy){
+    let r=u.type==='scout'?9:6;
+    if(allied(u.p,0)){
+      if(u.type==='villager')r+=civOf(u.p).vilLos||0;
+      if(u.type==='scout'&&teamHas(u.p,'scoutLos'))r+=2;      // Mongol TB
+      if(u.type==='knight'&&teamHas(u.p,'knightLos'))r+=2;    // Frank TB
+      if((u.type==='galley'||u.type==='longboat'||u.type==='turtle')
+        &&teamHas(u.p,'galleyLos'))r+=3;                      // Japanese TB
+      if(INF.has(u.type)&&ecoTier(u.p,'track'))r+=2;          // Tracking
+    }
+    mark(u.x,u.y,r);
+  }
   for(const b of G.blds)if(allied(b.p,0)&&b.built){const c=bldCenter(b);
-    mark(c.x,c.y,b.type==='tower'||b.type==='tc'?9:6);}
+    mark(c.x,c.y,(b.type==='tower'||b.type==='tc'?9:6)+2*ecoTier(b.p,'watch'));} // Town Watch/Patrol
   for(const b of G.blds)if(b.p!==0&&!b.seen){const c=bldCenter(b);
     if(V[(c.y|0)*MAP+(c.x|0)]===2)b.seen=true;}
   fogDirty=true;
@@ -2049,6 +2403,7 @@ function saveGame(){
       if(o.gar)o.gar=o.gar.map(g=>Object.assign({},g,{path:null,_gar:null,_garU:null}));
       return o;};
     const data={v:1,t:G.t,mapSel,diffSel,uid,np:NP,mapN:MAP,starts:START,teams:G.teams,
+      wonderT:G.wonderT||null,relicT:G.relicT||null,
       mission:mission?mission.id:null,
       P:G.P,ais:G.ais,relics:G.relics,groups:G.groups,stats:G.stats,cam:G.cam,
       units:G.units.map(strip),
@@ -2076,6 +2431,7 @@ function loadGame(){
      ais:data.ais||[null,data.ai||{wave:0,nextAtk:data.t+60,tick:0,attacking:false}],
      teams:data.teams||Array.from({length:NP},(_,i)=>i),
      relics:data.relics||[],groups:data.groups||{},
+     wonderT:data.wonderT||null,relicT:data.relicT||null,
      stats:data.stats,lastRaidToast:-99,
      map:data.map,water:data.water,ford:data.ford};
   G.elev=Uint8Array.from(data.elev);
@@ -2092,6 +2448,7 @@ function loadGame(){
     if(!st.uts)st.uts=[];
     if(!st.bs)st.bs={atk:0,arw:0,ia:0,aa:0,ca:0};
     if(st.pt===undefined)st.pt=false;
+    if(!st.uni)st.uni={};if(!st.eco)st.eco={};if(!st.mon)st.mon={};
   }
   // old saves lack motion state — default it (units + garrisoned units)
   const seedMot=u=>{if(u.hdg===undefined)u.hdg=Math.atan2(MAP/2-u.y,MAP/2-u.x);
@@ -3397,7 +3754,7 @@ const drawBldArt={
 };
 /* ---------- ISOMETRIC building sprites (supersede the flat set) ---------- */
 const ISPR={};
-const IHT={tc:56,house:36,farm:10,camp:28,barracks:48,range:38,stable:44,siege:42,castle:82,tower:74,wall:24,gate:34,swall:26,sgate:36,market:44,monastery:56,blacksmith:48,dock:40};
+const IHT={tc:56,house:36,farm:10,camp:28,barracks:48,range:38,stable:44,siege:42,castle:82,tower:74,wall:24,gate:34,swall:26,sgate:36,market:44,monastery:56,blacksmith:48,dock:40,university:56,wonder:96};
 const O2='rgba(58,42,26,.5)'; // soft warm edge tone — no black outlines
 const STONE={l:'#8e887d',r:'#716f6d',t:'#a39c90',o:O2};   // slate gray, cool shade side
 const CREAMW={l:'#e6dab8',r:'#c9baa5',t:'#dccfae',o:O2};  // whitewashed plaster
@@ -4064,6 +4421,74 @@ const ISO_ART={
     for(const t of [.2,.8])
       archWin(g,b.C,b.B,t,t+.1,7,13,'#3a2a18',null);
   },
+  university(g,s,p){
+    dirtPad(g,2,.45);
+    const b=isoBlock(g,.06,.06,1.88,1.88,0,22,STONE);
+    masonry(g,b.D,b.C,22,5);
+    masonry(g,b.C,b.B,22,5);
+    ivyAt(g,b.D,b.C,18,61);
+    const rf=roofGable(g,-.08,-.08,2.12,2.12,22,14,
+      {slope:'#7d8288',shade:'#61666c',end:'#6f747a',o:'rgba(26,28,32,.5)'}); // slate
+    roofLines(g,-.08,-.08,2.12,2.12,22,14,4);
+    // little observatory dome astride the ridge
+    const mx=(rf.Rs.x+rf.Re.x)/2,my=(rf.Rs.y+rf.Re.y)/2;
+    g.fillStyle='#8d9298';g.strokeStyle='rgba(26,28,32,.5)';g.lineWidth=.9;
+    g.fillRect(mx-5,my-8,10,7);g.strokeRect(mx-5,my-8,10,7);
+    g.fillStyle='#5d8a9c';
+    g.beginPath();g.arc(mx,my-8,5,Math.PI,0);g.closePath();g.fill();g.stroke();
+    g.fillStyle='rgba(255,240,204,.35)';
+    g.beginPath();g.arc(mx-1.6,my-9.6,1.7,0,7);g.fill();
+    g.strokeStyle='#e3b23c';g.lineWidth=1.2;
+    g.beginPath();g.moveTo(mx,my-13);g.lineTo(mx,my-17);g.stroke();
+    g.fillStyle='#e3b23c';g.beginPath();g.arc(mx,my-17.6,1.1,0,7);g.fill();
+    // tall arched scholar's windows, lamplit
+    archWin(g,b.C,b.B,.14,.3,4,15,'#2c2416','#6b5330');
+    archWin(g,b.C,b.B,.42,.58,0,13,'#3a2a18','#6b5330'); // door
+    archWin(g,b.C,b.B,.7,.86,4,15,'#2c2416','#6b5330');
+    for(const t of [.24,.6])
+      archWin(g,b.D,b.C,t,t+.13,6,15,'#2c2416',null);
+    g.fillStyle='rgba(240,206,110,.5)'; // candle glow in the upper panes
+    const w1=facePt(b.C,b.B,.2,9),w2=facePt(b.C,b.B,.78,9);
+    g.fillRect(w1.x-1.4,w1.y-2.4,2.8,2.4);g.fillRect(w2.x-1.4,w2.y-2.4,2.8,2.4);
+    crateAt(g,ip(2.3,1.1).x,ip(2.3,1.1).y);
+  },
+  wonder(g,s,p){
+    dirtPad(g,2,.5);
+    // stepped marble plinth
+    const b0=isoBlock(g,-.04,-.04,2.08,2.08,0,8,CREAMW);
+    const b1=isoBlock(g,.12,.12,1.76,1.76,8,20,CREAMW);
+    masonry(g,b1.D,b1.C,20,4);
+    masonry(g,b1.C,b1.B,20,4);
+    // colonnade on the lit faces
+    g.strokeStyle='#b9a678';g.lineWidth=1.7;
+    for(const t of [.14,.34,.66,.86]){
+      const a=facePt(b1.C,b1.B,t,1),c2=facePt(b1.C,b1.B,t,19);
+      g.beginPath();g.moveTo(a.x,a.y);g.lineTo(c2.x,c2.y);g.stroke();}
+    // upper drum
+    const b2=isoBlock(g,.4,.4,1.2,1.2,28,12,STONE);
+    ivyAt(g,b2.D,b2.C,10,29);
+    // great gilded dome
+    const tp=ip(1.5,1.5); // roof center in iso space
+    const cy=tp.y-44;
+    g.fillStyle='#c9971f';g.strokeStyle='rgba(94,64,10,.6)';g.lineWidth=1;
+    g.beginPath();g.arc(tp.x,cy+6,13,Math.PI,0);g.closePath();g.fill();g.stroke();
+    g.fillStyle='#e5c95c';
+    g.beginPath();g.arc(tp.x-4,cy+3,4.6,0,7);g.fill();
+    g.fillStyle='rgba(255,248,220,.75)';
+    g.beginPath();g.arc(tp.x-5.5,cy+1.5,1.8,0,7);g.fill();
+    g.strokeStyle='rgba(94,64,10,.4)';g.lineWidth=.8;
+    for(const dx of [-8,-3,3,8]){
+      g.beginPath();g.moveTo(tp.x+dx,cy+6-Math.sqrt(Math.max(0,169-dx*dx))*.96);
+      g.quadraticCurveTo(tp.x+dx*.8,cy+2,tp.x+dx*.55,cy+6);g.stroke();}
+    // golden finial + team standards at the plinth corners
+    g.strokeStyle='#e3b23c';g.lineWidth=1.4;
+    g.beginPath();g.moveTo(tp.x,cy-7);g.lineTo(tp.x,cy-13);g.stroke();
+    g.fillStyle='#e5c95c';g.beginPath();g.arc(tp.x,cy-14,1.6,0,7);g.fill();
+    bannerAt(g,ip(.1,2.2).x,ip(.1,2.2).y-6,p,11);
+    bannerAt(g,ip(2.2,.1).x,ip(2.2,.1).y-6,p,11);
+    // grand arched portal
+    archWin(g,b1.C,b1.B,.42,.58,0,14,'#2c2416','#8a6a2f');
+  },
   gate(g,s,p){
     poly(g,[ip(0,.3),ip(1,.3),ip(1,.7),ip(0,.7)],'rgba(122,98,58,.4)');
     for(const gx of [-24,19]){
@@ -4275,6 +4700,7 @@ const MAN_COSTUME={
   eagle:   {tunic:'team',legC:'#c49a70',helm:'plume',weapon:'spear',paint:true},
   plumed:  {tunic:'dark',legC:'#4a3a26',belt:'leather',helm:'plume',weapon:'bow',quiver:true,sash:true},
   petard:  {tunic:'#8a6538',legC:'#4a3a26',belt:'leather',helm:'steel',weapon:'bomb'},
+  handcannon:{tunic:'team',legC:'#4a3a26',belt:'leather',helm:'kettle',weapon:'gun'},
 };
 function drawManRig(u,t,TC,mc){
   const phi=octPhi(u),pr=rigProj(phi),s=pr.s,c=pr.c,sgn=c>=0?1:-1;
@@ -4470,6 +4896,24 @@ function drawManRig(u,t,TC,mc){
     ctx.lineTo(j1.x-dy/dl*1.1,j1.y+dx/dl*1.1);ctx.lineTo(j1.x+dy/dl*1.1,j1.y-dx/dl*1.1);ctx.closePath();ctx.fill();
     hand(j0.x+dx*.4,j0.y+dy*.4);
     armIdle(-1,-swing*.4);
+  }else if(mc.weapon==='gun'){
+    // handgonne held level across the chest; kicks and flashes on the shot
+    const kick=ap&&ap.k===2?-(1-ap.f)*1.2:0;
+    const g0=pr(1.6,-1.6+kick,9.4),g1=pr(1.2,5.4+kick,10.6);
+    ctx.strokeStyle='#6a4a26';ctx.lineWidth=2.6;
+    ctx.beginPath();ctx.moveTo(g0.x,g0.y);ctx.lineTo(g1.x,g1.y);ctx.stroke();
+    ctx.strokeStyle='#4c5158';ctx.lineWidth=1.9;
+    const gm=.35;
+    ctx.beginPath();ctx.moveTo(g0.x+(g1.x-g0.x)*gm,g0.y+(g1.y-g0.y)*gm);ctx.lineTo(g1.x,g1.y);ctx.stroke();
+    hand(g0.x+(g1.x-g0.x)*.3,g0.y+(g1.y-g0.y)*.3);
+    hand(g0.x+(g1.x-g0.x)*.62,g0.y+(g1.y-g0.y)*.62);
+    if(ap&&ap.k===2&&ap.f<.5){ // muzzle flash + smoke puff
+      ctx.fillStyle='rgba(255,214,110,'+(0.9-ap.f*1.6)+')';
+      ctx.beginPath();ctx.arc(g1.x,g1.y,2.6,0,7);ctx.fill();
+      ctx.fillStyle='rgba(220,216,206,.35)';
+      ctx.beginPath();ctx.arc(g1.x,g1.y-1.5,3.4,0,7);ctx.fill();
+    }
+    armIdle(-1,-swing*.3);
   }else if(mc.weapon==='staff'){
     const b0=pr(2.7,.4,1.2),b1=pr(2.7,.4,14.4);
     ctx.strokeStyle='#8a5a2b';ctx.lineWidth=1.4;
@@ -4944,6 +5388,185 @@ function drawRamRig(u,t,TC){
   ctx.moveTo(f1.x,f1.y);ctx.lineTo(f2.x,f2.y);ctx.lineTo(f3.x,f3.y);ctx.closePath();ctx.fill();
   ctx.restore();
 }
+/* ---- siege engine rigs (CD update) — same conventions as the ram ---- */
+function siegeWheel(pr,wx,wy,near,r){
+  const W=pr(wx,wy,r*.7),s=pr.s!==undefined?pr.s:1;
+  ctx.fillStyle='#3c2814';ctx.beginPath();
+  ctx.ellipse(W.x,W.y,Math.max(1,r*pr.fs+.4),r,pr.a,0,7);ctx.fill();
+  if(near){ctx.strokeStyle=OUT;ctx.lineWidth=.8;ctx.stroke();
+    ctx.strokeStyle='#c9a15e';ctx.lineWidth=.6;
+    ctx.beginPath();ctx.ellipse(W.x,W.y,Math.max(.6,r*.5*pr.fs),r*.5,pr.a,0,7);ctx.stroke();}
+}
+function drawScorpion(u,t,TC){
+  const phi=octPhi(u),pr=rigProj(phi),sgn=pr.c>=0?1:-1;
+  const ap=atkPhase(u);
+  ctx.save();
+  siegeWheel(pr,-sgn*2.6,1.2,false,2.2);
+  // wooden bed between the wheels
+  const quad=(a,b,c2,d2,fill,st)=>{ctx.fillStyle=fill;ctx.beginPath();
+    ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.lineTo(c2.x,c2.y);ctx.lineTo(d2.x,d2.y);
+    ctx.closePath();ctx.fill();if(st){ctx.strokeStyle=OUT;ctx.lineWidth=.8;ctx.stroke();}};
+  quad(pr(-2.2,-4.6,3.2),pr(2.2,-4.6,3.2),pr(2.2,4,4.6),pr(-2.2,4,4.6),'#7a5830',true);
+  // the great bow across the front
+  const draw=!ap?0:ap.k===1?1.4*ap.f:ap.k===2?1.4*(1-ap.f*2):0;
+  const bl=pr(-4.6,4.4,6),br=pr(4.6,4.4,6),bm=pr(0,5.6,6.4);
+  ctx.strokeStyle='#54381e';ctx.lineWidth=1.8;
+  ctx.beginPath();ctx.moveTo(bl.x,bl.y);ctx.quadraticCurveTo(bm.x,bm.y,br.x,br.y);ctx.stroke();
+  const st0=pr(0,.4-draw,6.2);
+  ctx.strokeStyle='rgba(230,222,200,.8)';ctx.lineWidth=.8;
+  ctx.beginPath();ctx.moveTo(bl.x,bl.y);ctx.lineTo(st0.x,st0.y);ctx.lineTo(br.x,br.y);ctx.stroke();
+  // the bolt in its groove
+  const b0=pr(0,-.6-draw,6.4),b1=pr(0,4.8,6.8);
+  ctx.strokeStyle='#4a3a24';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(b0.x,b0.y);ctx.lineTo(b1.x,b1.y);ctx.stroke();
+  ctx.fillStyle='#c9ccd1';ctx.beginPath();
+  ctx.moveTo(b1.x,b1.y);ctx.lineTo(b1.x-1.4,b1.y-1.6);ctx.lineTo(b1.x+1.4,b1.y-1.6);ctx.closePath();ctx.fill();
+  // crewman crouched behind
+  const H=pr(0,-4.2,8);
+  ctx.fillStyle=TC.main;ctx.strokeStyle=OUT;ctx.lineWidth=.8;
+  ctx.beginPath();ctx.ellipse(H.x,H.y+2.2,2,2.6,0,0,7);ctx.fill();ctx.stroke();
+  ctx.fillStyle=SKIN;ctx.beginPath();ctx.arc(H.x,H.y-.6,1.7,0,7);ctx.fill();ctx.stroke();
+  siegeWheel(pr,sgn*2.6,1.2,true,2.2);
+  ctx.restore();
+}
+function drawMangonel(u,t,TC){
+  const phi=octPhi(u),pr=rigProj(phi),sgn=pr.c>=0?1:-1;
+  const ap=atkPhase(u);
+  // throwing arm: cocked back at rest, whips forward on release
+  const arm=!ap?-.85:ap.k===1?-.85-.25*ap.f:ap.k===2?-1.1+2.1*ap.f:ap.k===3?1-(1.85)*ap.f:-.85;
+  ctx.save();
+  siegeWheel(pr,-sgn*3,-2.6,false,2.4);siegeWheel(pr,-sgn*3,2.8,false,2.4);
+  const quad=(a,b,c2,d2,fill,st)=>{ctx.fillStyle=fill;ctx.beginPath();
+    ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.lineTo(c2.x,c2.y);ctx.lineTo(d2.x,d2.y);
+    ctx.closePath();ctx.fill();if(st){ctx.strokeStyle=OUT;ctx.lineWidth=.9;ctx.stroke();}};
+  // heavy timber chassis
+  quad(pr(-3,-5.4,2.6),pr(3,-5.4,2.6),pr(3,5,4),pr(-3,5,4),'#7a5830',true);
+  // side uprights
+  ctx.strokeStyle='#54381e';ctx.lineWidth=2.2;
+  for(const sx of[-2.2,2.2]){
+    const u0=pr(sx,.6,4),u1=pr(sx,.6,9.4);
+    ctx.beginPath();ctx.moveTo(u0.x,u0.y);ctx.lineTo(u1.x,u1.y);ctx.stroke();}
+  // crossbar
+  {const c0=pr(-2.2,.6,9.4),c1=pr(2.2,.6,9.4);
+   ctx.strokeStyle='#6a4a26';ctx.lineWidth=1.8;
+   ctx.beginPath();ctx.moveTo(c0.x,c0.y);ctx.lineTo(c1.x,c1.y);ctx.stroke();}
+  // the arm, pivoting at the crossbar; cup on the end
+  const ay=Math.sin(arm)*7.2,az=9.4+Math.cos(arm)*-7.2*0+Math.cos(arm)*7.2-7.2;
+  const a0=pr(0,.6,9.4),a1=pr(0,.6+Math.sin(arm)*7.6,9.4+Math.cos(arm)*7.6-1.4);
+  ctx.strokeStyle='#8a5a2b';ctx.lineWidth=2.4;
+  ctx.beginPath();ctx.moveTo(a0.x,a0.y);ctx.lineTo(a1.x,a1.y);ctx.stroke();
+  ctx.fillStyle='#4a3a24';ctx.beginPath();ctx.arc(a1.x,a1.y,2,0,7);ctx.fill();
+  if(!ap||ap.k===1){ // a boulder waits in the cup
+    ctx.fillStyle='#8d8478';ctx.beginPath();ctx.arc(a1.x,a1.y-1.2,1.6,0,7);ctx.fill();
+    ctx.fillStyle='rgba(255,244,214,.4)';ctx.beginPath();ctx.arc(a1.x-.5,a1.y-1.7,.6,0,7);ctx.fill();}
+  // rope skeins + crew
+  ctx.strokeStyle='rgba(214,196,150,.75)';ctx.lineWidth=1;
+  {const r0=pr(-2.2,.6,5),r1=pr(2.2,.6,5);
+   ctx.beginPath();ctx.moveTo(r0.x,r0.y);ctx.lineTo(r1.x,r1.y);ctx.stroke();}
+  const H=pr(-sgn*1.2,-4.8,7.6);
+  ctx.fillStyle=TC.main;ctx.strokeStyle=OUT;ctx.lineWidth=.8;
+  ctx.beginPath();ctx.ellipse(H.x,H.y+2,1.9,2.5,0,0,7);ctx.fill();ctx.stroke();
+  ctx.fillStyle=SKIN;ctx.beginPath();ctx.arc(H.x,H.y-.8,1.6,0,7);ctx.fill();ctx.stroke();
+  siegeWheel(pr,sgn*3,-2.6,true,2.4);siegeWheel(pr,sgn*3,2.8,true,2.4);
+  ctx.restore();
+}
+function drawTreb(u,t,TC){
+  // tall A-frame with counterweight box and a long sling arm; packs flat to move
+  let phi=octPhi(u);
+  phi=Math.round((phi-Math.PI/4)/(Math.PI/2))*(Math.PI/2)+Math.PI/4;
+  const pr=rigProj(phi),sgn=pr.c>=0?1:-1;
+  const ap=atkPhase(u);
+  const packed=!u.setup&&(u.spd||0)>.02;
+  // arm angle: packed = lying flat; set up = counterweight down, arm high
+  const arm=packed?.12:!ap?1.05:ap.k===1?1.05+.2*ap.f:ap.k===2?1.25-2.2*ap.f:ap.k===3?-.95+2.0*ap.f:1.05;
+  ctx.save();
+  const quad=(a,b,c2,d2,fill,st)=>{ctx.fillStyle=fill;ctx.beginPath();
+    ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.lineTo(c2.x,c2.y);ctx.lineTo(d2.x,d2.y);
+    ctx.closePath();ctx.fill();if(st){ctx.strokeStyle=OUT;ctx.lineWidth=.9;ctx.stroke();}};
+  // ground sled
+  quad(pr(-3.4,-6,1.4),pr(3.4,-6,1.4),pr(3.4,6,2.2),pr(-3.4,6,2.2),'#6a4a26',true);
+  // A-frame legs both sides
+  ctx.strokeStyle='#54381e';ctx.lineWidth=2.4;
+  for(const sx of[-2.6,2.6]){
+    for(const sy of[-3.6,3.6]){
+      const l0=pr(sx,sy,1.8),l1=pr(sx,0,12.2);
+      ctx.beginPath();ctx.moveTo(l0.x,l0.y);ctx.lineTo(l1.x,l1.y);ctx.stroke();}}
+  // axle
+  {const x0=pr(-2.6,0,12.2),x1=pr(2.6,0,12.2);
+   ctx.strokeStyle='#6a4a26';ctx.lineWidth=2;
+   ctx.beginPath();ctx.moveTo(x0.x,x0.y);ctx.lineTo(x1.x,x1.y);ctx.stroke();}
+  // the great arm: short end carries the counterweight box, long end the sling
+  const pivY=0,pivZ=12.2;
+  const longY=Math.sin(arm)*10.5,longZ=Math.cos(arm)*10.5;
+  const shortY=-Math.sin(arm)*3.6,shortZ=-Math.cos(arm)*3.6;
+  const aL=pr(0,pivY+longY,pivZ+longZ),aS=pr(0,pivY+shortY,pivZ+shortZ);
+  ctx.strokeStyle='#8a5a2b';ctx.lineWidth=2.6;
+  ctx.beginPath();ctx.moveTo(aS.x,aS.y);ctx.lineTo(aL.x,aL.y);ctx.stroke();
+  // counterweight box on the short end
+  ctx.fillStyle='#5f4526';ctx.strokeStyle=OUT;ctx.lineWidth=.9;
+  ctx.fillRect(aS.x-2.6,aS.y-1.2,5.2,4.4);ctx.strokeRect(aS.x-2.6,aS.y-1.2,5.2,4.4);
+  ctx.fillStyle='rgba(0,0,0,.2)';ctx.fillRect(aS.x+.4,aS.y-1.2,2.2,4.4);
+  // sling rope + stone (visible while cocked)
+  if(!packed&&(!ap||ap.k===1)){
+    const s1=pr(0,pivY+longY*1.0,pivZ+longZ-3.2);
+    ctx.strokeStyle='rgba(214,196,150,.8)';ctx.lineWidth=.9;
+    ctx.beginPath();ctx.moveTo(aL.x,aL.y);ctx.lineTo(s1.x,s1.y);ctx.stroke();
+    ctx.fillStyle='#8d8478';ctx.beginPath();ctx.arc(s1.x,s1.y,1.7,0,7);ctx.fill();
+  }
+  // team banner on the frame
+  const f0=pr(0,-5.4,12.6),f1=pr(0,-5.4,16);
+  ctx.strokeStyle='#4a3a24';ctx.lineWidth=1.1;
+  ctx.beginPath();ctx.moveTo(f0.x,f0.y);ctx.lineTo(f1.x,f1.y);ctx.stroke();
+  ctx.fillStyle=TC.main;ctx.beginPath();
+  ctx.moveTo(f1.x,f1.y);ctx.lineTo(f1.x-sgn*4.6,f1.y+1.4);ctx.lineTo(f1.x,f1.y+2.8);ctx.closePath();ctx.fill();
+  // crew
+  const H=pr(sgn*2.2,-5,5.4);
+  ctx.fillStyle=TC.main;ctx.strokeStyle=OUT;ctx.lineWidth=.8;
+  ctx.beginPath();ctx.ellipse(H.x,H.y+2,1.9,2.5,0,0,7);ctx.fill();ctx.stroke();
+  ctx.fillStyle=SKIN;ctx.beginPath();ctx.arc(H.x,H.y-.8,1.6,0,7);ctx.fill();ctx.stroke();
+  ctx.restore();
+}
+function drawBombard(u,t,TC){
+  const phi=octPhi(u),pr=rigProj(phi),sgn=pr.c>=0?1:-1;
+  const ap=atkPhase(u);
+  const kick=ap&&ap.k===2?-(1-ap.f)*1.6:0;
+  ctx.save();
+  siegeWheel(pr,-sgn*2.8,.6,false,2.8);
+  // carriage
+  const quad=(a,b,c2,d2,fill,st)=>{ctx.fillStyle=fill;ctx.beginPath();
+    ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.lineTo(c2.x,c2.y);ctx.lineTo(d2.x,d2.y);
+    ctx.closePath();ctx.fill();if(st){ctx.strokeStyle=OUT;ctx.lineWidth=.9;ctx.stroke();}};
+  quad(pr(-2.2,-5.2,2.4),pr(2.2,-5.2,2.4),pr(2.2,2.6,4.2),pr(-2.2,2.6,4.2),'#6a4a26',true);
+  // the bronze barrel, slightly raised toward the muzzle
+  const b0=pr(0,-3.4+kick,6.2),b1=pr(0,5.2+kick,8.2);
+  ctx.strokeStyle='rgba(30,24,14,.55)';ctx.lineWidth=4.6;
+  ctx.beginPath();ctx.moveTo(b0.x,b0.y);ctx.lineTo(b1.x,b1.y);ctx.stroke();
+  ctx.strokeStyle='#7d6a3a';ctx.lineWidth=3.6;
+  ctx.beginPath();ctx.moveTo(b0.x,b0.y);ctx.lineTo(b1.x,b1.y);ctx.stroke();
+  ctx.strokeStyle='rgba(255,240,190,.4)';ctx.lineWidth=1.1;
+  ctx.beginPath();ctx.moveTo(b0.x-1,b0.y-1);ctx.lineTo(b1.x-1,b1.y-1);ctx.stroke();
+  // reinforcing rings
+  ctx.strokeStyle='#4c4126';ctx.lineWidth=1;
+  for(const f of[.25,.5,.78]){
+    const rx=b0.x+(b1.x-b0.x)*f,ry=b0.y+(b1.y-b0.y)*f;
+    ctx.beginPath();ctx.ellipse(rx,ry,2.4,1.5,Math.atan2(b1.y-b0.y,b1.x-b0.x)+Math.PI/2,0,7);ctx.stroke();}
+  // muzzle flash
+  if(ap&&ap.k===2&&ap.f<.4){
+    ctx.fillStyle='rgba(255,214,110,'+(1-ap.f*2.2)+')';
+    ctx.beginPath();ctx.arc(b1.x,b1.y,3.6,0,7);ctx.fill();
+    ctx.fillStyle='rgba(226,222,212,.4)';
+    ctx.beginPath();ctx.arc(b1.x,b1.y-2,4.6,0,7);ctx.fill();}
+  // powder kegs + gunner
+  const K=pr(-sgn*2,-3.8,5);
+  ctx.fillStyle='#3a3a40';ctx.strokeStyle=OUT;ctx.lineWidth=.7;
+  ctx.beginPath();ctx.arc(K.x,K.y,1.8,0,7);ctx.fill();ctx.stroke();
+  const H=pr(sgn*1.6,-4.6,7.4);
+  ctx.fillStyle=TC.main;ctx.strokeStyle=OUT;ctx.lineWidth=.8;
+  ctx.beginPath();ctx.ellipse(H.x,H.y+2,1.9,2.5,0,0,7);ctx.fill();ctx.stroke();
+  ctx.fillStyle=SKIN;ctx.beginPath();ctx.arc(H.x,H.y-.8,1.6,0,7);ctx.fill();ctx.stroke();
+  siegeWheel(pr,sgn*2.8,.6,true,2.8);
+  ctx.restore();
+}
 function drawWarWagon(u,t,TC){
   // Korean War Wagon: armored cart with a team-color canopy and bow slits.
   // Heading snaps to the diagonals so the cart never collapses end-on.
@@ -5019,6 +5642,7 @@ function drawShip(u,t,TC){
     demo:{HL:4.2,HW:1.9,Z:3.4,hull:'#5f4526',sail:.55,barrels:true},
     longboat:{HL:6.6,HW:1.7,Z:3.2,hull:'#4f3a1f',sail:.9,dragon:true,shields:true,oars:true},
     turtle:{HL:5.8,HW:2.6,Z:4.4,hull:'#4a4a50',shell:true,dragon:true},
+    cannongalleon:{HL:6.4,HW:2.4,Z:4.6,hull:'#6a4a26',sail:1.05,cannon:true},
   }[type]||{HL:5,HW:2,Z:4,hull:'#7a5830',sail:1};
   P=Object.assign({},P); // scale pass — hulls need presence beside land units
   P.HL*=1.35;P.HW*=1.3;P.Z*=1.15;if(P.sail)P.sail*=1.15;
@@ -5084,6 +5708,18 @@ function drawShip(u,t,TC){
     ctx.fillStyle=Math.sin(t*14)>0?'#ffd75e':'#e2761e';
     ctx.beginPath();ctx.arc(fq.x,fq.y,.8,0,7);ctx.fill();
   }
+  if(P.cannon){ // cannon galleon: a bronze bow gun on a squat carriage
+    const c0=pr(0,P.HL*.35,P.Z+1.2),c1=pr(0,P.HL*.95,P.Z+2.4);
+    ctx.strokeStyle='rgba(30,24,14,.5)';ctx.lineWidth=3.4;
+    ctx.beginPath();ctx.moveTo(c0.x,c0.y);ctx.lineTo(c1.x,c1.y);ctx.stroke();
+    ctx.strokeStyle='#7d6a3a';ctx.lineWidth=2.5;
+    ctx.beginPath();ctx.moveTo(c0.x,c0.y);ctx.lineTo(c1.x,c1.y);ctx.stroke();
+    ctx.strokeStyle='rgba(255,240,190,.35)';ctx.lineWidth=.8;
+    ctx.beginPath();ctx.moveTo(c0.x-.8,c0.y-.8);ctx.lineTo(c1.x-.8,c1.y-.8);ctx.stroke();
+    ctx.fillStyle='#3a3a40'; // kegs beside the gun
+    const K=pr(-.9,P.HL*.15,P.Z+1.2);
+    ctx.beginPath();ctx.ellipse(K.x,K.y,1.5,1.9,0,0,7);ctx.fill();
+  }
   if(P.brazier){ // fire ship: iron pot of flame at the bow
     const q=pr(0,P.HL*.7,P.Z+2);
     ctx.fillStyle='#3a3a40';ctx.fillRect(q.x-1.6,q.y-1,3.2,2);
@@ -5148,6 +5784,11 @@ function drawUnitBody(u,t,sw,TC){
   else if(u.type==='elephant')drawElephant(u,t,sw,TC);
   else if(u.type==='monk')drawMonk(u,t,sw,TC);
   else if(u.type==='ram')drawRam(u,t,TC);
+  else if(u.type==='scorpion')drawScorpion(u,t,TC);
+  else if(u.type==='mangonel')drawMangonel(u,t,TC);
+  else if(u.type==='treb')drawTreb(u,t,TC);
+  else if(u.type==='bombard')drawBombard(u,t,TC);
+  else if(u.type==='handcannon')drawManRigT(u,t,TC,'handcannon');
   else if(u.type==='warwagon')drawWarWagon(u,t,TC);
   else if(u.type==='archer'||u.type==='longbow'||u.type==='chukonu'||u.type==='janissary'
     ||u.type==='plumed')drawArcher(u,t,sw,TC,false);
@@ -5175,7 +5816,7 @@ function portraitFor(kind,type,p){
   g.fillStyle='rgba(0,0,0,.28)';g.fillRect(0,S*.72,S,S*.28);
   if(kind==='u'){
     const fake={type,p,state:'idle',cd:0,carry:0,gatherT:0,face:1};
-    const big=!!UNITS[type].cav||type==='ram'||type==='elephant';
+    const big=!!UNITS[type].cav||type==='ram'||type==='elephant'||!!UNITS[type].siege;
     const k=big?4.2:5.6;
     const old=ctx;ctx=g;
     try{g.setTransform(k,0,0,k,S/2,S/2+(big?17:14)*k-S*.12);g.lineCap='round';g.lineJoin='round';
@@ -5215,7 +5856,7 @@ function drawUnit(u){
   const moving=u.spd!==undefined?u.spd>.05:!!(u.path&&u.path.length);
   const t=G.t*9+u.id*1.71;
   const sw=moving?Math.sin(t):0; // legacy param, unused by the rigs
-  const big=!!UNITS[u.type].cav||u.type==='ram'||!!UNITS[u.type].ship;
+  const big=!!UNITS[u.type].cav||u.type==='ram'||!!UNITS[u.type].ship||!!UNITS[u.type].siege;
   if(G.sel.includes(u.id)||(G.inspect&&G.inspect.id===u.id)){
     // white ellipse, exactly like the original
     ctx.strokeStyle=G.inspect&&G.inspect.id===u.id?'rgba(230,230,230,.7)':'rgba(255,255,255,.95)';ctx.lineWidth=1.4;
@@ -5898,8 +6539,32 @@ function drawArrow(p){
   const a0=isoE(p.x0,p.y0),a1=isoE(p.x1,p.y1);
   const dx=a1.x-a0.x,dy=a1.y-a0.y;
   const dist=Math.hypot(dx,dy);
-  const arc=Math.min(54,Math.max(10,dist*.17));
+  let arc=Math.min(54,Math.max(10,dist*.17));
+  if(p.kind==='stone')arc=Math.min(84,Math.max(26,dist*.34)); // lofted boulders
+  if(p.kind==='ball')arc=Math.max(4,dist*.05);                 // flat cannon shot
   const px=ff=>a0.x+dx*ff,py=ff=>a0.y+dy*ff-Math.sin(ff*Math.PI)*arc;
+  if(p.kind==='stone'||p.kind==='ball'){
+    const x=px(f),y=py(f),r=p.kind==='stone'?3.1:2.2;
+    const f1=Math.max(0,f-.12);
+    ctx.strokeStyle='rgba(120,112,100,.3)';ctx.lineWidth=r*1.4;
+    ctx.beginPath();ctx.moveTo(px(f1),py(f1));ctx.lineTo(x,y);ctx.stroke();
+    ctx.fillStyle=p.kind==='stone'?'#8d8478':'#3a3d42';
+    ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill();
+    ctx.fillStyle='rgba(255,244,214,.45)';
+    ctx.beginPath();ctx.arc(x-r*.3,y-r*.35,r*.42,0,7);ctx.fill();
+    return;
+  }
+  if(p.kind==='bolt'){
+    const x=px(f),y=py(f);
+    const vy=dy-Math.cos(f*Math.PI)*Math.PI*arc,ang=Math.atan2(vy,dx);
+    ctx.save();ctx.translate(x,y);ctx.rotate(ang);
+    ctx.strokeStyle='#54381e';ctx.lineWidth=1.8;
+    ctx.beginPath();ctx.moveTo(-6.5,0);ctx.lineTo(4,0);ctx.stroke();
+    ctx.fillStyle='#c9ccd1';
+    ctx.beginPath();ctx.moveTo(4.4,0);ctx.lineTo(1.6,-1.7);ctx.lineTo(1.6,1.7);ctx.closePath();ctx.fill();
+    ctx.restore();
+    return;
+  }
   // short fading motion streak behind the arrow
   const f1=Math.max(0,f-.09),f2=Math.max(0,f-.18);
   ctx.strokeStyle='rgba(235,225,200,.13)';ctx.lineWidth=1.3;
@@ -6307,7 +6972,7 @@ function handleTap(cx,cy,mouse,right){
   for(const u of G.units){
     if(!allied(u.p,0)&&!tileVis(u.x,u.y))continue;
     const p=isoE(u.x,u.y);
-    const big=!!UNITS[u.type].cav||u.type==='ram'||!!UNITS[u.type].ship;
+    const big=!!UNITS[u.type].cav||u.type==='ram'||!!UNITS[u.type].ship||!!UNITS[u.type].siege;
     const d=Math.hypot(p.x-wx,(p.y-(big?10:8)-wy)*.8);
     if(d<hd){hd=d;hitU=u;}}
   let hitB=null;
@@ -6601,6 +7266,22 @@ function refreshPanel(){
       if(['atk','arw','ia','aa','ca'].every(l=>bs[l]>=3))
         hint('The forge is quiet — every upgrade is complete');
     }
+    if(b.type==='university'){
+      const un=uniOf(0);
+      hint('Research the sciences of war and works');
+      for(const id of UNI_ORDER){
+        if(un[id])continue;
+        const T=UNI_TECHS[id];
+        if(T.req&&!un[T.req])continue; // Architecture needs Masonry, Bombard Tower needs Chemistry
+        const locked=G.P[0].age<T.age;
+        mkBtn('<i>'+T.icon+'</i><b>'+T.name+'</b><span class="cost">'+costStr(T.cost)+'</span>','txt',
+          ()=>{if(G.P[0].age<T.age){toast('Requires the '+AGES[T.age]);return;}
+            if(!canAfford(0,T.cost)){toast('Not enough resources');return;}
+            pay(0,T.cost);uniOf(0)[id]=1;applyUni(0,id);},
+          locked||!canAfford(0,T.cost));
+      }
+      if(UNI_ORDER.every(id=>un[id]))hint('Every science is mastered');
+    }
     if(b.type==='range'&&!G.P[0].pt){
       const cost={f:200,g:250},locked=G.P[0].age<3;
       mkBtn('<i>🐴</i><b>Parthian Tactics</b><span class="cost">'+costStr(cost)+'</span>','txt',
@@ -6609,6 +7290,44 @@ function refreshPanel(){
           pay(0,cost);G.P[0].pt=true;snd('done');
           feed('Parthian Tactics — researched');updateTop();refreshPanel();},
         locked||!canAfford(0,cost));
+    }
+    // economy & line technologies researched at this building (manual pp. 47-49)
+    for(const id in ECO_TECHS){
+      const T=ECO_TECHS[id];
+      if(T.bld!==b.type)continue;
+      const tier=ecoTier(0,id);
+      if(tier>=ecoMax(id))continue;
+      const nm=T.names?T.names[tier]:T.name;
+      const cost=T.costs?T.costs[tier]:T.cost;
+      const needAge=T.ages?T.ages[tier]:T.age;
+      const locked=G.P[0].age<needAge;
+      mkBtn('<i>'+T.icon+'</i><b>'+nm+'</b><span class="cost">'+costStr(cost)+'</span>','txt',
+        ()=>{if(G.P[0].age<needAge){toast('Requires the '+AGES[needAge]);return;}
+          if(!canAfford(0,cost)){toast('Not enough resources');return;}
+          pay(0,cost);ecoOf(0)[id]=tier+1;applyEco(0,id);
+          feed(nm+' — researched');},
+        locked||!canAfford(0,cost));
+    }
+    if(b.type==='dock'){ // Fish Trap: seed a fresh fishery in the waters beside the dock
+      const ftCost={w:100};
+      mkBtn('<i>🐟</i><b>Fish Trap</b><span class="cost">100W</span>','txt',()=>{
+        if(!canAfford(0,ftCost)){toast('Not enough wood');return;}
+        let spot=null;
+        for(let r=2;r<7&&!spot;r++)for(let dy=-r;dy<=r&&!spot;dy++)for(let dx=-r;dx<=r&&!spot;dx++){
+          if(Math.max(Math.abs(dx),Math.abs(dy))!==r)continue;
+          const x=b.tx+dx,y=b.ty+dy,k=x+','+y;
+          if(x<1||y<1||x>=MAP-1||y>=MAP-1)continue;
+          if(G.water[k]&&!G.res[k]&&!(G.navBlock&&G.navBlock[k]))spot={x,y,k};
+        }
+        if(!spot){toast('No open water near this dock');return;}
+        pay(0,ftCost);snd('place');updateTop();
+        G.res[spot.k]={type:'fish',x:spot.x,y:spot.y,amt:250};
+        miniResDirty=true;
+        feed('Fish Trap set');
+        // idle fishing ships steam straight to it
+        for(const sh of G.units)
+          if(sh.p===0&&UNITS[sh.type].fisher&&sh.hp>0&&sh.state==='idle'){cmdGather(sh,spot.k);break;}
+      },!canAfford(0,ftCost));
     }
     const trainsList=trainsFor(b,0);
     for(const ut of trainsList){
@@ -6679,7 +7398,7 @@ function refreshPanel(){
     if(ents.length===1)hint(mouseSeen
       ?'Right-click resources to gather · right-click ground to move'
       :'Tap resources to gather · tap ground to move');
-    for(const bt of ['house','farm','camp','wall','gate','swall','sgate','market','blacksmith','dock','barracks','range','stable','siege','monastery','castle','tower']){
+    for(const bt of ['house','farm','camp','wall','gate','swall','sgate','market','blacksmith','university','dock','barracks','range','stable','siege','monastery','castle','tower','wonder']){
       if(bt==='stable'&&civOf(0).noStable)continue; // Aztecs/Mayans field no cavalry
       if(bt==='house'&&civOf(0).noHouse)continue;   // Huns need no Houses
       const d=BLDS[bt];
@@ -6750,22 +7469,30 @@ function updateTop(){
     const left=Math.max(0,mission.win.time-G.t);
     age+=' · '+Math.floor(left/60)+':'+('0'+Math.floor(left%60)).slice(-2);
   }
+  const cds=[];
+  if(G.wonderT){const l=Math.max(0,G.wonderT.end-G.t);
+    cds.push((allied(G.wonderT.p,0)?'🏯 ':'⚠️🏯 ')+Math.floor(l/60)+':'+('0'+Math.floor(l%60)).slice(-2));}
+  if(G.relicT){const l=Math.max(0,G.relicT.end-G.t);
+    cds.push((G.relicT.team===G.teams[0]?'✨ ':'⚠️✨ ')+Math.floor(l/60)+':'+('0'+Math.floor(l%60)).slice(-2));}
+  if(cds.length)age+=' · '+cds.join(' ');
   document.getElementById('ageLbl').textContent=age;
 }
 /* ================= hotkeys ================= */
-const BUILD_KEYS={house:'e',farm:'f',camp:'c',barracks:'b',range:'a',stable:'l',siege:'g',castle:'v',tower:'t',wall:'w',gate:'o',swall:'x',sgate:'p',market:'k',monastery:'m',blacksmith:'s',dock:'d'};
+const BUILD_KEYS={house:'e',farm:'f',camp:'c',barracks:'b',range:'a',stable:'l',siege:'g',castle:'v',tower:'t',wall:'w',gate:'o',swall:'x',sgate:'p',market:'k',monastery:'m',blacksmith:'s',dock:'d',university:'u',wonder:'n'};
 const BLD_ICONS={tc:'🏛️',house:'🏠',farm:'🌾',camp:'📦',wall:'🪵',gate:'🚪',swall:'🧱',sgate:'⛩️',
-  market:'⚖️',barracks:'⚔️',range:'🏹',stable:'🐎',siege:'⚙️',monastery:'⛪',castle:'🏰',tower:'🗼',blacksmith:'🔨',dock:'⚓'};
+  market:'⚖️',barracks:'⚔️',range:'🏹',stable:'🐎',siege:'⚙️',monastery:'⛪',castle:'🏰',tower:'🗼',blacksmith:'🔨',dock:'⚓',university:'🎓',wonder:'🏯'};
 const UNIT_ICONS={villager:'🧑‍🌾',militia:'⚔️',spearman:'🔱',archer:'🏹',skirmisher:'🎯',
   scout:'🐎',knight:'🛡️',ram:'🐏',longbow:'🏹',axeman:'🪓',berserker:'🪓',mangudai:'🏹',
   teuton:'⚔️',woad:'🪓',cataphract:'🛡️',mameluke:'🐪',monk:'📿',huskarl:'🛡️',
   chukonu:'🏹',elephant:'🐘',janissary:'💥',samurai:'⚔️',jaguar:'🐆',eagle:'🦅',
   plumed:'🏹',warwagon:'🛞',conquistador:'💥',tarkan:'🔥',petard:'💣',missionary:'📿',
-  fishing:'🎣',cog:'⛵',transport:'🛶',galley:'⚓',fireship:'🔥',demo:'💥',longboat:'🐉',turtle:'🐢'};
+  fishing:'🎣',cog:'⛵',transport:'🛶',galley:'⚓',fireship:'🔥',demo:'💥',longboat:'🐉',turtle:'🐢',
+  scorpion:'🎯',mangonel:'🪨',treb:'🏗️',bombard:'💣',handcannon:'💥',cannongalleon:'💥'};
 const TRAIN_KEYS_BY_BLD={tc:{c:'villager'},barracks:{m:'militia',s:'spearman',e:'eagle',h:'huskarl'},
-  range:{a:'archer',k:'skirmisher'},stable:{s:'scout',k:'knight'},siege:{r:'ram'},
-  monastery:{m:'monk',i:'missionary'},castle:{d:'petard'},
-  dock:{f:'fishing',c:'cog',t:'transport',g:'galley',i:'fireship',e:'demo',u:'longboat',r:'turtle'}};
+  range:{a:'archer',k:'skirmisher',h:'handcannon'},stable:{s:'scout',k:'knight'},
+  siege:{r:'ram',s:'scorpion',m:'mangonel',b:'bombard'},
+  monastery:{m:'monk',i:'missionary'},castle:{d:'petard',t:'treb'},
+  dock:{f:'fishing',c:'cog',t:'transport',g:'galley',i:'fireship',e:'demo',u:'longboat',r:'turtle',n:'cannongalleon'}};
 function keyFor(bldType,ut){
   if(bldType==='castle')return 'U';
   const km=TRAIN_KEYS_BY_BLD[bldType]||{};
