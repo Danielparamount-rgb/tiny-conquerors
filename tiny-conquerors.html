@@ -2895,6 +2895,16 @@ function resize(){
   clampCam&&G&&clampCam();
 }
 window.addEventListener('resize',resize);
+// The bottom panel grows and shrinks with the selection, resizing #viewwrap
+// WITHOUT a window resize. If vw/vh go stale the canvas is drawn squashed and
+// every tap lands offset from the cursor — so watch the wrap itself.
+let chkT=0;
+function chkView(){
+  const wrap=document.getElementById('viewwrap');
+  if(wrap.clientWidth!==vw||wrap.clientHeight!==vh)resize();
+}
+if(window.ResizeObserver)
+  new ResizeObserver(chkView).observe(document.getElementById('viewwrap'));
 /* ---------- terrain ---------- */
 function stampWorn(b){
   // dithered trampled-earth ring around a finished building, painted onto the terrain canvas
@@ -7728,6 +7738,10 @@ function begin(){
 function frame(now){
   requestAnimationFrame(frame);
   if(!G)return;
+  // belt-and-braces beside the ResizeObserver: if the panel re-flowed the view,
+  // recalibrate before drawing so taps always land where the cursor points
+  chkT-=1;
+  if(chkT<=0){chkT=20;chkView();}
   const dt=Math.min(.1,(now-last)/1000);last=now;
   if(!G.paused&&!G.over){
     acc+=dt;
