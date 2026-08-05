@@ -257,6 +257,7 @@
     <div class="diff">
       <button data-m="0" class="sel">River Crossing</button>
       <button data-m="1">Black Forest</button>
+      <button data-m="2">Hallowed Ground</button>
     </div>
     <p class="sub" id="mapBlurb" style="margin:6px 0 0;text-align:center">A river divides the land — armies must cross at the sandy fords.</p>
     <p style="text-align:center;margin-bottom:0"><b>Choose your foe</b></p>
@@ -279,6 +280,10 @@
       <button data-t="0" class="sel">Free-for-all</button>
       <button data-t="1">Two teams</button>
       <button data-t="2">You vs world</button>
+    </div>
+    <div class="diff">
+      <button data-tb="0" class="sel">Standard pace</button>
+      <button data-tb="1">⚡ Turbo</button>
     </div>
     <p class="sub" style="margin:6px 0 0;text-align:center">4+ players battle on a larger map. Allies share vision and fight beside you.</p>
     <button class="bigbtn" id="startBtn">⚔ &nbsp;Begin the Conquest</button>
@@ -346,7 +351,7 @@ const UNITS={
   skirmisher:{name:'Skirmisher',hp:30,atk:2,range:4,speed:1.25,cost:{f:25,w:35},train:6,age:1,ranged:true,vsRanged:5,
     line:{name:[,'Skirmisher','Skirmisher','Elite Skirmisher'],hp:[,30,30,35],atk:[,2,2,3],rng:[,4,4,5]}},
   scout:{name:'Scout Cavalry',hp:45,atk:3,range:.7,speed:2.3,cost:{f:80},train:8,age:1,cav:true,
-    line:{name:[,'Scout Cavalry','Light Cavalry','Hussar'],hp:[,45,60,75],atk:[,3,7,7]}},
+    line:{name:[,'Scout Cavalry','Light Cavalry','Hussar'],hp:[,45,60,75],atk:[,5,7,7]}}, // 1.0B: +2 atk in Feudal
   knight:{name:'Knight',hp:100,atk:10,range:.7,speed:2.0,cost:{f:60,g:75},train:10,age:2,cav:true,
     line:{name:[,,'Knight','Cavalier'],hp:[,,100,120],atk:[,,10,12]}},
   ram:{name:'Battering Ram',hp:175,atk:40,range:.7,speed:.85,cost:{w:160,g:75},train:14,age:2,ram:true,garCap:4,
@@ -358,7 +363,7 @@ const UNITS={
   mangonel:{name:'Mangonel',hp:50,atk:40,range:6,speed:.9,cost:{w:160,g:135},train:14,age:2,ranged:true,siege:true,rof:6,blast:1.6,
     line:{name:[,,'Mangonel','Onager'],hp:[,,50,60],atk:[,,40,50],rng:[,,6,6.5]}},
   treb:{name:'Trebuchet',hp:150,atk:200,range:12,speed:.6,cost:{w:200,g:200},train:18,age:3,ranged:true,siege:true,treb:true,rof:10},
-  bombard:{name:'Bombard Cannon',hp:80,atk:40,range:9,speed:.8,cost:{w:225,g:225},train:16,age:3,ranged:true,siege:true,gun:true,rof:6.5,vsBld:160,chem:true},
+  bombard:{name:'Bombard Cannon',hp:80,atk:40,range:9,speed:.8,cost:{w:225,g:225},train:16,age:3,ranged:true,siege:true,gun:true,rof:6.5,vsBld:200,chem:true}, // 1.0B: +80 vs buildings
   handcannon:{name:'Hand Cannoneer',hp:35,atk:17,range:6,speed:1.2,cost:{f:45,g:50},train:9,age:3,ranged:true,gun:true,rof:2.2,vsInf:10,chem:true},
   monk:{name:'Monk',hp:30,atk:0,range:2.2,speed:1.15,cost:{g:100},train:12,age:2,monk:true},
   missionary:{name:'Missionary',hp:30,atk:0,range:1.8,speed:1.55,cost:{g:100},train:11,age:2,monk:true,noRelic:true,cav:true},
@@ -371,9 +376,9 @@ const UNITS={
     elite:{name:'Elite Berserk',hp:60,atk:14}},
   mangudai:{name:'Mangudai',hp:60,atk:6,range:4,speed:2.1,cost:{w:55,g:65},train:10,age:2,cav:true,ranged:true,
     elite:{name:'Elite Mangudai',hp:60,atk:8}},
-  teuton:{name:'Teutonic Knight',hp:70,atk:12,range:.6,speed:.9,cost:{f:85,g:40},train:11,age:2,
+  teuton:{name:'Teutonic Knight',hp:70,atk:12,range:.6,speed:.9,cost:{f:85,g:40},train:9,age:2,
     elite:{name:'Elite Teutonic Knight',hp:100,atk:17}},
-  woad:{name:'Woad Raider',hp:65,atk:8,range:.6,speed:1.7,cost:{f:65,g:25},train:8,age:2,
+  woad:{name:'Woad Raider',hp:65,atk:8,range:.6,speed:1.8,cost:{f:65,g:25},train:8,age:2,
     elite:{name:'Elite Woad Raider',hp:80,atk:13}},
   cataphract:{name:'Cataphract',hp:110,atk:9,range:.7,speed:1.9,cost:{f:70,g:75},train:11,age:2,cav:true,vsInf:6,
     elite:{name:'Elite Cataphract',hp:150,atk:12}},
@@ -387,7 +392,7 @@ const UNITS={
     elite:{name:'Elite War Elephant',hp:600,atk:20}},
   janissary:{name:'Janissary',hp:35,atk:17,range:6,speed:1.2,cost:{f:60,g:55},train:9,age:2,ranged:true,rof:2.0,
     elite:{name:'Elite Janissary',hp:40,atk:22}},
-  samurai:{name:'Samurai',hp:60,atk:8,range:.6,speed:1.2,cost:{f:60,g:30},train:9,age:2,vsUnique:5,
+  samurai:{name:'Samurai',hp:60,atk:8,range:.6,speed:1.2,cost:{f:60,g:30},train:8,age:2,vsUnique:5,
     elite:{name:'Elite Samurai',hp:80,atk:12}},
   jaguar:{name:'Jaguar Warrior',hp:50,atk:10,range:.6,speed:1.25,cost:{f:60,g:30},train:9,age:2,vsInf:10,
     elite:{name:'Elite Jaguar Warrior',hp:75,atk:12}},
@@ -395,23 +400,23 @@ const UNITS={
     elite:{name:'Elite Eagle Warrior',hp:60,atk:9}},
   plumed:{name:'Plumed Archer',hp:50,atk:5,range:4,speed:1.55,cost:{w:46,g:46},train:8,age:2,ranged:true,
     elite:{name:'Elite Plumed Archer',hp:65,atk:5,rng:5}},
-  warwagon:{name:'War Wagon',hp:150,atk:9,range:5,speed:1.55,cost:{w:80,g:60},train:12,age:2,cav:true,ranged:true,
-    elite:{name:'Elite War Wagon',hp:200,atk:9,rng:6}},
+  warwagon:{name:'War Wagon',hp:150,atk:9,range:4.5,speed:1.55,cost:{w:120,g:60},train:12,age:2,cav:true,ranged:true,
+    elite:{name:'Elite War Wagon',hp:200,atk:9,rng:5.5}}, // 1.0B: dearer, shorter-ranged
   conquistador:{name:'Conquistador',hp:55,atk:16,range:5,speed:1.9,cost:{f:60,g:70},train:10,age:2,cav:true,ranged:true,rof:2.0,
     elite:{name:'Elite Conquistador',hp:70,atk:18}},
-  tarkan:{name:'Tarkan',hp:90,atk:7,range:.7,speed:1.9,cost:{f:60,g:60},train:10,age:2,cav:true,vsBld:8,
+  tarkan:{name:'Tarkan',hp:90,atk:7,range:.7,speed:1.9,cost:{f:60,g:60},train:9,age:2,cav:true,vsBld:8,
     elite:{name:'Elite Tarkan',hp:150,atk:11,vsBld:10}},
   /* ---- ships (manual p. 44) — built at the Dock ---- */
   fishing:{name:'Fishing Ship',hp:60,atk:0,range:.6,speed:1.5,cost:{w:75},train:7,ship:true,fisher:true,passive:true},
   cog:{name:'Trade Cog',hp:80,atk:0,range:.6,speed:1.7,cost:{w:100,g:50},train:9,age:1,ship:true,passive:true},
   transport:{name:'Transport Ship',hp:100,atk:0,range:.6,speed:1.7,cost:{w:125},train:10,age:1,ship:true,passive:true,garCap:5},
-  galley:{name:'Galley',hp:120,atk:6,range:4.5,speed:1.8,cost:{w:90,g:30},train:10,age:1,ship:true,ranged:true,
+  galley:{name:'Galley',hp:120,atk:6,range:4.5,speed:1.8,cost:{w:90,g:30},train:11,age:1,ship:true,ranged:true,
     line:{name:[,'Galley','War Galley','Galleon'],hp:[,120,135,165],atk:[,6,7,8],rng:[,4.5,5,5.5]}},
   fireship:{name:'Fire Ship',hp:100,atk:2,range:1.8,speed:1.9,cost:{w:75,g:45},train:10,age:2,ship:true,ranged:true,rof:.4,vsShip:3,
     elite:{name:'Fast Fire Ship',hp:120,atk:3}},
   demo:{name:'Demolition Ship',hp:50,atk:110,range:.8,speed:1.8,cost:{w:70,g:50},train:9,age:2,ship:true,demo:true,
     elite:{name:'Heavy Demolition Ship',hp:60,atk:140}},
-  longboat:{name:'Longboat',hp:130,atk:7,range:5,speed:1.9,cost:{w:100,g:50},train:10,age:2,ship:true,ranged:true,
+  longboat:{name:'Longboat',hp:130,atk:7,range:5,speed:1.9,cost:{w:100,g:50},train:9,age:2,ship:true,ranged:true,
     elite:{name:'Elite Longboat',hp:160,atk:8,rng:5.5}},
   turtle:{name:'Turtle Ship',hp:200,atk:50,range:3,speed:1.2,cost:{w:200,g:200},train:14,age:2,ship:true,ranged:true,rof:2.6,arrowRes:.5,
     elite:{name:'Elite Turtle Ship',hp:300,atk:50}},
@@ -435,30 +440,30 @@ const CIVS=[
    blurb:'Towers hold twice the garrison and fire double arrows; monks heal from afar. Unique: Teutonic Knight. Tech: Crenellations (+3 castle range).'},
   {id:'celts',name:'Celts',uu:'woad',ut:'furor',woodMult:1.15,infSpd:1.15,siegeRof:.8,
    blurb:'Infantry 15% faster, lumberjacks faster, rams strike quicker. Unique: Woad Raider. Tech: Furor Celtica (+50% ram HP).'},
-  {id:'byzantines',name:'Byzantines',uu:'cataphract',ut:'logistica',bldHpAge:[1.1,1.2,1.3,1.4],counterCost:.75,impDisc:.67,
+  {id:'byzantines',name:'Byzantines',uu:'cataphract',ut:'logistica',bldHpAge:[1.1,1.2,1.3,1.4],counterCost:.75,impDisc:.67,freeTech:{watch:1},
    blurb:'Buildings harden each age; spear and skirmish troops -25%; cheaper Imperial Age. Unique: Cataphract. Tech: Logistica (trample damage).'},
   {id:'saracens',name:'Saracens',uu:'mameluke',ut:'zealotry',mktRate:true,
    blurb:'Market trades at nearly no fee. Unique: Mameluke camel rider. Tech: Zealotry (+30 Mameluke HP).'},
-  {id:'goths',name:'Goths',uu:'huskarl',ut:'anarchy',infCost:.85,popBonus:10,
+  {id:'goths',name:'Goths',uu:'huskarl',ut:'anarchy',infCost:.75,infCostAge:1,popBonus:10,
    blurb:'Infantry -15% cost; +10 population in the Imperial Age. Unique: Huskarl, shrugs off arrows. Techs: Anarchy, then Perfusion.'},
-  {id:'chinese',name:'Chinese',uu:'chukonu',ut:'rocketry',startVills:3,startF:-150,startW:-50,techDisc:[1,.9,.85,.8],farmFast:1.15,
+  {id:'chinese',name:'Chinese',uu:'chukonu',ut:'rocketry',startVills:3,startF:-200,startW:-50,techDisc:[1,.9,.85,.8],farmFast:1.15,
    blurb:'Start with +3 villagers but less food; ages cost less. Unique: Chu Ko Nu, rapid-fire crossbow. Tech: Rocketry (+2 attack).'},
   {id:'persians',name:'Persians',uu:'elephant',ut:'mahouts',tcHp:2,startF:50,startW:50,
    blurb:'Town Hall has double HP; start with bonus food and wood. Unique: War Elephant. Tech: Mahouts (+30% elephant speed).'},
   {id:'turks',name:'Turks',uu:'janissary',ut:'artillery',goldMult:1.15,gunHp:1.25,
    blurb:'Gold miners 15% faster; Janissaries +25% HP. Unique: Janissary, long-range gunner. Tech: Artillery (+ range).'},
   /* ---- The Conquerors civilizations (+ Japanese from Age of Kings) ---- */
-  {id:'japanese',name:'Japanese',uu:'samurai',ut:'kataparuto',campCost:.5,infRofAge:[1,.9,.85,.75],fishHp:2,
+  {id:'japanese',name:'Japanese',uu:'samurai',ut:'kataparuto',campCost:.5,infRofAge:[1,.75,.75,.75],fishHp:2,
    blurb:'Storage Camps half price; infantry strike faster each age; hardy fishing ships. Unique: Samurai, slayer of unique units. Tech: Kataparuto.'},
-  {id:'aztecs',name:'Aztecs',uu:'jaguar',ut:'garland',vilCarry:5,trainFast:.85,monkHp:15,noStable:true,eagles:true,
+  {id:'aztecs',name:'Aztecs',uu:'jaguar',ut:'garland',vilCarry:5,trainFast:.85,monkHp:15,noStable:true,eagles:true,freeTech:{loom:1},
    blurb:'Villagers carry +5; military trains 15% faster; no cavalry — fields Eagle Warriors. Unique: Jaguar Warrior. Tech: Garland Wars (+4 infantry attack).'},
   {id:'mayans',name:'Mayans',uu:'plumed',ut:'eldorado',startVills:1,startF:-50,resLast:1.2,archCost:.8,noStable:true,eagles:true,
    blurb:'Start +1 villager; resources last 20% longer; archers -20% cost; no cavalry — fields Eagle Warriors. Unique: Plumed Archer. Tech: El Dorado (+40 Eagle HP).'},
   {id:'huns',name:'Huns',uu:'tarkan',ut:'atheism',noHouse:true,startW:-100,
    blurb:'Need no Houses, but start -100 wood. Unique: Tarkan, scourge of buildings. Tech: Atheism (spies reveal your enemies).'},
-  {id:'koreans',name:'Koreans',uu:'warwagon',ut:'shinkichon',vilLos:2,towerRangeAge:[0,0,1,2],towerCost:.75,uuShip:'turtle',
+  {id:'koreans',name:'Koreans',uu:'warwagon',ut:'shinkichon',vilLos:3,towerRangeAge:[0,0,1,2],towerCost:.75,uuShip:'turtle',
    blurb:'Villagers see farther; towers cheaper with growing range. Unique: War Wagon and the armored Turtle Ship. Tech: Shinkichon.'},
-  {id:'spanish',name:'Spanish',uu:'conquistador',ut:'supremacy',buildFast:1.3,missionaries:true,
+  {id:'spanish',name:'Spanish',uu:'conquistador',ut:'supremacy',buildFast:1.3,missionaries:true,gunRof:.85,
    blurb:'Builders work 30% faster; Monastery trains swift Missionaries. Unique: Conquistador, mounted gunner. Tech: Supremacy (fighting villagers).'},
 ];
 for(const cv of CIVS)UU_SET.add(cv.uu);
@@ -545,6 +550,9 @@ function trainTimeOf(b,ut){
   if(b.type==='barracks'&&teamHas(b.p,'barracksFast'))t*=.8;// Goths
   if(b.type==='stable'&&teamHas(b.p,'stableFast'))t*=.8;    // Huns
   if(UNITS[ut].gun&&teamHas(b.p,'gunFast'))t*=.8;           // Turks
+  if(UNITS[ut].ship&&ecoTier(b.p,'shipw'))t*=.85;           // 1.0B: Shipwright speeds the slips
+  // Turbo: military trains 2.5x faster; economy units keep their pace (WHATSNEW)
+  if(turboSel&&ut!=='villager'&&!UNITS[ut].fisher&&!UNITS[ut].passive)t/=2.5;
   return t;
 }
 /* Blacksmith upgrade lines (manual pp. 46-47). Armor becomes flat damage
@@ -654,7 +662,7 @@ const BLDS={
   range:{name:'Archery Range',hp:1000,size:2,cost:{w:150},bt:16,trains:['archer','skirmisher','handcannon'],age:1},
   stable:{name:'Stable',hp:1000,size:2,cost:{w:150},bt:16,trains:['scout','knight'],age:1},
   siege:{name:'Siege Works',hp:1200,size:2,cost:{w:200},bt:18,trains:['ram','scorpion','mangonel','bombard'],age:2},
-  castle:{name:'Castle',hp:3200,size:2,cost:{w:350,g:200},bt:40,trains:[],atk:11,rng:7,age:2,garCap:10},
+  castle:{name:'Castle',hp:3200,size:2,cost:{w:350,g:200},bt:50,trains:[],atk:11,rng:7,age:2,garCap:10}, // 1.0B: castles build slower
   tower:{name:'Watch Tower',hp:700,size:1,cost:{w:100,g:75},bt:18,atk:7,rng:5,age:1,garCap:4},
   wall:{name:'Palisade Wall',hp:300,size:1,cost:{w:5},bt:4,thin:true},
   gate:{name:'Palisade Gate',hp:500,size:1,cost:{w:30},bt:8,thin:true,gate:true},
@@ -675,10 +683,14 @@ const DIFF=[{trickle:0,firstWave:380,waveEvery:210,waveGrow:2,vT:[6,9,12,14]},
             {trickle:1.8,firstWave:195,waveEvery:100,waveGrow:4,vT:[8,13,16,18]}];
 
 /* ================= state ================= */
-let G=null, diffSel=0, civSel=0, mapSel=0, playersSel=2, teamSel=0, NP=2, uid=1;
+let G=null, diffSel=0, civSel=0, mapSel=0, playersSel=2, teamSel=0, turboSel=0, NP=2, uid=1;
+// Turbo pace (CD WHATSNEW): work rates x2.5 (military training, construction,
+// gathering, carry), trade x2 — economy unit training stays normal.
+function TB(){return turboSel?2.5:1;}
 const MAPS=[
   {name:'River Crossing',blurb:'A river divides the land — armies must cross at the sandy fords.'},
-  {name:'Black Forest',blurb:'Endless dark woodland. Narrow trails link the clearings — wall a chokepoint, turtle up, and strike when ready. Wood is everywhere; gold is contested.'}];
+  {name:'Black Forest',blurb:'Endless dark woodland. Narrow trails link the clearings — wall a chokepoint, turtle up, and strike when ready. Wood is everywhere; gold is contested.'},
+  {name:'Hallowed Ground',blurb:'Open steppe strewn with holy relics — every lord starts with a Monastery and a Monk. Claim the relics for gold, or hoard them all and win outright.'}];
 let mission=null;
 const MISSIONS=[
   {id:0,name:'First Blood',map:0,diff:0,
@@ -730,7 +742,9 @@ function newGame(){
   else teams=Array.from({length:NP},(_,i)=>i);
   const mkP=c=>{const cv=CIVS[c]; // manual start bonuses/penalties
     return{f:200+(cv.startF||0),w:200+(cv.startW||0),g:100,age:0,ageT:0,aging:false,civ:c,uts:[],
-      bs:{atk:0,arw:0,ia:0,aa:0,ca:0},pt:false,uni:{},eco:{},mon:{}};};
+      bs:{atk:0,arw:0,ia:0,aa:0,ca:0},pt:false,uni:{},
+      eco:Object.assign({},cv.freeTech||{}), // 1.0B: Aztec free Loom, Byzantine free Town Watch
+      mon:{}};};
   const P=[mkP(civSel)];
   const used=[civSel];
   const ais=[null];
@@ -753,6 +767,14 @@ function newGame(){
     addBld(p,'tc',bx,by,true);
     const nv=3+(CIVS[G.P[p].civ].startVills||0);
     for(let i=0;i<nv;i++)addUnit(p,'villager',bx-1+i%3,by+3+(i/3|0));
+    if(mapSel===2&&!mission){ // Hallowed Ground: every lord starts with the cloth
+      let placed=null;
+      for(let r=3;r<9&&!placed;r++)for(let a=0;a<12&&!placed;a++){
+        const tx=Math.round(bx+Math.cos(a/12*6.283)*r),ty=Math.round(by+Math.sin(a/12*6.283)*r);
+        if(canPlace(tx,ty,2,0))placed={tx,ty};}
+      if(placed)addBld(p,'monastery',placed.tx,placed.ty,true);
+      addUnit(p,'monk',bx+2,by+3);
+    }
   }
   centerOn(START[0][0]+1,START[0][1]+1);
   updateFog();
@@ -760,12 +782,24 @@ function newGame(){
 }
 function genMap(){
   miniResDirty=true;
-  if(mapSel===1)genMapForest();else genMapRiver();
+  if(mapSel===1)genMapForest();
+  else if(mapSel===2)genMapHallowed();
+  else genMapRiver();
   placeRelics();
 }
 function placeRelics(){
   G.relics=[];
-  const spots=mapSel===1
+  let spots;
+  if(mapSel===2){ // Hallowed Ground: relics everywhere (HALLOWED.RMS concept)
+    spots=[];
+    let guard=0;
+    while(spots.length<8&&guard++<300){
+      const x=4+Math.floor(Math.random()*(MAP-8)),y=4+Math.floor(Math.random()*(MAP-8));
+      if(START.some(([bx,by])=>Math.hypot(x-bx,y-by)<8))continue;
+      if(spots.some(([sx,sy])=>Math.hypot(x-sx,y-sy)<7))continue;
+      spots.push([x,y]);
+    }
+  }else spots=mapSel===1
     ?[[32,32],[13,13],[MAP-14,MAP-14],[32,44]]
     :[[MAP*.3|0,MAP*.55|0],[MAP*.7|0,MAP*.45|0],[MAP*.2|0,MAP*.15|0],[MAP*.85|0,MAP*.8|0]];
   let rid=1;
@@ -887,6 +921,58 @@ function genMapRiver(){
   placeRes('gold',MAP*.2|0,MAP*.75|0,4);placeRes('gold',MAP*.8|0,MAP*.25|0,4);
   placeRes('food',MAP*.45|0,MAP*.28|0,5);placeRes('food',MAP*.55|0,MAP*.72|0,5);
 }
+function genMapHallowed(){
+  // open steppe with forest clumps, small fishable ponds and hills — an original
+  // generator built to the proportions in the CD's HALLOWED.RMS sample script
+  G.map=Array.from({length:MAP},()=>Array(MAP).fill(0));
+  G.water={};G.ford={};
+  const rng=(n)=>Math.floor(Math.random()*n);
+  // ponds (the script's little oases), never near a start; fish in each
+  for(let p2=0,nP=Math.round(8*MAP*MAP/4096);p2<nP;p2++){
+    const px=6+rng(MAP-12),py=6+rng(MAP-12),pr=2+rng(2);
+    if(START.some(([bx,by])=>Math.hypot(px-bx,py-by)<12))continue;
+    for(let y=py-pr;y<=py+pr;y++)for(let x=px-pr;x<=px+pr;x++){
+      if(x<2||y<2||x>=MAP-2||y>=MAP-2)continue;
+      if(Math.hypot(x-px,y-py)<=pr-.3+((x*7+y*13)%2)*.6){
+        G.map[y][x]=1;G.water[x+','+y]=1;}
+    }
+    const fk=px+','+py;
+    if(G.water[fk]&&!G.res[fk])G.res[fk]={type:'fish',amt:RES_META.fish.amt,x:px,y:py};
+  }
+  // walkable hill plateaus
+  G.elev=new Uint8Array(MAP*MAP);
+  for(let hb=0,nH=Math.round(7*MAP*MAP/4096);hb<nH;hb++){
+    const hx=6+rng(MAP-12),hy=6+rng(MAP-12),hr=3+rng(3);
+    if(START.some(([bx,by])=>Math.hypot(hx-bx,hy-by)<10))continue;
+    for(let y=hy-hr;y<=hy+hr;y++)for(let x=hx-hr;x<=hx+hr;x++){
+      if(x<1||y<1||x>=MAP-1||y>=MAP-1)continue;
+      if(G.water[x+','+y])continue;
+      if(Math.hypot(x-hx,y-hy)<=hr-.2+((x*7+y*13)%2)*.5)G.elev[y*MAP+x]=1;
+    }
+  }
+  const placeRes=(type,cx,cy,n)=>{let placed=0,tries=0;
+    while(placed<n&&tries++<220){const x=cx+rng(5)-2,y=cy+rng(5)-2;
+      if(x<1||y<1||x>=MAP-1||y>=MAP-1)continue;const k=x+','+y;
+      if(G.map[y][x]||G.res[k])continue;
+      G.res[k]={type,amt:RES_META[type].amt,x,y};G.map[y][x]=1;placed++;}};
+  // forest clumps — sparser than the river map; this is open ground
+  for(let b=0,nF=Math.round(38*MAP*MAP/4096);b<nF;b++){
+    const cx=3+rng(MAP-6),cy=3+rng(MAP-6);
+    if(START.some(([bx,by])=>Math.hypot(cx-bx,cy-by)<9))continue;
+    placeRes('wood',cx,cy,5+rng(5));
+  }
+  // per-player berries, gold and woodlots
+  for(const [bx,by] of START){
+    const dx=Math.sign(MAP/2-bx)||1,dy=Math.sign(MAP/2-by)||1;
+    placeRes('food',bx+5*dx,by-4*dy,6);
+    placeRes('food',bx-3*dx,by+6*dy,4);
+    placeRes('gold',bx+8*dx,by+8*dy,5);
+    placeRes('wood',bx+dx,by+9*dy,8);placeRes('wood',bx+9*dx,by+dy,8);
+  }
+  placeRes('gold',MAP*.5|0,MAP*.5|0,6);
+  placeRes('gold',MAP*.25|0,MAP*.7|0,4);placeRes('gold',MAP*.75|0,MAP*.3|0,4);
+  placeRes('food',MAP*.4|0,MAP*.3|0,5);placeRes('food',MAP*.6|0,MAP*.7|0,5);
+}
 /* ================= entities ================= */
 function hasUt(p,id){const uts=G.P[p].uts;return !!(uts&&uts.includes(id));}
 function uniOf(p){const st=G.P[p];if(!st.uni)st.uni={};return st.uni;}
@@ -924,6 +1010,7 @@ function speedOf(u){
   if(u.type==='villager')s*=1+.1*ecoTier(u.p,'cart');         // Wheelbarrow / Hand Cart
   if(d.cav&&!d.monk&&ecoTier(u.p,'husb'))s*=1.1;              // Husbandry
   if(d.ship&&ecoTier(u.p,'dry'))s*=1.15;                      // Dry Dock
+  if(u.type==='cog'&&turboSel)s*=2;                           // Turbo: trade works 2x
   if(d.monk&&ecoTier(u.p,'ferv'))s*=1.15;                     // Fervor
   if(u.type==='ram'||d.siege){
     if(hasUt(u.p,'drill'))s*=1.5;
@@ -974,7 +1061,7 @@ function rangeOf(u){
   if(u.type==='axeman'&&hasUt(u.p,'bearded'))r+=1;
   if(u.type==='janissary'&&hasUt(u.p,'artillery'))r+=1.5;
   if((u.type==='bombard'||u.type==='cannongalleon')&&hasUt(u.p,'artillery'))r+=1.5;
-  if(u.type==='mangonel'&&hasUt(u.p,'shinkichon'))r+=2; // Korean unique tech
+  if(u.type==='mangonel'&&hasUt(u.p,'shinkichon'))r+=1; // Korean unique tech (1.0B: +1, was +2)
   if(u.type==='mangonel'&&teamHas(u.p,'mangonelRng'))r+=1; // Korean team bonus
   if(d.siege&&!d.ram&&hasUni(u.p,'se'))r+=1;        // Siege Engineers
   return r;
@@ -985,13 +1072,15 @@ function rofOf(u){
   if(INF.has(u.type)&&cv.infRofAge)c*=cv.infRofAge[G.P[u.p].age];
   if(u.type==='mangudai'&&cv.mangRof)c*=cv.mangRof;
   if(d.ranged&&!d.siege&&!d.gun&&!d.ship&&ecoTier(u.p,'thumb'))c*=.85; // Thumb Ring
+  if(d.gun&&cv.gunRof)c*=cv.gunRof; // 1.0B: Spanish gunpowder fires faster (incl. Conquistador)
+  if(u.type==='conquistador'&&cv.gunRof)c*=cv.gunRof;
   if((d.ram||d.siege)&&cv.siegeRof)c*=cv.siegeRof;  // Celts: siege fires faster
   if((u.type==='ram'||d.treb)&&hasUt(u.p,'kataparuto'))c*=.67;
   return c;
 }
 function carryCap(u){
-  if(UNITS[u.type].fisher)return 15;
-  return Math.round((10+(civOf(u.p).vilCarry||0))*(1+.25*ecoTier(u.p,'cart')));}
+  if(UNITS[u.type].fisher)return Math.round(15*TB());
+  return Math.round((10+(civOf(u.p).vilCarry||0))*(1+.25*ecoTier(u.p,'cart'))*TB());}
 
 /* ================= pathfinding ================= */
 function passable(x,y){return x>=0&&y>=0&&x<MAP&&y<MAP&&!G.map[y][x];}
@@ -1283,7 +1372,7 @@ function popCap(p){
 /* manual-derived cost adjustments (civ discounts) */
 function unitCostOf(p,type){
   const cv=civOf(p),base=UNITS[type].cost,d=UNITS[type];let m=1;
-  if(INF.has(type)&&cv.infCost)m=cv.infCost;
+  if(INF.has(type)&&cv.infCost&&G.P[p].age>=(cv.infCostAge||0))m=cv.infCost; // Goths: from Feudal (1.0B)
   if(cv.archCost&&(type==='archer'||type==='skirmisher'||type==='plumed'))m=cv.archCost;
   if(cv.counterCost&&(type==='spearman'||type==='skirmisher'))m=cv.counterCost;
   if(cv.shipCost&&d.ship&&!d.passive)m=cv.shipCost; // Vikings: warships -20%
@@ -1700,6 +1789,20 @@ function updateUnit(u,dt){
         // monks drift toward wounded allies and heal them; AI monks also preach
         u.scanT=(u.scanT||0)-dt;
         if(u.scanT<=0){u.scanT=.8;
+          // AI monks run the relic circuit (outside missions, so The Relic War stays fair)
+          if(u.p>0&&!mission&&!d.noRelic){
+            const mon=G.blds.find(b2=>b2.p===u.p&&b2.type==='monastery'&&b2.built);
+            if(mon){
+              if(u.relic){const c2=bldCenter(mon);
+                u.state='toMon';u.monB=mon.id;u.path=uPath(u,c2.x,c2.y,u.p)||[];break;}
+              let rr=null,rd=26;
+              for(const r2 of G.relics){if(r2.held||r2.mon)continue;
+                const dd=Math.hypot(r2.x+.5-u.x,r2.y+.5-u.y);
+                if(dd<rd){rd=dd;rr=r2;}}
+              if(rr){u.state='toRelic';u.relicT=rr.id;
+                u.path=uPath(u,rr.x,rr.y,u.p)||[];break;}
+            }
+          }
           let best=null,bd=7;
           for(const f of G.units){
             if(!allied(f.p,u.p)||f.id===u.id||f.hp<=0||f.hp>=f.maxhp)continue;
@@ -1859,7 +1962,7 @@ function updateUnit(u,dt){
       u.gatherT+=dt;
       if(u.gatherT>=1){u.gatherT=0;
         const cv=civOf(u.p);
-        const rate=(r.type==='fish'?1.35:1.1)
+        const rate=(r.type==='fish'?1.35:1.1)*TB()
           *(r.type==='wood'&&cv.woodMult?cv.woodMult:1)*(r.type==='gold'&&cv.goldMult?cv.goldMult:1)
           *(r.type==='wood'?WOOD_RATE[ecoTier(u.p,'wood')]:1)   // axe/saw line
           *(r.type==='gold'?GOLD_RATE[ecoTier(u.p,'gold')]:1);  // mining line
@@ -1889,7 +1992,7 @@ function updateUnit(u,dt){
       if(!b){u.state='idle';break;}
       {const fc=bldCenter(b);slewHdg(u,fc.x,fc.y,dt);}
       u.gatherT+=dt;
-      if(u.gatherT>=1.25/(civOf(u.p).farmFast||1)){u.gatherT=0;u.carry+=1;u.carryType='food';
+      if(u.gatherT>=1.25/((civOf(u.p).farmFast||1)*TB())){u.gatherT=0;u.carry+=1;u.carryType='food';
         // farms exhaust (manual); replant automatically while wood allows
         if(b.food===undefined)b.food=farmFoodOf(u.p);
         b.food-=1;
@@ -1933,7 +2036,9 @@ function updateUnit(u,dt){
         if(b.type==='farm')cmdFarm(u,b);
         break;}
       const def=BLDS[b.type];
-      const bRate=dt*(civOf(u.p).buildFast||1)*(hasUni(u.p,'tread')?1.2:1); // Spanish / Treadmill Crane
+      // Turbo speeds construction except castles, towers and wonders (WHATSNEW)
+      const tbB=(turboSel&&b.type!=='castle'&&b.type!=='tower'&&b.type!=='wonder')?2.5:1;
+      const bRate=dt*(civOf(u.p).buildFast||1)*(hasUni(u.p,'tread')?1.2:1)*tbB; // Spanish / Treadmill Crane
       b.prog+=bRate;b.hp=Math.min(b.maxhp,b.hp+b.maxhp*bRate/def.bt);
       if(b.prog>=def.bt){b.built=true;b.hp=b.maxhp;b.pendCost=null;
         if(!def.thin&&b.type!=='farm'&&b.type!=='dock')stampWorn(b);
@@ -1993,6 +2098,8 @@ function updateUnit(u,dt){
             else if(td){
               if(d.vsCav&&td.cav)dmg+=d.vsCav;
               if(d.vsRanged&&td.ranged)dmg+=d.vsRanged;
+              if(t.type==='spearman'&&d.ranged&&!d.gun&&!d.siege&&!d.ship)dmg+=1; // 1.0B: archers +1 vs spear line
+              if(t.type==='spearman'&&d.cav&&d.ranged&&G.P[u.p].pt)dmg+=3; // 1.0B Parthian: cav archers savage spears
               if(d.vsInf&&INF.has(t.type))dmg+=d.vsInf;      // Jaguar, Cataphract
               if(d.vsUnique&&UU_SET.has(t.type))dmg+=d.vsUnique; // Samurai
               if(d.vsShip&&td.ship)dmg+=d.vsShip;            // Fire Ship
@@ -2224,6 +2331,23 @@ function aiThink(p,ai){
     if(b.queue.length<1&&canAfford(p,uc)&&popUsed(p)<popCap(p))
       {pay(p,uc);b.queue.push(ut);}
   }
+  // CPSB-style town defense: when raiders reach the town the villagers duck
+  // into the Town Hall (adding to its arrows); back to work once it's quiet
+  const tcC={x:tc.tx+1,y:tc.ty+1};
+  const danger=G.units.some(e=>!allied(e.p,p)&&e.hp>0
+    &&e.type!=='villager'&&!UNITS[e.type].passive&&!UNITS[e.type].fisher
+    &&Math.hypot(e.x-tcC.x,e.y-tcC.y)<8);
+  if(danger){
+    ai.lastDanger=G.t;
+    for(const v of vills){
+      if(v.state==='toGar'||v._gar)continue;
+      if(tc.gar.length>=bldGarCap(tc))break;
+      if(Math.hypot(v.x-tcC.x,v.y-tcC.y)<8)cmdGarrison(v,tc);
+    }
+  }else if(ai.lastDanger&&G.t-ai.lastDanger>10){
+    ai.lastDanger=null;
+    if(tc.gar&&tc.gar.some(g=>g.type==='villager'))ejectGarrison(tc);
+  }
   // villager jobs
   for(const v of vills){
     if(v.state!=='idle')continue;
@@ -2402,7 +2526,7 @@ function saveGame(){
     const strip=u=>{const o=Object.assign({},u);o.path=null;o._gar=null;o._garU=null;
       if(o.gar)o.gar=o.gar.map(g=>Object.assign({},g,{path:null,_gar:null,_garU:null}));
       return o;};
-    const data={v:1,t:G.t,mapSel,diffSel,uid,np:NP,mapN:MAP,starts:START,teams:G.teams,
+    const data={v:1,t:G.t,mapSel,diffSel,turboSel,uid,np:NP,mapN:MAP,starts:START,teams:G.teams,
       wonderT:G.wonderT||null,relicT:G.relicT||null,
       mission:mission?mission.id:null,
       P:G.P,ais:G.ais,relics:G.relics,groups:G.groups,stats:G.stats,cam:G.cam,
@@ -2418,7 +2542,7 @@ function loadGame(){
   let data;
   try{data=JSON.parse(localStorage.getItem('tq_save'));}catch(e){return false;}
   if(!data||data.v!==1)return false;
-  mapSel=data.mapSel;diffSel=data.diffSel;uid=data.uid||1;
+  mapSel=data.mapSel;diffSel=data.diffSel;turboSel=data.turboSel||0;uid=data.uid||1;
   NP=data.np||data.P.length||2;
   setMapSize(data.mapN||64);
   START=data.starts||genStarts(NP);
@@ -7626,6 +7750,10 @@ document.querySelectorAll('.diff button[data-d]').forEach(b=>{
 document.querySelectorAll('.diff button[data-n]').forEach(b=>{
   b.onclick=()=>{document.querySelectorAll('.diff button[data-n]').forEach(x=>x.classList.remove('sel'));
     b.classList.add('sel');playersSel=+b.dataset.n;};
+});
+document.querySelectorAll('.diff button[data-tb]').forEach(b=>{
+  b.onclick=()=>{document.querySelectorAll('.diff button[data-tb]').forEach(x=>x.classList.remove('sel'));
+    b.classList.add('sel');turboSel=+b.dataset.tb;};
 });
 document.querySelectorAll('.diff button[data-t]').forEach(b=>{
   b.onclick=()=>{document.querySelectorAll('.diff button[data-t]').forEach(x=>x.classList.remove('sel'));
