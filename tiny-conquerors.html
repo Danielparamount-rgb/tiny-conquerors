@@ -1387,7 +1387,7 @@ function finishConvert(u,t,isBld){
   }
   for(let i=0;i<7;i++)G.fx.push({x:c.x+(Math.random()-.5),y:c.y-.4-Math.random(),
     vx:(Math.random()-.5)*.6,vy:-.7-Math.random()*.5,life:.7,max:.7,r:1.6,kind:'chip',col:'#f0e29a'});
-  if(tileVis(c.x,c.y))snd('age');
+  if(tileVis(c.x,c.y))snd('convert',c.x,c.y);
 }
 function cmdConvert(u,ent,isBld){
   u.state='toConv';u.target={id:ent.id,bld:isBld};u.convT=0;
@@ -1740,6 +1740,7 @@ function removeBld(i){
       type:b.type,tilt:Math.random()<.5?-1:1});
     if(G.rubble.length>40)G.rubble.shift();
     const cc=bldCenter(b);
+    if(tileVis(cc.x,cc.y))snd('collapse',cc.x,cc.y);
     // dust rolls outward from the footprint as it comes down
     for(let fi=0;fi<14;fi++){
       const an=Math.random()*6.283,rr=b.size*(.4+Math.random()*.7);
@@ -1874,7 +1875,7 @@ function dealDamage(hit,amt,fromP,ranged){
     if(!lp||G.t-lp.t>2||Math.hypot(hx-lp.x,hy-lp.y)>10){
       pgs.push({x:hx,y:hy,t:G.t});if(pgs.length>6)pgs.shift();}
   }
-  if(tileVis(hx,hy))snd(ranged?'hit':'sword');
+  if(tileVis(hx,hy))snd(ranged==='siege'?'crash':ranged?'hit':'sword',hx,hy);
   G.fx.push({x:hx+(Math.random()-.5)*.5,y:hy+(Math.random()-.5)*.5,vx:0,vy:-.6,
     life:.28,max:.28,r:3,kind:'spark'});
   if(fromP!==0&&hit.ent.p===0&&G.t-G.lastRaidToast>18){G.lastRaidToast=G.t;
@@ -2276,6 +2277,14 @@ function updateUnit(u,dt){
             }
           }
           if(d.range>1){
+            // the engine's own report, fired from where it stands
+            if(tileVis(u.x,u.y)){
+              if(d.gun)snd(d.siege?'cannon':'gun',u.x,u.y);
+              else if(d.treb)snd('treb',u.x,u.y);
+              else if(d.blast)snd('sling',u.x,u.y);
+              else if(d.pierce)snd('twang',u.x,u.y);
+              else snd('arrow',u.x,u.y);
+            }
             const kind=d.gun?'ball':(d.treb||d.blast)?'stone':d.pierce?'bolt':null;
             const noMiss=ecoTier(u.p,'thumb')&&!d.siege&&!d.gun; // Thumb Ring: true flight
             const ms=!kind&&!noMiss&&!u.target.bld&&Math.random()<missChance(u.p);
@@ -2803,11 +2812,52 @@ function initAudio(){
     birdTimer=setInterval(()=>{if(!sndMuted&&G&&!G.paused&&!G.over&&Math.random()<.55)sBird();},9000);
   }catch(e){}
 }
+/* Positional mix: snd(kind,x,y) attenuates and pans by where the event sits on
+   screen, so a skirmish across the map murmurs while the fight at your feet is
+   loud. sVolMul/sPan are set by snd() for the duration of one call. */
+let sVolMul=1,sPan=0;
 function sEnv(vol,dur,att){const g=AC.createGain();const t=AC.currentTime;
-  if(att){g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+att);}
-  else g.gain.setValueAtTime(vol,t);
+  const v=Math.max(.0002,vol*sVolMul);
+  if(att){g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(v,t+att);}
+  else g.gain.setValueAtTime(v,t);
   g.gain.exponentialRampToValueAtTime(.001,t+dur);
-  g.connect(masterG);return g;}
+  if(sPan&&AC.createStereoPanner){
+    const p=AC.createStereoPanner();p.pan.value=Math.max(-1,Math.min(1,sPan));
+    g.connect(p);p.connect(masterG);
+  }else g.connect(masterG);
+  return g;}
+function sBoom(f0,dur,vol){ // sub-bass thump for gunpowder and collapsing masonry
+  if(!AC)return;
+  const o=AC.createOscillator();o.type='sine';
+  o.frequency.setValueAtTime(f0,AC.currentTime);
+  o.frequency.exponentialRampToValueAtTime(Math.max(24,f0*.35),AC.currentTime+dur);
+  o.connect(sEnv(vol,dur,.006));o.start();o.stop(AC.currentTime+dur+.05);
+  const o2=AC.createOscillator();o2.type='triangle';
+  o2.frequency.setValueAtTime(f0*1.5,AC.currentTime);
+  o2.frequency.exponentialRampToValueAtTime(Math.max(30,f0*.5),AC.currentTime+dur*.6);
+  o2.connect(sEnv(vol*.5,dur*.6,.004));o2.start();o2.stop(AC.currentTime+dur+.05);}
+function sCreak(dur,vol){ // rope under load — timber and cordage, not a tone
+  if(!AC)return;
+  const o=AC.createOscillator();o.type='sawtooth';
+  o.frequency.setValueAtTime(58,AC.currentTime);
+  o.frequency.linearRampToValueAtTime(104,AC.currentTime+dur);
+  const bp=AC.createBiquadFilter();bp.type='bandpass';bp.Q.value=7;
+  bp.frequency.setValueAtTime(430,AC.currentTime);
+  bp.frequency.linearRampToValueAtTime(880,AC.currentTime+dur);
+  o.connect(bp);bp.connect(sEnv(vol,dur,.03));
+  o.start();o.stop(AC.currentTime+dur+.02);}
+function sChant(base,dur,vol){ // stacked fifths through a vowel formant — plainsong
+  if(!AC)return;
+  for(const [m,g2] of [[1,1],[1.5,.6],[2,.45]]){
+    const o=AC.createOscillator();o.type='sawtooth';
+    o.frequency.setValueAtTime(base*m,AC.currentTime);
+    o.frequency.linearRampToValueAtTime(base*m*1.03,AC.currentTime+dur);
+    const fm=AC.createBiquadFilter();fm.type='bandpass';fm.Q.value=3.2;
+    fm.frequency.setValueAtTime(700,AC.currentTime);
+    fm.frequency.linearRampToValueAtTime(950,AC.currentTime+dur*.7);
+    o.connect(fm);fm.connect(sEnv(vol*g2,dur,.09));
+    o.start();o.stop(AC.currentTime+dur+.05);
+  }}
 function sTone(freq,dur,vol,type,slide,att){
   if(!AC)return;
   const o=AC.createOscillator();o.type=type||'square';
@@ -2886,14 +2936,28 @@ function sBird(){
     sTone(b+Math.random()*500,.06+Math.random()*.05,.012,'sine',b*.82);
   },i*(90+Math.random()*120));
 }
-function snd(kind){
+function snd(kind,wx,wy){
   if(sndMuted||!AC)return;
   if(AC.state==='suspended'){AC.resume();return;}
   const now=performance.now();
   const gap={chop:220,mine:240,farmt:400,sword:110,hit:130,arrow:150,click:70,ack:340,
-    place:250,horn:2600,done:350,train:280,age:600,win:1500,lose:1500}[kind]||120;
+    place:250,horn:2600,done:350,train:280,age:600,win:1500,lose:1500,
+    gun:90,cannon:220,treb:400,sling:260,twang:150,crash:150,collapse:500,convert:700}[kind]||120;
   if(sndLast[kind]&&now-sndLast[kind]<gap)return;
   sndLast[kind]=now;
+  // distance mix — silent well off screen, panned toward its side of the view
+  sVolMul=1;sPan=0;
+  if(wx!==undefined&&G&&vw){
+    // isoE is pre-camera (draw() applies the camera via ctx transform), so
+    // convert to real screen pixels before measuring distance from the view
+    const p=isoE(wx,wy);
+    const sx=(p.x-G.cam.x)*G.cam.z,sy=(p.y-G.cam.y)*G.cam.z;
+    const dx=(sx-vw/2)/(vw/2),dy=(sy-vh/2)/(vh/2);
+    const d=Math.hypot(dx,dy);
+    if(d>2.6){sVolMul=1;sPan=0;return;}          // too far off screen to hear
+    sVolMul=Math.max(.16,1-d*.42);
+    sPan=Math.max(-.85,Math.min(.85,dx*.8));
+  }
   switch(kind){
     case 'chop': // axe bite: crack + woody body, slight per-hit variance
       sNoise(.045,.11,2400+Math.random()*700,1.4);
@@ -2932,7 +2996,40 @@ function snd(kind){
     case 'lose':
       [349,311,262,196].forEach((f,i)=>setTimeout(()=>sBrass(f,.55,.08,.09),i*260));
       setTimeout(()=>sKnock(60,.8,.14),1100);break;
+    /* ---- siege & gunpowder (added with the artillery, tq-v20) ---- */
+    case 'gun': // handgonne: sharp crack over a short powder thump
+      sBoom(150,.16,.13);
+      sNoise(.05,.13,1900,.7);
+      sNoise(.16,.05,600,.9,'lowpass');break;
+    case 'cannon': // bombard: deep report, long powder roar, ringing barrel
+      sBoom(74,.5,.22);
+      sNoise(.09,.18,900,.6);
+      sNoise(.42,.08,340,.8,'lowpass');
+      setTimeout(()=>sMetal(240,.3,.03),40);break;
+    case 'treb': // counterweight drops, ropes groan, beam cracks over
+      sCreak(.34,.19);
+      setTimeout(()=>{sKnock(70,.3,.17);sWhoosh(.3,.1,300,1500);},300);break;
+    case 'sling': // mangonel arm slams its stop and slings
+      sKnock(110,.16,.13);
+      sWhoosh(.22,.08,500,2100);break;
+    case 'twang': // scorpion bolt: taut cord release
+      sTone(280,.09,.1,'sawtooth',150);
+      sNoise(.06,.09,1500,2);break;
+    case 'crash': // stone landing — rubble, not the dull thud of an arrow
+      sKnock(85,.2,.13);
+      sNoise(.2,.09,700,.7);
+      sNoise(.3,.045,2600,.5,'highpass');break;
+    case 'collapse': // a building coming down: rumble, timber, settling debris
+      sBoom(52,.75,.2);
+      sNoise(.6,.12,420,.5,'lowpass');
+      setTimeout(()=>{sKnock(90,.28,.11);sNoise(.35,.07,2200,.6,'highpass');},170);
+      setTimeout(()=>sNoise(.5,.05,1500,.5,'highpass'),420);break;
+    case 'convert': // plainsong swell — the monk's own voice, not the age fanfare
+      sChant(196,.55,.09);
+      setTimeout(()=>sChant(262,.6,.085),260);
+      setTimeout(()=>{sChant(294,.75,.085);sTone(1568,.5,.022,'sine');},520);break;
   }
+  sVolMul=1;sPan=0;
 }
 
 /* ================= rendering ================= */
