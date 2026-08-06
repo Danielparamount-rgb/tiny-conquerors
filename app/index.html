@@ -497,6 +497,16 @@ const UNITS={
   turtle:{name:'Turtle Ship',hp:200,atk:50,range:3,speed:1.2,cost:{w:200,g:200},train:14,age:2,ship:true,ranged:true,rof:2.6,arrowRes:.5,
     elite:{name:'Elite Turtle Ship',hp:300,atk:50}},
   cannongalleon:{name:'Cannon Galleon',hp:120,atk:35,range:7,speed:1.5,cost:{w:200,g:150},train:15,age:3,ship:true,ranged:true,gun:true,rof:6,vsBld:165,chem:true},
+  /* ---- wildlife (manual Ch. II "Food"): not trainable, never bought. They live
+     as units so they can walk, be shot at and die like anything else; the meat
+     they leave behind is an ordinary food resource, so villagers gather from a
+     carcass with the code that already gathers from a berry bush. ---- */
+  sheep:{name:'Sheep',hp:7,atk:0,range:.6,speed:.62,cost:{},train:0,
+    animal:true,herd:true,meat:100,passive:true},
+  deer:{name:'Deer',hp:15,atk:0,range:.6,speed:1.75,cost:{},train:0,
+    animal:true,skittish:true,meat:140,passive:true},
+  boar:{name:'Wild Boar',hp:75,atk:8,range:.7,speed:1.5,cost:{},train:0,
+    animal:true,fierce:true,meat:340,rof:2.2},
 };
 const INF=new Set(['militia','spearman','berserker','teuton','woad','axeman','huskarl','samurai','jaguar','eagle']);
 const UU_SET=new Set(); // filled after CIVS below — samurai's manual bonus targets these
@@ -510,18 +520,18 @@ const CIVS=[
    blurb:'Knights +20% HP, castles -25% cost, farmers faster. Unique: Throwing Axeman. Tech: Bearded Axe (+1 axe range).'},
   {id:'vikings',name:'Vikings',uu:'berserker',ut:'berserkergang',infHpAge:[1,1.1,1.15,1.2],vilSpd:1.1,vilCarry:2,shipCost:.8,uuShip:'longboat',
    blurb:'Infantry HP grows each age; villagers haul faster; warships -20% cost. Unique: Berserk and the Longboat. Tech: Berserkergang.'},
-  {id:'mongols',name:'Mongols',uu:'mangudai',ut:'drill',mangRof:.8,scoutHp:1.3,
-   blurb:'Mangudai fire 20% faster; scout line +30% HP. Unique: Mangudai. Tech: Drill (rams move 50% faster).'},
+  {id:'mongols',name:'Mongols',uu:'mangudai',ut:'drill',mangRof:.8,scoutHp:1.3,huntFast:1.5,
+   blurb:'Hunters butcher 50% faster; Mangudai fire 20% faster; scout line +30% HP. Unique: Mangudai. Tech: Drill (rams move 50% faster).'},
   {id:'teutons',name:'Teutons',uu:'teuton',ut:'crenellations',garArrow:2,towerGar:2,healRange:2,
    blurb:'Towers hold twice the garrison and fire double arrows; monks heal from afar. Unique: Teutonic Knight. Tech: Crenellations (+3 castle range).'},
-  {id:'celts',name:'Celts',uu:'woad',ut:'furor',woodMult:1.15,infSpd:1.15,siegeRof:.8,
-   blurb:'Infantry 15% faster, lumberjacks faster, rams strike quicker. Unique: Woad Raider. Tech: Furor Celtica (+50% ram HP).'},
+  {id:'celts',name:'Celts',uu:'woad',ut:'furor',woodMult:1.15,infSpd:1.15,siegeRof:.8,sheepLock:true,
+   blurb:'Infantry 15% faster, lumberjacks faster, rams strike quicker; their flocks cannot be stolen. Unique: Woad Raider. Tech: Furor Celtica (+50% ram HP).'},
   {id:'byzantines',name:'Byzantines',uu:'cataphract',ut:'logistica',bldHpAge:[1.1,1.2,1.3,1.4],counterCost:.75,impDisc:.67,freeTech:{watch:1},
    blurb:'Buildings harden each age; spear and skirmish troops -25%; cheaper Imperial Age. Unique: Cataphract. Tech: Logistica (trample damage).'},
   {id:'saracens',name:'Saracens',uu:'mameluke',ut:'zealotry',mktRate:true,
    blurb:'Market trades at nearly no fee. Unique: Mameluke camel rider. Tech: Zealotry (+30 Mameluke HP).'},
-  {id:'goths',name:'Goths',uu:'huskarl',ut:'anarchy',infCost:.75,infCostAge:1,popBonus:10,
-   blurb:'Infantry -15% cost; +10 population in the Imperial Age. Unique: Huskarl, shrugs off arrows. Techs: Anarchy, then Perfusion.'},
+  {id:'goths',name:'Goths',uu:'huskarl',ut:'anarchy',infCost:.75,infCostAge:1,popBonus:10,vsBoar:5,huntCarry:15,
+   blurb:'Infantry -15% cost; hunters +5 attack against boar and carry +15 meat; +10 population in the Imperial Age. Unique: Huskarl, shrugs off arrows. Techs: Anarchy, then Perfusion.'},
   {id:'chinese',name:'Chinese',uu:'chukonu',ut:'rocketry',startVills:3,startF:-200,startW:-50,techDisc:[1,.9,.85,.8],farmFast:1.15,
    blurb:'Start with +3 villagers but less food; ages cost less. Unique: Chu Ko Nu, rapid-fire crossbow. Tech: Rocketry (+2 attack).'},
   {id:'persians',name:'Persians',uu:'elephant',ut:'mahouts',tcHp:2,startF:50,startW:50,
@@ -761,6 +771,12 @@ const DIFF=[{trickle:0,firstWave:380,waveEvery:210,waveGrow:2,vT:[6,9,12,14]},
 
 /* ================= state ================= */
 let G=null, diffSel=0, civSel=0, mapSel=0, playersSel=2, teamSel=0, turboSel=0, NP=2, uid=1;
+/* Nature owns the wildlife. Player slots run 0..7, so 8 is always free; giving
+   the animals a real player index means they path, take damage, die and draw
+   through exactly the same code as everything else. G.P/G.teams/G.ais are
+   padded out to this index in newGame so nothing ever indexes a hole. */
+const GAIA=8;
+function isAnimal(u){return !!(u&&UNITS[u.type]&&UNITS[u.type].animal);}
 /* ---------- deterministic simulation RNG (multiplayer foundation) ----------
    Every random draw that changes GAME STATE must come from SR()/SRi(), seeded
    once per match. Two machines given the same seed and the same command stream
@@ -779,12 +795,31 @@ const MAPS=[
   {name:'Black Forest',blurb:'Endless dark woodland. Narrow trails link the clearings — wall a chokepoint, turtle up, and strike when ready. Wood is everywhere; gold is contested.'},
   {name:'Hallowed Ground',blurb:'Open steppe strewn with holy relics — every lord starts with a Monastery and a Monk. Claim the relics for gold, or hoard them all and win outright.'}];
 let mission=null;
+/* Mission setups run in begin(), right after newGame() — the map exists, the
+   Town Halls stand, nothing has moved yet. These two helpers keep the setups
+   short; both spiral outward from a point until the ground allows it. */
+function missionBld(p,type,bx,by,rMin,rMax,done){
+  for(let r=rMin;r<rMax;r++)for(let a=0;a<16;a++){
+    const tx=Math.round(bx+Math.cos(a/16*6.283)*r),ty=Math.round(by+Math.sin(a/16*6.283)*r);
+    if(type==='dock'?canPlaceDock(tx,ty):canPlace(tx,ty,BLDS[type].size,0,!!BLDS[type].thin))
+      return addBld(p,type,tx,ty,done!==false);
+  }
+  return null;
+}
+function missionSquad(p,type,n,bx,by){
+  const out=[];
+  for(let i=0;i<n;i++){
+    const s=nearFree(bx+(i%3),by+((i/3)|0),5)||{x:bx,y:by};
+    out.push(addUnit(p,type,s.x,s.y));
+  }
+  return out;
+}
 const MISSIONS=[
   {id:0,name:'First Blood',map:0,diff:0,
    blurb:'A rival squire underestimates you. Raise your village and burn his Town Hall.',
    win:{type:'raze'},
-   setup(){for(let i=0;i<4;i++)addUnit(0,'militia',START[0][0]+3+i,START[0][1]+4);},
-   obj:'Destroy the enemy Town Hall.'},
+   setup(){missionSquad(0,'militia',4,START[0][0]+3,START[0][1]+4);},
+   obj:'Destroy the enemy Town Hall. Send a villager at the sheep first — meat beats berries.'},
   {id:1,name:'Hold the Fords',map:0,diff:2,
    blurb:'A warlord marches on the river crossings. Hold out for ten minutes.',
    win:{type:'survive',time:600},
@@ -815,6 +850,81 @@ const MISSIONS=[
    win:{type:'raze'},
    setup(){G.P[0].w+=150;},
    obj:'Destroy BOTH enemy Town Halls. They share vision — watch every ford.'},
+  /* ---- the later campaign, written for the systems the first five never saw:
+     siege engines, the navy, and the Wonder ---- */
+  {id:5,name:'The Iron Harvest',map:0,diff:2,
+   blurb:'A tyrant sits behind stone and calls it peace. Bring the engines and teach him otherwise.',
+   win:{type:'raze'},
+   setup(){
+     const st=G.P[0];st.age=2;st.w+=500;st.g+=350;st.f+=250;
+     const [bx,by]=START[0];
+     missionBld(0,'siege',bx,by,3,9);
+     missionBld(0,'blacksmith',bx,by,3,10);
+     addUnit(0,'ram',bx+2,by+4);
+     missionSquad(0,'spearman',3,bx,by+5);
+     // the enemy is dug in: Castle Age, a castle, and a stone curtain with one gate
+     G.P[1].age=2;G.P[1].w+=400;G.P[1].g+=300;
+     const [ex,ey]=START[1];
+     missionBld(1,'castle',ex,ey,3,7);
+     for(let a=0;a<40;a++){
+       if(a>=17&&a<=20)continue;                 // leave a gate's worth of gap
+       const wx=Math.round(ex+1+Math.cos(a/40*6.283)*7),wy=Math.round(ey+1+Math.sin(a/40*6.283)*7);
+       if(canPlace(wx,wy,1,0,true))addBld(1,'swall',wx,wy,true);
+     }
+     missionSquad(1,'archer',4,ex,ey+3);
+   },
+   obj:'Raze the enemy Town Hall. Rams and mangonels chew through stone; swords do not.'},
+  {id:6,name:'Lords of the Narrow Sea',map:0,diff:1,
+   blurb:'The fords have flooded. Whoever rules the water rules the war.',
+   win:{type:'raze'},
+   setup(){
+     // drown the crossings — this war has to be fought over water
+     for(const k in G.ford){
+       const ci=k.indexOf(','),x=+k.slice(0,ci),y=+k.slice(ci+1);
+       G.water[k]=1;G.map[y][x]=1;
+     }
+     G.ford={};
+     refreshTerrain();updateFog();
+     const st=G.P[0];st.age=1;st.w+=450;st.g+=200;
+     const [bx,by]=START[0];
+     // the shore is ~30 tiles off — a radius scan from the Town Hall never finds
+     // it, so walk the water list for the nearest tile the way the AI does
+     let near=null,nd=1e9;
+     for(const w of (G.waterList||[])){
+       const dd=Math.hypot(w.x-bx,w.y-by);
+       if(dd<nd){nd=dd;near=w;}
+     }
+     let dk=null;
+     if(near)for(let r=0;r<9&&!dk;r++)for(let dy=-r;dy<=r&&!dk;dy++)for(let dx=-r;dx<=r&&!dk;dx++){
+       if(Math.max(Math.abs(dx),Math.abs(dy))!==r)continue;
+       if(canPlaceDock(near.x+dx,near.y+dy))dk=addBld(0,'dock',near.x+dx,near.y+dy,true);
+     }
+     if(dk){
+       for(const t of['transport','transport','galley','fishing']){
+         const s=nearFree(dk.tx+1,dk.ty+1,7,true);
+         if(s)addUnit(0,t,s.x,s.y);
+       }
+       const c=bldCenter(dk);centerOn(c.x,c.y);
+     }
+     missionSquad(0,'militia',4,bx+2,by+4);
+     G.P[1].age=1;G.P[1].w+=350;
+   },
+   obj:'No ford remains. Ferry an army across in Transports — or sink his fleet and starve him.'},
+  {id:7,name:'The Wonder of the Age',map:2,diff:2,foes:2,vsWorld:true,
+   blurb:'Let them come. Raise the wonder of the age, and hold it while the world burns.',
+   win:{type:'wonder'},
+   setup(){
+     const st=G.P[0];st.age=3;st.f+=900;st.w+=1400;st.g+=1200;
+     const [bx,by]=START[0];
+     missionBld(0,'castle',bx,by,3,8);
+     missionBld(0,'blacksmith',bx,by,3,10);
+     missionBld(0,'university',bx,by,3,11);
+     missionSquad(0,'knight',4,bx+2,by+4);
+     missionSquad(0,'archer',4,bx-2,by+4);
+     missionSquad(0,'monk',1,bx,by+3);
+     for(let p=1;p<NP;p++){G.P[p].age=3;G.P[p].w+=600;G.P[p].g+=500;}
+   },
+   obj:'Build a Wonder and hold it until the countdown ends. Both warlords will come for it.'},
 ];
 /* Fingerprint of everything that IS the game state. Two peers running the same
    seed and the same commands must agree on this every tick; the first tick they
@@ -844,6 +954,7 @@ function newGame(){
   // Entity ids MUST restart every match: commands reference units by id, and
   // unit behaviour reads it (creep stagger), so a stale counter desyncs peers.
   uid=1;
+  cmdQ=[];   // nothing carries over from the last match
   NP=mission?(1+(mission.foes||1)):playersSel;
   // Roomier battlefields. Ceiling is 128: the terrain canvas is MAP*TILE*TREZT
   // square, and 144 would be 3744px — close to the 4096px canvas limit phones
@@ -873,6 +984,13 @@ function newGame(){
     used.push(c);
     P.push(mkP(c));
     ais.push({wave:0,nextAtk:DIFF[diffSel].firstWave+(p-1)*40,tick:.3*(p-1),attacking:false});
+  }
+  // Pad every per-player array out to GAIA with inert entries. Holes in these
+  // arrays are the real hazard: stateHash maps over G.P, and a hole there is an
+  // undefined that throws rather than a value that hashes.
+  for(let q=NP;q<=GAIA;q++){
+    P[q]=mkP(0);ais[q]=null;
+    teams[q]=q===GAIA?99:50+q;   // nature allies with nobody, and neither do the unused slots
   }
   G={t:0,over:false,paused:false,units:[],blds:[],res:{},proj:[],fx:[],corpses:[],
      rubble:[],stuck:[],pings:[],navBlock:{},
@@ -913,6 +1031,89 @@ function genMap(){
       if(G.res[k]){delete G.res[k];if(G.map[y]&&G.map[y][x])G.map[y][x]=0;}
     }
   placeRelics();
+  placeAnimals();
+}
+/* Wildlife (manual Ch. II, "Food"). Sheep sit close enough to walk a villager
+   onto in the first minute; boar are a deliberate trek out and bite back; deer
+   roam the wilds and bolt when shot at. Everything here draws from SR() so two
+   peers seeded alike get the same herds in the same places. */
+function placeAnimals(){
+  const openAt=(x,y)=>{
+    if(x<2||y<2||x>=MAP-2||y>=MAP-2)return false;
+    if(!passable(x,y))return false;
+    const k=x+','+y;
+    if(G.water[k]||G.ford[k]||G.res[k])return false;
+    for(const [bx,by] of START)if(Math.abs(x-bx)<4&&Math.abs(y-by)<4)return false;
+    return true;
+  };
+  const spot=(cx,cy,rMin,rMax)=>{
+    for(let n=0;n<40;n++){
+      const a=SR()*6.283,r=rMin+SR()*(rMax-rMin);
+      const x=Math.round(cx+Math.cos(a)*r),y=Math.round(cy+Math.sin(a)*r);
+      if(openAt(x,y))return{x,y};
+    }
+    return null;
+  };
+  const herd=(cx,cy,type,n)=>{
+    for(let i=0;i<n;i++){
+      const s=spot(cx,cy,0,2.2);
+      if(!s)continue;
+      const u=addUnit(GAIA,type,s.x,s.y);
+      u.home={x:s.x+.5,y:s.y+.5};u.state='graze';u.grazeT=SR()*4;
+    }
+  };
+  const tight=mapSel===1; // Black Forest: everything has to live in the clearings
+  for(const [bx,by] of START){
+    const sh=spot(bx,by,tight?4:6,tight?6.5:9);
+    if(sh)herd(sh.x,sh.y,'sheep',4);
+    for(let i=0;i<2;i++){
+      const bo=spot(bx,by,tight?6:11,tight?7.5:15);
+      if(bo)herd(bo.x,bo.y,'boar',1);
+    }
+  }
+  const herds=Math.round(MAP*MAP/1400);   // ~6 herds at 96 tiles, ~12 at 128
+  for(let i=0;i<herds;i++){
+    const c=spot(MAP/2,MAP/2,MAP*.12,MAP*.46);
+    if(c)herd(c.x,c.y,'deer',3+SRi(2));
+  }
+}
+/* A slain animal leaves meat — an ordinary food resource, so villagers butcher
+   a carcass with the same code that picks berries, and the AI's food search
+   finds it without knowing wildlife exists. */
+function dropCarcass(u){
+  const meat=UNITS[u.type].meat||100;
+  let x=Math.max(1,Math.min(MAP-2,u.x|0)),y=Math.max(1,Math.min(MAP-2,u.y|0));
+  let k=x+','+y;
+  if(G.map[y][x]||G.res[k]){            // fell on a blocked tile — lay it beside
+    const f=nearFree(x,y,3);
+    if(!f)return null;
+    x=f.x;y=f.y;k=x+','+y;
+    if(G.res[k])return null;
+  }
+  G.res[k]={type:'food',sub:'meat',x,y,amt:meat};
+  G.map[y][x]=1;                        // a carcass occupies its tile like any other pile
+  miniResDirty=true;
+  // whoever was hunting it walks straight over to butcher the kill
+  for(const o of G.units){
+    if(o.hp<=0||o.type!=='villager')continue;
+    if(o.target&&!o.target.bld&&o.target.id===u.id)cmdGather(o,k);
+  }
+  return k;
+}
+/* An animal's answer to being struck: boar charge, deer bolt, sheep just die. */
+function animalHit(t,from){
+  const d=UNITS[t.type];
+  if(!d||!d.animal||t.hp<=0||!from||from.hp<=0)return;
+  if(d.fierce){
+    const cur=t.target&&targetEnt(t.target);
+    if(cur!==from)cmdAttack(t,from,false);
+  }else if(d.skittish){
+    const dx=t.x-from.x,dy=t.y-from.y,dd=Math.hypot(dx,dy)||1;
+    const fx=Math.max(2,Math.min(MAP-3,Math.round(t.x+dx/dd*10)));
+    const fy=Math.max(2,Math.min(MAP-3,Math.round(t.y+dy/dd*10)));
+    t.state='flee';t.fleeT=6;t.home={x:fx+.5,y:fy+.5};
+    t.path=uPath(t,fx,fy)||[];
+  }
 }
 function placeRelics(){
   G.relics=[];
@@ -1438,6 +1639,7 @@ function convRange(p){return 5+2*ecoTier(p,'bp');} // Block Printing reaches fur
 function monkReady(u){return u.faithReady===undefined||G.t>=u.faithReady;}
 function canConvert(u,ent,isBld){
   if(!UNITS[u.type].monk)return false;
+  if(!isBld&&isAnimal(ent))return false; // no sermon moves a boar
   if(isBld)return !!ecoTier(u.p,'red')
     &&!['tc','castle','wall','gate','swall','sgate','farm','monastery','wonder'].includes(ent.type);
   const td=UNITS[ent.type];
@@ -1492,6 +1694,226 @@ function cmdAttack(u,ent,isBld){
 function cmdBuild(u,b){if(u.type!=='villager')return;
   u.state='toBuild';u.target={id:b.id,bld:true};
   const c=bldCenter(b);u.path=uPath(u,c.x,c.y,u.p)||[];}
+/* ================= command layer (multiplayer step 2) =================
+   Everything a HUMAN does is now expressed as a small serializable record —
+   {k:kind, p:player, plus ids and numbers, never object references} — and
+   pushed onto a queue instead of mutating G at the point of the tap. One
+   chokepoint, one place where a match can intercept player intent.
+
+   Solo play drains the queue the instant a command is issued, so behaviour and
+   input latency are exactly what they were. A lockstep match will instead hold
+   the queue, ship it to the peers, and call applyTick() once every peer's
+   commands for that tick have arrived — the sim below needs no further change.
+
+   The AI deliberately does NOT come through here. Under lockstep every peer
+   runs the same deterministic aiThink() over the same state and reproduces the
+   AI's orders locally; sending them would apply every decision twice.
+
+   Handlers re-validate everything — ownership, cost, age, placement. The UI's
+   own checks exist only to grey out buttons and explain refusals; a command
+   arriving over a wire is never trusted. */
+let netMode=false;   // true once a lockstep match owns the clock
+let localP=0;        // which player this machine speaks for
+let cmdQ=[];         // commands issued this turn, not yet applied
+function issue(k,d){
+  const c=Object.assign({k,p:localP},d);
+  cmdQ.push(c);
+  if(!netMode)drainCmds();      // solo: no round trip, apply at once
+  return c;
+}
+function drainCmds(){
+  if(!cmdQ.length)return;
+  const q=cmdQ;cmdQ=[];
+  for(const c of q)applyCmd(c);
+}
+function applyCmd(c){const h=CMDS[c.k];if(h)h(c);}
+// Lockstep entry point: one command array per player, applied in player order.
+// Deliberately NOT a sort — Array.sort's tie-breaking is one more thing two
+// machines could quietly disagree about.
+function applyTick(perPlayer){
+  for(let p=0;p<perPlayer.length;p++){
+    const q=perPlayer[p];if(!q)continue;
+    for(const c of q){c.p=p;applyCmd(c);}
+  }
+}
+/* A command names unit ids; the units are resolved here, at APPLY time, by
+   walking G.units. Walking the sim's own array (rather than the id list, which
+   carries the local selection's order) means every peer visits them in the
+   same order. */
+function cmdUnits(c){
+  if(!c.u||!c.u.length)return[];
+  const want=new Set(c.u),out=[];
+  for(const u of G.units)if(u.p===c.p&&u.hp>0&&want.has(u.id))out.push(u);
+  return out;
+}
+function cmdBld(c,id){
+  const b=G.blds.find(x=>x.id===(id===undefined?c.id:id));
+  return b&&b.p===c.p&&b.hp>0?b:null;
+}
+const CMDS={
+  move(c){const us=cmdUnits(c),n=us.length;
+    for(let i=0;i<n;i++){const d=groupDest(n,i,c.x,c.y);cmdMove(us[i],d[0],d[1]);}},
+  amove(c){const us=cmdUnits(c),n=us.length;
+    for(let i=0;i<n;i++){const d=groupDest(n,i,c.x,c.y);cmdAmove(us[i],d[0],d[1]);}},
+  stop(c){for(const u of cmdUnits(c)){u.state='idle';u.path=null;u.target=null;
+    u.resKey=null;u.farm=null;u.am=null;u.spd=0;u.vx=0;u.vy=0;}},
+  attack(c){
+    const t=c.bld?G.blds.find(b=>b.id===c.id):G.units.find(u=>u.id===c.id);
+    // your own flock is a legitimate target — that is what a sheep is FOR
+    if(!t||t.hp<=0||(allied(t.p,c.p)&&!isAnimal(t)))return;
+    for(const u of cmdUnits(c))cmdAttack(u,t,!!c.bld);},
+  gather(c){if(!G.res[c.key])return;for(const u of cmdUnits(c))cmdGather(u,c.key);},
+  farm(c){const b=cmdBld(c);if(!b||b.type!=='farm'||!b.built)return;
+    for(const u of cmdUnits(c))cmdFarm(u,b);},
+  build(c){const b=cmdBld(c);if(!b||b.built)return;
+    for(const u of cmdUnits(c))cmdBuild(u,b);},
+  gar(c){const b=cmdBld(c);if(!b||!b.built||!BLDS[b.type].garCap)return;
+    let room=bldGarCap(b)-b.gar.length-G.units.filter(u=>u.garB===b.id&&u.hp>0).length;
+    for(const u of cmdUnits(c)){
+      if(room<=0)break;
+      if(u.type==='ram')continue;
+      cmdGarrison(u,b);room--;}},
+  garU(c){
+    const cr=G.units.find(u=>u.id===c.id&&u.hp>0);
+    if(!cr||cr.p!==c.p||!UNITS[cr.type].garCap)return;
+    const isRam=cr.type==='ram';
+    let room=UNITS[cr.type].garCap-(cr.gar?cr.gar.length:0);
+    for(const u of cmdUnits(c)){
+      if(room<=0)break;
+      if(u.id===cr.id||UNITS[u.type].ship)continue;
+      if(isRam&&!INF.has(u.type))continue;   // only infantry ride rams
+      cmdGarrisonRam(u,cr);room--;}},
+  ungar(c){const b=cmdBld(c);if(!b)return;
+    if(ejectGarrison(b)&&c.p===localP){snd('click');refreshPanel();}},
+  unload(c){
+    const u0=G.units.find(u=>u.id===c.id&&u.hp>0&&u.p===c.p);
+    if(!u0||!u0.gar||!u0.gar.length)return;
+    const ud=UNITS[u0.type];
+    const shore=ud.ship?nearFree(Math.floor(u0.x),Math.floor(u0.y),4):null;
+    if(ud.ship&&!shore)return;               // nowhere to set them down
+    let n=0;
+    for(const gu of u0.gar){
+      if(shore){gu.x=shore.x+.5+(n%2)*.4;gu.y=shore.y+.5+((n/2)|0)*.4;}
+      else{gu.x=u0.x+(SR()-.5);gu.y=u0.y+(SR()-.5);}
+      gu.state='idle';gu.path=null;gu.target=null;gu.spd=0;gu.vx=0;gu.vy=0;
+      G.units.push(gu);n++;}
+    u0.gar=[];
+    if(c.p===localP){snd('click');refreshPanel();}},
+  relic(c){
+    const r=G.relics.find(x=>x.id===c.rid);
+    if(!r||r.held||r.mon)return;
+    const m=cmdUnits(c).find(u=>UNITS[u.type].monk&&!UNITS[u.type].noRelic);
+    if(!m)return;
+    m.state='toRelic';m.relicT=r.id;m.target=null;m.path=uPath(m,r.x,r.y)||[];},
+  enshrine(c){
+    const b=cmdBld(c);if(!b||!b.built||b.type!=='monastery')return;
+    const cc=bldCenter(b);
+    for(const m of cmdUnits(c))if(m.relic){
+      m.state='toMon';m.monB=b.id;m.path=uPath(m,cc.x,cc.y)||[];}},
+  place(c){
+    if(!BLDS[c.t]||!canPlaceType(c.t,c.tx,c.ty))return;
+    const bc=bldCostOf(c.p,c.t);
+    if(!canAfford(c.p,bc))return;
+    pay(c.p,bc);
+    const b=addBld(c.p,c.t,c.tx,c.ty,false);b.pendCost=bc;
+    for(const v of cmdUnits(c))if(v.type==='villager')cmdBuild(v,b);
+    if(c.p===localP){snd('place');updateTop();refreshPanel();}},
+  placeLine(c){
+    if(!BLDS[c.t])return;
+    let built=0,first=null;
+    for(const s of c.tiles){
+      if(!canPlaceType(c.t,s[0],s[1]))continue;
+      const bc=bldCostOf(c.p,c.t);
+      if(!canAfford(c.p,bc))break;           // out of wood — keep what was laid
+      pay(c.p,bc);
+      const b=addBld(c.p,c.t,s[0],s[1],false);b.pendCost=bc;built++;
+      if(!first)first=b;}
+    if(first)for(const v of cmdUnits(c))if(v.type==='villager')cmdBuild(v,first);
+    if(built&&c.p===localP){snd('place');updateTop();refreshPanel();}},
+  train(c){
+    const b=cmdBld(c);if(!b||!b.built)return;
+    if(!trainsFor(b,c.p).includes(c.ut))return;  // tech-tree gate
+    const d=UNITS[c.ut];if(!d)return;
+    if(d.age!==undefined&&G.P[c.p].age<d.age)return;
+    const uc=unitCostOf(c.p,c.ut);
+    if(!canAfford(c.p,uc)||popUsed(c.p)>=popCap(c.p))return;
+    pay(c.p,uc);b.queue.push(c.ut);
+    if(c.p===localP){updateTop();refreshPanel();}},
+  age(c){
+    const b=cmdBld(c);if(!b||b.type!=='tc'||!b.built)return;
+    const st=G.P[c.p];
+    if(st.age>=3||st.aging)return;
+    const nc=ageCostOf(c.p,st.age+1);
+    if(!canAfford(c.p,nc))return;
+    pay(c.p,nc);st.aging=true;b.queue.push('AGE');
+    if(c.p===localP){updateTop();refreshPanel();}},
+  tech(c){
+    const p=c.p,st=G.P[p];
+    if(c.kind==='bs'){
+      const bs=bsOf(p),tier=bs[c.id];
+      if(tier===undefined||tier>=3)return;
+      const T=BS_TECHS[c.id],cost=T.costs[tier];
+      if(st.age<tier+1||!canAfford(p,cost))return;
+      pay(p,cost);bs[c.id]++;
+      if(p===localP){snd('done');feed(T.names[tier]+' — researched');updateTop();refreshPanel();}
+    }else if(c.kind==='uni'){
+      const T=UNI_TECHS[c.id],un=uniOf(p);
+      if(!T||un[c.id]||(T.req&&!un[T.req]))return;
+      if(st.age<T.age||!canAfford(p,T.cost))return;
+      pay(p,T.cost);un[c.id]=1;applyUni(p,c.id);
+    }else if(c.kind==='eco'){
+      const T=ECO_TECHS[c.id];if(!T)return;
+      const tier=ecoTier(p,c.id);
+      if(tier>=ecoMax(c.id))return;
+      const cost=T.costs?T.costs[tier]:T.cost,needAge=T.ages?T.ages[tier]:T.age;
+      if(st.age<needAge||!canAfford(p,cost))return;
+      pay(p,cost);ecoOf(p)[c.id]=tier+1;applyEco(p,c.id);
+      if(p===localP)feed((T.names?T.names[tier]:T.name)+' — researched');
+    }else if(c.kind==='ut'){
+      const T=UTECHS[c.id];
+      if(!T||hasUt(p,c.id)||nextUtFor(p)!==c.id)return;
+      if(st.age<T.age||!canAfford(p,T.cost))return;
+      pay(p,T.cost);st.uts.push(c.id);applyUt(p,c.id);
+      if(p===localP)updateTop();
+    }else if(c.kind==='pt'){
+      const cost={f:200,g:250};
+      if(st.pt||st.age<3||!canAfford(p,cost))return;
+      pay(p,cost);st.pt=true;
+      if(p===localP){snd('done');feed('Parthian Tactics — researched');updateTop();refreshPanel();}
+    }},
+  trade(c){
+    const p=c.p;
+    if(!G.blds.some(b=>b.p===p&&b.type==='market'&&b.built))return;
+    if(c.give===c.get||!'fwg'.includes(c.give)||!'fwg'.includes(c.get))return;
+    const sar=civOf(p).mktRate;              // Saracens trade at a 5% fee
+    const giveN=c.give==='g'?(sar?105:80):100;
+    const getN=c.give==='g'?100:(sar?95:70);
+    if(G.P[p][c.give]<giveN)return;
+    G.P[p][c.give]-=giveN;G.P[p][c.get]+=getN;
+    if(p===localP){snd('done');updateTop();refreshPanel();}},
+  fishtrap(c){
+    const b=cmdBld(c);if(!b||b.type!=='dock'||!b.built)return;
+    const cost={w:100};if(!canAfford(c.p,cost))return;
+    let spot=null;
+    for(let r=2;r<7&&!spot;r++)for(let dy=-r;dy<=r&&!spot;dy++)for(let dx=-r;dx<=r&&!spot;dx++){
+      if(Math.max(Math.abs(dx),Math.abs(dy))!==r)continue;
+      const x=b.tx+dx,y=b.ty+dy,k=x+','+y;
+      if(x<1||y<1||x>=MAP-1||y>=MAP-1)continue;
+      if(G.water[k]&&!G.res[k]&&!(G.navBlock&&G.navBlock[k]))spot={x,y,k};}
+    if(!spot)return;
+    pay(c.p,cost);
+    G.res[spot.k]={type:'fish',x:spot.x,y:spot.y,amt:250};
+    miniResDirty=true;
+    for(const sh of G.units)                 // an idle fishing boat steams straight to it
+      if(sh.p===c.p&&UNITS[sh.type].fisher&&sh.hp>0&&sh.state==='idle'){cmdGather(sh,spot.k);break;}
+    if(c.p===localP){snd('place');updateTop();feed('Fish Trap set');}},
+  del(c){
+    for(const id of (c.ids||[])){
+      const u=G.units.find(x=>x.id===id);
+      if(u&&u.p===c.p){u.hp=0;continue;}
+      const b=G.blds.find(x=>x.id===id);
+      if(b&&b.p===c.p&&b.type!=='tc')b.hp=0;}},
+};
 function dropoffFor(u){let best=null,bd=1e9;
   const fisher=UNITS[u.type].fisher;
   for(const b of G.blds)if(b.p===u.p&&b.built&&BLDS[b.type].drop){
@@ -1512,7 +1934,7 @@ function freeFarm(u){let best=null,bd=1e9;
 function canAfford(p,cost){return(!cost.f||G.P[p].f>=cost.f)&&(!cost.w||G.P[p].w>=cost.w)&&(!cost.g||G.P[p].g>=cost.g);}
 function pay(p,cost){G.P[p].f-=cost.f||0;G.P[p].w-=cost.w||0;G.P[p].g-=cost.g||0;}
 function refund(p,cost){G.P[p].f+=cost.f||0;G.P[p].w+=cost.w||0;G.P[p].g+=cost.g||0;}
-function popUsed(p){return G.units.filter(u=>u.p===p&&u.hp>0)
+function popUsed(p){return G.units.filter(u=>u.p===p&&u.hp>0&&!isAnimal(u)) // livestock isn't a subject
     .reduce((s,u)=>s+1+(u.gar?u.gar.length:0),0)+ // ram passengers count too
   G.blds.filter(b=>b.p===p).reduce((s,b)=>s+b.queue.length+(b.gar?b.gar.length:0),0);}
 function bldGarCap(b){const cap=BLDS[b.type].garCap||0;
@@ -1573,6 +1995,9 @@ function costStr(c){const parts=[];if(c.f)parts.push(c.f+'🍖'.replace('🍖','
 
 /* ================= update loop ================= */
 function step(dt){
+  // Player orders land at one fixed point in the tick. Solo play has already
+  // drained them at issue time; a lockstep match fills the queue here instead.
+  drainCmds();
   G.t+=dt;
   // keep the inspect panel / selection card HP live without full rebuilds
   if(G.inspect&&!G.sel.length){
@@ -1751,6 +2176,7 @@ function step(dt){
   // dead cleanup
   for(let i=G.units.length-1;i>=0;i--)if(G.units[i].hp<=0){
     const u=G.units[i];G.sel=G.sel.filter(id=>id!==u.id);
+    if(isAnimal(u))dropCarcass(u); // the kill becomes food on the ground
     if(u.relic){const r=G.relics.find(x=>x.id===u.relic);
       if(r){r.held=null;r.x=Math.max(1,Math.min(MAP-2,u.x|0));r.y=Math.max(1,Math.min(MAP-2,u.y|0));}}
     if(u.gar&&u.gar.length){ // a wrecked ram or transport spills its passengers
@@ -1769,9 +2195,11 @@ function step(dt){
         col:ci===3?'#b8bdc2':TEAMS[u.p].main});
       G.fx.push({x:u.x,y:u.y-.3,vx:0,vy:-.4,life:.2,max:.2,r:2.2,kind:'spark'});
     }
-    G.corpses.push({x:u.x,y:u.y,p:u.p,type:u.type,t:150,max:150,h:Math.random()<.5?1:0,
-      hdg:u.hdg,face:u.face,fall:Math.random()<.5?-1:1}); // pose for the topple
-    if(G.corpses.length>140)G.corpses.shift();
+    if(!isAnimal(u)){ // a hunted beast leaves a carcass, not a corpse — one body, not two
+      G.corpses.push({x:u.x,y:u.y,p:u.p,type:u.type,t:150,max:150,h:Math.random()<.5?1:0,
+        hdg:u.hdg,face:u.face,fall:Math.random()<.5?-1:1}); // pose for the topple
+      if(G.corpses.length>140)G.corpses.shift();
+    }
     G.units.splice(i,1);}
   for(let i=G.blds.length-1;i>=0;i--)if(G.blds[i].hp<=0)removeBld(i);
   // fog
@@ -1786,8 +2214,8 @@ function step(dt){
     if(!mb){r.mon=null;continue;}
     G.P[mb.p].g+=.55*dt*(teamHas(mb.p,'relicGold')?1.33:1); // Aztec team bonus
   }
-  // Wonder victory countdown (skirmish games)
-  if(!mission&&G.wonderT){
+  // Wonder victory countdown — skirmish games, and the mission built around it
+  if((!mission||mission.win.type==='wonder')&&G.wonderT){
     const wb=G.blds.find(b=>b.id===G.wonderT.id&&b.built&&b.hp>0);
     if(!wb){
       feed(allied(G.wonderT.p,0)?'Your Wonder has fallen!':'The enemy Wonder has fallen!',!allied(G.wonderT.p,0)?false:true);
@@ -1988,7 +2416,10 @@ function creepToward(u,tx,ty,want,dt){
 function targetEnt(t){return t.bld?G.blds.find(b=>b.id===t.id):G.units.find(x=>x.id===t.id);}
 function nearestEnemy(p,x,y,r,unitsOnly){
   let best=null,bd=r;
-  for(const u of G.units){if(allied(u.p,p)||u.hp<=0)continue;
+  // Wildlife is never a target of opportunity — soldiers and towers would
+  // otherwise abandon a battle to shoot the neighbour's sheep. Hunting is
+  // always an explicit order.
+  for(const u of G.units){if(allied(u.p,p)||u.hp<=0||isAnimal(u))continue;
     const d=Math.hypot(u.x-x,u.y-y);if(d<bd){bd=d;best={ent:u,bld:false,ex:u.x,ey:u.y};}}
   if(!unitsOnly)for(const b of G.blds){if(allied(b.p,p))continue;
     const c=bldCenter(b),d=Math.hypot(c.x-x,c.y-y)-b.size*.5;
@@ -2016,12 +2447,54 @@ function dealDamage(hit,amt,fromP,ranged){
   G.fx.push({x:hx+(Math.random()-.5)*.5,y:hy+(Math.random()-.5)*.5,vx:0,vy:-.6,
     life:.28,max:.28,r:3,kind:'spark'});
   if(fromP!==0&&hit.ent.p===0&&G.t-G.lastRaidToast>18){G.lastRaidToast=G.t;
-    feed('Warning! You are being attacked by the '+CIVS[G.P[fromP].civ].name+'!',true);snd('horn');}
+    if(fromP===GAIA)feed('A wild boar has turned on your hunters!',true);
+    else{feed('Warning! You are being attacked by the '+CIVS[G.P[fromP].civ].name+'!',true);snd('horn');}}
 }
 function updateUnit(u,dt){
   const d=unitDef(u);u.cd-=dt;
   switch(u.state){
+    /* ---- wildlife ---- */
+    case 'graze':{
+      // amble around a home point, pause, amble again
+      u.grazeT=(u.grazeT||0)-dt;
+      if(u.grazeT<=0){
+        u.grazeT=2.5+SR()*4;
+        const h=u.home||(u.home={x:u.x,y:u.y});
+        const a=SR()*6.283,r=SR()*2.2;
+        const tx=Math.max(1,Math.min(MAP-2,Math.round(h.x+Math.cos(a)*r)));
+        const ty=Math.max(1,Math.min(MAP-2,Math.round(h.y+Math.sin(a)*r)));
+        if(passable(tx,ty))u.path=uPath(u,tx,ty)||[];
+      }
+      // Sheep belong to whoever walks up to them (manual: they are "converted"
+      // simply by approach) and then trail their keeper. The Celts keep theirs.
+      if(d.herd){
+        u.scanT=(u.scanT||0)-dt;
+        if(u.scanT<=0){
+          u.scanT=1;
+          let best=null,bd=7;
+          for(const o of G.units){
+            if(o.hp<=0||o.p===GAIA||isAnimal(o))continue;
+            const dd=Math.hypot(o.x-u.x,o.y-u.y);
+            if(dd<bd){bd=dd;best=o;}
+          }
+          if(best){
+            if(best.p!==u.p&&!(u.p!==GAIA&&civOf(u.p).sheepLock))u.p=best.p;
+            if(best.p===u.p)u.home={x:best.x,y:best.y}; // drift after the keeper
+          }
+        }
+      }
+      followPath(u,dt);
+      break;}
+    case 'flee':{
+      u.fleeT=(u.fleeT||0)-dt;
+      if(followPath(u,dt)||u.fleeT<=0){
+        u.state='graze';u.grazeT=1+SR()*2;u.home={x:u.x,y:u.y};}
+      break;}
     case 'idle':{
+      if(isAnimal(u)){ // every road back to idle returns an animal to its pasture
+        u.state='graze';u.grazeT=SR()*2;
+        if(!u.home)u.home={x:u.x,y:u.y};
+        break;}
       if(u.type==='ram'){
         let bb=null,bd=6;
         for(const b2 of G.blds){if(b2.p===u.p)continue;
@@ -2048,7 +2521,7 @@ function updateUnit(u,dt){
           }
           let best=null,bd=7;
           for(const f of G.units){
-            if(!allied(f.p,u.p)||f.id===u.id||f.hp<=0||f.hp>=f.maxhp)continue;
+            if(!allied(f.p,u.p)||f.id===u.id||f.hp<=0||f.hp>=f.maxhp||isAnimal(f))continue;
             const dd=Math.hypot(f.x-u.x,f.y-u.y);
             if(dd<bd){bd=dd;best=f;}}
           if(best){u.state='toHeal';u.target={id:best.id,bld:false};
@@ -2206,8 +2679,10 @@ function updateUnit(u,dt){
       u.gatherT+=dt;
       if(u.gatherT>=1){u.gatherT=0;
         const cv=civOf(u.p);
+        const meat=r.sub==='meat';
         const rate=(r.type==='fish'?1.35:1.1)*TB()
           *(r.type==='wood'&&cv.woodMult?cv.woodMult:1)*(r.type==='gold'&&cv.goldMult?cv.goldMult:1)
+          *(meat&&cv.huntFast?cv.huntFast:1)                    // Mongols butcher fast
           *(r.type==='wood'?WOOD_RATE[ecoTier(u.p,'wood')]:1)   // axe/saw line
           *(r.type==='gold'?GOLD_RATE[ecoTier(u.p,'gold')]:1);  // mining line
         const take=Math.min(rate,r.amt);
@@ -2220,7 +2695,8 @@ function updateUnit(u,dt){
           if(r.type!=='fish')G.map[r.y][r.x]=0; // spent fisheries stay open water
           delete G.res[u.resKey];miniResDirty=true;
           if(r.type==='wood')stampCleared(r.x,r.y);}
-        if(u.carry>=carryCap(u)||!G.res[u.resKey]){
+        const cap=carryCap(u)+(meat&&cv.huntCarry?cv.huntCarry:0); // Goths shoulder more meat
+        if(u.carry>=cap||!G.res[u.resKey]){
           const b=dropoffFor(u);if(!b){u.state='idle';break;}
           u.state='return';const c=bldCenter(b);u.path=uPath(u,c.x,c.y,u.p)||[];}}
       break;}
@@ -2357,6 +2833,7 @@ function updateUnit(u,dt){
               if(t.type==='spearman'&&d.cav&&d.ranged&&G.P[u.p].pt)dmg+=3; // 1.0B Parthian: cav archers savage spears
               if(d.vsInf&&INF.has(t.type))dmg+=d.vsInf;      // Jaguar, Cataphract
               if(d.vsUnique&&UU_SET.has(t.type))dmg+=d.vsUnique; // Samurai
+              if(td.fierce&&civOf(u.p).vsBoar)dmg+=civOf(u.p).vsBoar; // Goths hunt boar hard
               if(d.vsShip&&td.ship)dmg+=d.vsShip;            // Fire Ship
               if(u.type==='knight'&&td.ranged&&teamHas(u.p,'knightVsArcher'))dmg+=2; // Persian TB
               const eu=elevTile(u.x,u.y),et=elevTile(t.x,t.y);
@@ -2377,6 +2854,7 @@ function updateUnit(u,dt){
           }
           const rangedKind=d.range>1?((d.siege||d.gun)?'siege':true):false;
           dealDamage({ent:t,bld:u.target.bld},dmg,u.p,rangedKind);
+          if(!u.target.bld&&isAnimal(t))animalHit(t,u); // it charges, or it bolts
           // heavy melee shoves its victim back a touch — sells the weight of the blow
           if(!u.target.bld&&!rangedKind&&dmg>=8&&t.hp>0&&!UNITS[t.type].ship){
             const kx=t.x-u.x,ky=t.y-u.y,kd=Math.hypot(kx,ky)||1;
@@ -2466,7 +2944,7 @@ function aiThink(p,ai){
   const cfg=DIFF[diffSel],st=G.P[p];
   const tc=G.blds.find(b=>b.p===p&&b.type==='tc');if(!tc)return;
   const vills=G.units.filter(u=>u.p===p&&u.type==='villager'&&u.hp>0);
-  const army=G.units.filter(u=>u.p===p&&u.type!=='villager'&&u.hp>0);
+  const army=G.units.filter(u=>u.p===p&&u.type!=='villager'&&u.hp>0&&!isAnimal(u));
   if(ai.attacking&&army.length===0)ai.attacking=false;
   const myBld=t=>G.blds.filter(b=>b.p===p&&b.type===t);
   // houses
@@ -2522,6 +3000,45 @@ function aiThink(p,ai){
         const c=bldCenter(b);bd=Math.min(bd,Math.hypot(c.x-r.x,c.y-r.y));}
       return bd>7;});
     if(far){const r=G.res[far.resKey];aiPlace('camp',r.x,r.y,p);}
+  }
+  // hunt: in the Dark Age the meat walking past the Town Hall is the best food
+  // on the map. Sheep first — they don't bite — then boar once there are hands
+  // enough to bring one down without losing the hunter.
+  {
+    let onHunt=0;
+    for(const v of vills)if(v.target&&!v.target.bld){
+      const tgt=G.units.find(x=>x.id===v.target.id);
+      if(!tgt||!isAnimal(tgt))continue;
+      // a gored villager breaks off and goes back to work — the meat is not
+      // worth the man, and an AI that traded one villager per boar fell a
+      // third of an army behind by the four-minute mark
+      if(v.hp<v.maxhp*.45&&UNITS[tgt.type].fierce){autoNext(v);continue;}
+      onHunt++;
+    }
+    if(onHunt<4&&G.t>=(ai.huntNext||0)){
+      ai.huntNext=G.t+8;
+      let best=null,bs2=1e9;
+      for(const a of G.units){
+        if(a.hp<=0||!isAnimal(a))continue;
+        if(UNITS[a.type].fierce&&vills.length<8)continue; // boar wait for a real crew
+        const dd=Math.hypot(a.x-(tc.tx+1),a.y-(tc.ty+1));
+        if(dd>(st.age===0?16:11))continue;
+        const score=dd/((UNITS[a.type].meat||100)/100); // near and fat wins
+        if(score<bs2){bs2=score;best=a;}
+      }
+      if(best){
+        const want=UNITS[best.type].fierce?6:2; // swarm a boar; it dies before it kills
+        let sent=0;
+        for(const v of vills){
+          if(sent>=want)break;
+          if(v.state==='toBuild'||v.state==='building')continue;   // builders keep building
+          if(v.target&&!v.target.bld)continue;                     // already on a kill
+          if(v.hp<v.maxhp*.6)continue;                             // the walking wounded stay home
+          if(Math.hypot(v.x-best.x,v.y-best.y)>18)continue;
+          cmdAttack(v,best,false);sent++;
+        }
+      }
+    }
   }
   // farms if food scarce
   const foodLeft=Object.values(G.res).some(r=>r.type==='food'&&Math.hypot(r.x-tc.tx,r.y-tc.ty)<14);
@@ -2605,8 +3122,8 @@ function aiThink(p,ai){
   // into the Town Hall (adding to its arrows); back to work once it's quiet
   const tcC={x:tc.tx+1,y:tc.ty+1};
   const danger=G.units.some(e=>!allied(e.p,p)&&e.hp>0
-    &&e.type!=='villager'&&!UNITS[e.type].passive&&!UNITS[e.type].fisher
-    &&Math.hypot(e.x-tcC.x,e.y-tcC.y)<8);
+    &&e.type!=='villager'&&!UNITS[e.type].passive&&!UNITS[e.type].fisher&&!isAnimal(e)
+    &&Math.hypot(e.x-tcC.x,e.y-tcC.y)<8); // a boar in the fields is not an invasion
   if(danger){
     ai.lastDanger=G.t;
     for(const v of vills){
@@ -2769,8 +3286,9 @@ function updateFog(){
       const dx=x+.5-cx,dy=y+.5-cy;
       if(dx*dx+dy*dy<=r2)V[y*MAP+x]=2;}};
   const spy=hasUt(0,'atheism'); // Huns: spies — see what your enemies see
-  for(const u of G.units)if(allied(u.p,0)||spy){
-    let r=u.type==='scout'?9:6;
+  for(const u of G.units)if((allied(u.p,0)||spy)&&u.p!==GAIA){
+    // a herded sheep is a walking (short-sighted) scout — that's half the point of them
+    let r=u.type==='scout'?9:isAnimal(u)?3:6;
     if(allied(u.p,0)){
       if(u.type==='villager')r+=civOf(u.p).vilLos||0;
       if(u.type==='scout'&&teamHas(u.p,'scoutLos'))r+=2;      // Mongol TB
@@ -2832,6 +3350,15 @@ function loadGame(){
   G.elev=Uint8Array.from(data.elev);
   G.vis=Uint8Array.from(data.vis);G.visT=0;
   G.navBlock={};
+  cmdQ=[];
+  // Saves made before the wildlife existed stop at the last real player. Pad the
+  // per-player arrays out to GAIA so nothing ever reads a hole.
+  for(let q=G.P.length;q<=GAIA;q++)G.P[q]={f:0,w:0,g:0,age:0,ageT:0,aging:false,civ:0,
+    uts:[],bs:{atk:0,arw:0,ia:0,aa:0,ca:0},pt:false,uni:{},eco:{},mon:{}};
+  for(let q=0;q<=GAIA;q++){
+    if(G.ais[q]===undefined)G.ais[q]=null;
+    if(G.teams[q]==null)G.teams[q]=q===GAIA?99:50+q;
+  }
   for(const b of G.blds){
     if(!b.gar)b.gar=[];
     if(BLDS[b.type].thin)G.wallMap[b.tx+','+b.ty]=b;
@@ -2911,7 +3438,7 @@ function updateOverlays(){ // throttled: writes at most once per game-second
 function updateArmyCounts(){
   let cav=0,rng=0,inf=0,sg=0;
   for(const u of G.units){
-    if(u.p!==0||u.hp<=0||u.type==='villager')continue;
+    if(u.p!==0||u.hp<=0||u.type==='villager'||isAnimal(u))continue;
     const d=UNITS[u.type];
     if(d.ram)sg++;else if(d.cav)cav++;else if(d.ranged)rng++;else if(!d.monk)inf++;
   }
@@ -3268,6 +3795,7 @@ const TEAMS=[ // high-chroma AoE2 player colors — the loudest signal on screen
   {main:'#9b3fd4',dark:'#63268c',trim:'#cf9af2'},  // purple
   {main:'#8c8c8c',dark:'#565656',trim:'#c9c9c9'},  // gray
   {main:'#e8801f',dark:'#9c5212',trim:'#f5b87a'}]; // orange
+TEAMS[GAIA]={main:'#9a8f7c',dark:'#5d5548',trim:'#cfc4ac'}; // nature — hide, horn, bristle
 // no black outlines — forms read through value contrast; edges are a soft warm
 // shadow tone (late-90s pre-rendered look: warm key upper-left, cool ambient fill)
 const OUT='rgba(50,33,17,.72)',SKIN='#e0b78e'; // a notch darker/crisper, still warm — the reference sprites pop harder
@@ -3806,6 +4334,40 @@ function getResSpr(type,h){
     g.fillStyle='rgba(228,242,246,.5)';
     for(let i=0;i<4;i++){g.beginPath();g.arc(-8+rnd()*16,-1+rnd()*2,.7,0,7);g.fill();}
     const out={c,ox:ax,oy:ay-6,w:W,h:Ht};RES_SPR[key]=out;return out;
+  }
+  if(type==='meat'){
+    // a fallen beast: hide over a low mass, legs folded, a scatter of feathers
+    // of grass torn up around it. Deliberately reads flatter than a bush so a
+    // kill never looks like forage from across the map.
+    const rnd=mulberry(h*3141+7);
+    g.fillStyle='rgba(18,26,10,.30)';
+    g.beginPath();g.ellipse(1.5,1.5,13,4.4,.1,0,7);g.fill();
+    const hide=(h%3===0)?['#6b5442','#83694f','#a08360']    // boar bristle
+              :(h%3===1)?['#7d6a4e','#98835f','#b6a077']    // deer
+                        :['#8d8375','#a8a094','#c6c0b4'];   // fleece
+    g.fillStyle=hide[0];
+    g.beginPath();g.ellipse(0,-3,11,5.2,-.06,0,7);g.fill();
+    g.fillStyle=hide[1];
+    g.beginPath();g.ellipse(-1.5,-4.6,8.4,3.4,-.1,0,7);g.fill();
+    g.fillStyle=hide[2];
+    g.beginPath();g.ellipse(-3,-5.6,4.6,1.9,-.14,0,7);g.fill();
+    // head lolling off the near side, legs stuck out stiff
+    g.fillStyle=hide[0];
+    g.beginPath();g.ellipse(9.5,-1.6,4,2.6,.35,0,7);g.fill();
+    g.strokeStyle=hide[0];g.lineWidth=1.9;g.lineCap='round';
+    for(let i=0;i<3;i++){
+      const lx=-6+i*5.2,ly=-4.4;
+      g.beginPath();g.moveTo(lx,ly);g.lineTo(lx-2.4-rnd()*2,ly-4.6-rnd()*2.4);g.stroke();
+    }
+    g.strokeStyle='rgba(64,44,26,.5)';g.lineWidth=.6;
+    g.beginPath();g.ellipse(0,-3,11,5.2,-.06,0,7);g.stroke();
+    // trampled grass around the kill
+    g.strokeStyle='rgba(96,86,44,.45)';g.lineWidth=.7;
+    for(let i=0;i<7;i++){
+      const gx=-13+rnd()*26,gy=-.5+rnd()*2.4;
+      g.beginPath();g.moveTo(gx,gy);g.lineTo(gx+(rnd()-.5)*3,gy-2-rnd()*2);g.stroke();
+    }
+    const out={c,ox:ax,oy:ay-2,w:W,h:Ht};RES_SPR[key]=out;return out;
   }
   if(type==='wood'){
     const rr=10+(h%4)*1.7;
@@ -6352,7 +6914,97 @@ function drawShip(u,t,TC){
   }
   ctx.restore();
 }
+/* Wildlife rigs. One quadruped painter, three costumes — silhouette does the
+   work: sheep are round and low-slung, deer stand tall on thin legs, boar are a
+   forward-heavy wedge with tusks. Facing is a horizontal flip plus a squeeze
+   when the beast is head-on; they never fight in formation, so the full octant
+   projection the cavalry uses would be spent on nothing here. */
+/* `y` is the barrel's centre in rig space, chosen so hoof (y + H*.25 + legLen)
+   lands at ~3.2 — the ground line the two-legged rigs stand on. Get it wrong and
+   the beast floats above its own shadow. */
+const BEAST={
+  sheep:{L:5.2,H:3.6,y:-1.1,legLen:3.4,neck:.14,fleece:true,
+    body:'#ded9cc',shade:'#bab2a0',leg:'#6d5c46',head:'#4f4437',ear:'#584c40'},
+  deer:{L:5.6,H:3.4,y:-3.3,legLen:5.6,neck:.34,antler:true,rump:true,
+    body:'#a97d4e',shade:'#c49a68',leg:'#6b4c30',head:'#9a7145',ear:'#7d5a36'},
+  boar:{L:6.2,H:4.2,y:-1.5,legLen:3.6,neck:.02,tusk:true,
+    body:'#604d3d',shade:'#4a3a2d',leg:'#3a2d24',head:'#4c3d31',ear:'#3f3228'},
+};
+function drawBeastRig(u,t,TC,B){
+  const hd=u.hdg||0,ch=Math.cos(hd);
+  const dir=ch>=0?1:-1;
+  const fs=.42+.58*Math.abs(ch);        // foreshorten as it turns toward the camera
+  const moving=(u.spd!==undefined?u.spd>.05:!!(u.path&&u.path.length));
+  const gait=moving?Math.sin(t*.8):0;
+  const bob=moving?Math.abs(Math.sin(t*.8))*.45:Math.sin(t*.11+(u.id||0)*1.3)*.2;
+  const X=x=>x*fs*dir;
+  const by=B.y;
+  ctx.save();ctx.translate(0,-bob);
+  const legAt=(x,ph,near)=>{
+    const sw=gait*Math.sin(ph)*1.6;
+    const x0=X(x),x1=X(x+sw),y0=by+B.H*.25,y1=y0+B.legLen;
+    ctx.strokeStyle=near?'rgba(64,44,26,.5)':'rgba(28,18,8,.8)';
+    ctx.lineWidth=near?2.4:1.9;
+    ctx.beginPath();ctx.moveTo(x0,y0);ctx.quadraticCurveTo((x0+x1)/2,(y0+y1)/2,x1,y1);ctx.stroke();
+    if(near){ctx.strokeStyle=B.leg;ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.moveTo(x0,y0);ctx.quadraticCurveTo((x0+x1)/2,(y0+y1)/2,x1,y1);ctx.stroke();}
+    ctx.strokeStyle='#2b2016';ctx.lineWidth=1.3;
+    ctx.beginPath();ctx.moveTo(x1-.7,y1);ctx.lineTo(x1+.7,y1);ctx.stroke();
+  };
+  legAt(-B.L*.6,0,false);legAt(B.L*.55,3.14,false);   // far pair
+  const barrel=()=>{ctx.beginPath();ctx.ellipse(0,by,B.L*fs,B.H,0,0,7);};
+  ctx.fillStyle=B.body;barrel();ctx.fill();
+  ctx.strokeStyle=OUT;ctx.lineWidth=.9;barrel();ctx.stroke();
+  volShade(barrel);
+  if(B.fleece){                                        // curls along the back
+    ctx.strokeStyle='rgba(255,252,240,.5)';ctx.lineWidth=.8;
+    for(let i=-2;i<=2;i++){
+      ctx.beginPath();ctx.arc(X(i*B.L*.3),by-B.H*.52,1.1,3.4,6.1);ctx.stroke();}
+  }else{
+    ctx.fillStyle=B.shade;
+    ctx.beginPath();ctx.ellipse(0,by+B.H*.42,B.L*fs*.82,B.H*.36,0,0,7);ctx.fill();
+  }
+  if(B.rump){ctx.fillStyle='rgba(246,240,226,.75)';
+    ctx.beginPath();ctx.ellipse(X(-B.L*.78),by-B.H*.12,1.9*fs+.5,1.5,0,0,7);ctx.fill();}
+  legAt(-B.L*.6,3.14,true);legAt(B.L*.55,0,true);      // near pair
+  const nx=X(B.L*.72),ny=by-B.H*.35;
+  const hx=X(B.L*(1.02+B.neck)),hy=by-B.H*(.55+B.neck*.9);
+  ctx.strokeStyle=OUT;ctx.lineWidth=3.4;
+  ctx.beginPath();ctx.moveTo(nx,ny);ctx.lineTo(hx,hy);ctx.stroke();
+  ctx.strokeStyle=B.body;ctx.lineWidth=2.4;
+  ctx.beginPath();ctx.moveTo(nx,ny);ctx.lineTo(hx,hy);ctx.stroke();
+  const hw=2.2*(fs*.5+.5);
+  ctx.fillStyle=B.head;ctx.strokeStyle=OUT;ctx.lineWidth=.7;
+  ctx.beginPath();ctx.ellipse(hx,hy,hw,1.5,dir*.25,0,7);ctx.fill();ctx.stroke();
+  ctx.beginPath();ctx.ellipse(hx+dir*hw*.8,hy+.55,hw*.5,.9,0,0,7);ctx.fill();
+  if(B.tusk){
+    ctx.strokeStyle='#efe9d6';ctx.lineWidth=.9;
+    ctx.beginPath();ctx.moveTo(hx+dir*hw*.9,hy+1.1);
+    ctx.quadraticCurveTo(hx+dir*hw*1.5,hy+.2,hx+dir*hw*1.3,hy-1.2);ctx.stroke();
+  }
+  if(B.antler){
+    ctx.strokeStyle='#9a8358';ctx.lineWidth=.85;
+    for(const s2 of[-1,1]){
+      const ax=hx+s2*.5*dir;
+      ctx.beginPath();
+      ctx.moveTo(ax,hy-1.2);ctx.lineTo(ax+dir*.9,hy-4.2);
+      ctx.moveTo(ax+dir*.45,hy-2.7);ctx.lineTo(ax+dir*1.9,hy-3.4);
+      ctx.moveTo(ax+dir*.75,hy-3.7);ctx.lineTo(ax-dir*.5,hy-4.7);ctx.stroke();
+    }
+  }else{
+    ctx.fillStyle=B.ear;
+    ctx.beginPath();ctx.ellipse(hx-dir*1.2,hy-1.3,.8,1.2,dir*.5,0,7);ctx.fill();
+  }
+  if(!RIG_LOD){ctx.fillStyle='#26180c';
+    ctx.beginPath();ctx.arc(hx+dir*.6,hy-.3,.42,0,7);ctx.fill();}
+  const tx0=X(-B.L*.95),ty0=by-B.H*.35;
+  ctx.strokeStyle=B.leg;ctx.lineWidth=B.tusk?1.1:1.4;
+  ctx.beginPath();ctx.moveTo(tx0,ty0);
+  ctx.quadraticCurveTo(tx0-dir*1.4,ty0+.4+Math.sin(t*.4)*.4,tx0-dir*1.1,ty0+2.2);ctx.stroke();
+  ctx.restore();
+}
 function drawUnitBody(u,t,sw,TC){
+  if(UNITS[u.type].animal)return drawBeastRig(u,t,TC,BEAST[u.type]||BEAST.sheep);
   if(UNITS[u.type].ship)return drawShip(u,t,TC);
   if(u.type==='knight'||u.type==='cataphract')drawKnight(u,t,sw,TC);
   else if(u.type==='scout'||u.type==='mameluke'||u.type==='mangudai'
@@ -7410,7 +8062,7 @@ function draw(){
         ctx.strokeStyle='rgba(240,240,240,.9)';ctx.lineWidth=1.6;
         ctx.beginPath();ctx.ellipse(rp.x,rp.y+8,IW*.72,IH*.72,0,0,7);ctx.stroke();
       }
-      const sp=getResSpr(e.r.type,hash2(e.r.x*13,e.r.y*17));
+      const sp=getResSpr(e.r.sub||e.r.type,hash2(e.r.x*13,e.r.y*17));
       if(e.r.type==='wood')treeDrawn++;
       if(e.r.type==='wood'&&swayOk){
         // gentle wind sway, phase per tree, pivot at the trunk base
@@ -7762,32 +8414,35 @@ function handleTap(cx,cy,mouse,right){
     }
   }
   // mouse: left-click only selects; commands go on right-click (attack-move tap is the exception)
+  // Every branch below states an INTENT — issue() records it and the handler
+  // carries it out; nothing here touches a unit directly any more.
+  const selIds=selUnits.map(s=>s.id);
   if(haveSel&&(right||!mouse||G.amode)){
-    if(hitU&&!allied(hitU.p,0)){for(const s of selUnits)cmdAttack(s,hitU,false);flashSel();return;}
-    if(hitB&&!allied(hitB.p,0)){for(const s of selUnits)cmdAttack(s,hitB,true);flashSel();return;}
-    if(res){for(const s of selUnits)cmdGather(s,resKey);flashSel();return;}
+    if(hitU&&!allied(hitU.p,0)){issue('attack',{u:selIds,id:hitU.id,bld:false});flashSel();return;}
+    // a beast you already own is still meat — send anyone who can swing at it
+    if(hitU&&isAnimal(hitU)&&selUnits.some(s=>!UNITS[s.type].passive&&!UNITS[s.type].monk)){
+      issue('attack',{u:selIds,id:hitU.id,bld:false});
+      if(hitU.p===0)toast('Slaughtering — villagers will butcher the carcass');
+      flashSel();return;}
+    if(hitB&&!allied(hitB.p,0)){issue('attack',{u:selIds,id:hitB.id,bld:true});flashSel();return;}
+    if(res){issue('gather',{u:selIds,key:resKey});flashSel();return;}
     const relic=G.relics.find(r=>!r.held&&!r.mon&&Math.hypot(r.x+.5-tw.x,r.y+.5-tw.y)<1);
     const monks=selUnits.filter(s=>UNITS[s.type].monk&&!UNITS[s.type].noRelic); // Missionaries can't carry relics
     if(relic&&monks.length){
-      const m=monks[0];m.state='toRelic';m.relicT=relic.id;
-      m.path=uPath(m,relic.x,relic.y,m.p)||[];
+      issue('relic',{u:monks.map(m=>m.id),rid:relic.id});
       toast('Monk moving to the relic');return;}
     if(hitB&&hitB.p===0&&hitB.built&&hitB.type==='monastery'&&monks.some(m=>m.relic)){
-      for(const m of monks)if(m.relic){m.state='toMon';m.monB=hitB.id;
-        const c=bldCenter(hitB);m.path=uPath(m,c.x,c.y,m.p)||[];}
-      return;}
+      issue('enshrine',{u:monks.map(m=>m.id),id:hitB.id});return;}
     if(hitB&&hitB.p===0&&!hitB.built&&selUnits.some(s=>s.type==='villager')){
-      for(const s of selUnits)if(s.type==='villager')cmdBuild(s,hitB);flashSel();return;}
+      issue('build',{u:selIds,id:hitB.id});flashSel();return;}
     if(hitB&&hitB.p===0&&hitB.type==='farm'&&selUnits.some(s=>s.type==='villager')){
-      for(const s of selUnits)if(s.type==='villager')cmdFarm(s,hitB);flashSel();return;}
+      issue('farm',{u:selIds,id:hitB.id});flashSel();return;}
     if(hitB&&hitB.p===0&&hitB.built&&BLDS[hitB.type].garCap){
-      let room=bldGarCap(hitB)-hitB.gar.length
-        -selUnits.filter(s=>s.garB===hitB.id).length,n=0;
-      for(const s of selUnits){
-        if(room<=0)break;
-        if(s.type==='ram')continue;
-        cmdGarrison(s,hitB);room--;n++;
-      }
+      // count locally only to phrase the toast — the handler decides who fits
+      const room=bldGarCap(hitB)-hitB.gar.length
+        -selUnits.filter(s=>s.garB===hitB.id).length;
+      const n=Math.min(Math.max(0,room),selUnits.filter(s=>s.type!=='ram').length);
+      issue('gar',{u:selIds,id:hitB.id});
       if(n){toast(n+' heading inside — select the building to release them');return;}
       toast(BLDS[hitB.type].name+' is full');return;
     }
@@ -7795,24 +8450,20 @@ function handleTap(cx,cy,mouse,right){
     // hits); any land unit can board a Transport Ship moored at the shore
     if(hitU&&hitU.p===0&&UNITS[hitU.type].garCap&&selUnits.some(s=>s.id!==hitU.id&&!UNITS[s.type].ship)){
       const isRam=hitU.type==='ram';
-      let room=UNITS[hitU.type].garCap-(hitU.gar?hitU.gar.length:0),n=0;
-      for(const s of selUnits){
-        if(room<=0)break;
-        if(UNITS[s.type].ship||s.id===hitU.id)continue;
-        if(isRam&&!INF.has(s.type))continue; // only infantry ride rams
-        cmdGarrisonRam(s,hitU);room--;n++;
-      }
+      const room=UNITS[hitU.type].garCap-(hitU.gar?hitU.gar.length:0);
+      const eligible=selUnits.filter(s=>s.id!==hitU.id&&!UNITS[s.type].ship&&(!isRam||INF.has(s.type)));
+      const n=Math.min(Math.max(0,room),eligible.length);
+      issue('garU',{u:selIds,id:hitU.id});
       if(n){toast(n+(isRam?' climbing into the ram':' boarding the ship')+' — select it to release them');return;}
       toast(isRam?'The ram is full':'The ship is full');return;
     }
     if(!hitU&&!hitB){
-      const n=selUnits.length;let i=0;
       if(G.amode){
-        for(const s of selUnits){const d=groupDest(n,i++,tx,ty);cmdAmove(s,d[0],d[1]);}
+        issue('amove',{u:selIds,x:tx,y:ty});
         G.amode=false;toast('Attack-moving — they will fight through anything they meet');
         refreshPanel();return;
       }
-      for(const s of selUnits){const d=groupDest(n,i++,tx,ty);cmdMove(s,d[0],d[1]);}
+      issue('move',{u:selIds,x:tx,y:ty});
       flashSel();return;}
   }
   if(right)return; // right-click never changes selection
@@ -7904,18 +8555,12 @@ function refreshPanel(){
         (G.pendLine?'Confirm, or tap a new end point':'Tap where the wall ends'));
       if(G.pendLine){
         const segs=G.pendLine.filter(s2=>canPlaceType(G.placing,s2.tx,s2.ty));
-        mkBtn('<b>✓ Build '+segs.length+' sections</b><span class="cost">'+costStr(d.cost)+' each</span>','go',()=>{
-          let built=0;
-          for(const s2 of segs){
-            if(!canPlaceType(G.placing,s2.tx,s2.ty))continue;
-            if(!canAfford(0,d.cost)){toast('Out of resources — placed '+built+' sections');break;}
-            pay(0,d.cost);
-            const b=addBld(0,G.placing,s2.tx,s2.ty,false);b.pendCost=d.cost;built++;
-          }
-          if(built)snd('place');
-          const vills=G.sel.map(id=>G.units.find(u=>u.id===id)).filter(u=>u&&u.type==='villager');
-          const site=G.blds.find(b2=>b2.p===0&&!b2.built&&b2.type===G.placing);
-          if(site)for(const v of vills)cmdBuild(v,site);
+        const lc=bldCostOf(0,G.placing); // Mayan walls are half price — say so
+        mkBtn('<b>✓ Build '+segs.length+' sections</b><span class="cost">'+costStr(lc)+' each</span>','go',()=>{
+          const afford=Math.floor(Math.min(...['f','w','g'].map(r2=>lc[r2]?G.P[0][r2]/lc[r2]:Infinity)));
+          if(afford<segs.length)toast('Out of resources — placing '+Math.max(0,afford)+' sections');
+          issue('placeLine',{t:G.placing,tiles:segs.map(s2=>[s2.tx,s2.ty]),
+            u:G.sel.map(id=>G.units.find(u=>u.id===id)).filter(u=>u&&u.type==='villager').map(u=>u.id)});
           G.placing=null;G.wallA=null;G.pendLine=null;
           updateTop();refreshPanel();
         },!segs.length);
@@ -7929,12 +8574,9 @@ function refreshPanel(){
       const ok=canPlaceType(G.placing,G.pend.tx,G.pend.ty);
       mkBtn('<b>✓ Build here</b>','go',()=>{
         if(!canPlaceType(G.placing,G.pend.tx,G.pend.ty)){toast('Blocked — pick open ground');return;}
-        const bc=bldCostOf(0,G.placing);
-        if(!canAfford(0,bc)){toast('Not enough resources');return;}
-        pay(0,bc);snd('place');
-        const b=addBld(0,G.placing,G.pend.tx,G.pend.ty,false);b.pendCost=bc;
-        const vills=G.sel.map(id=>G.units.find(u=>u.id===id)).filter(u=>u&&u.type==='villager');
-        for(const v of vills)cmdBuild(v,b);
+        if(!canAfford(0,bldCostOf(0,G.placing))){toast('Not enough resources');return;}
+        issue('place',{t:G.placing,tx:G.pend.tx,ty:G.pend.ty,
+          u:G.sel.map(id=>G.units.find(u=>u.id===id)).filter(u=>u&&u.type==='villager').map(u=>u.id)});
         G.placing=null;G.pend=null;updateTop();refreshPanel();
       },!ok);
     }
@@ -7950,9 +8592,9 @@ function refreshPanel(){
         const r=G.res[insp.res];
         if(r){
           const RN={wood:'Tree',gold:'Gold Mine',food:'Berry Bush',fish:'Fishery'};
-          setCard(RN[r.type]||r.type,portraitFor('res',r.type,0),null);
+          setCard(r.sub==='meat'?'Carcass':(RN[r.type]||r.type),portraitFor('res',r.sub||r.type,0),null);
           hint('<b>'+Math.ceil(r.amt)+'</b> '+(r.type==='food'?'food':r.type)+' left · '
-            +(mouseSeen?'right-click':'tap')+' with villagers to gather');
+            +(mouseSeen?'right-click':'tap')+' with villagers to '+(r.sub==='meat'?'butcher':'gather'));
           mkBtn('<b>Deselect</b>',null,()=>{G.inspect=null;refreshPanel();});
           return;
         }
@@ -7963,7 +8605,10 @@ function refreshPanel(){
         if(t&&t.hp>0){
           const nm=eu?unitName(t.type,t.p):BLDS[t.type].name;
           setCard(nm,portraitFor(eu?'u':'b',t.type,t.p),t.hp,t.maxhp);
-          hint(allied(t.p,0)?'An ally\'s '+nm:'An enemy '+nm);
+          hint(eu&&isAnimal(t)
+            ?(UNITS[t.type].meat+' food · '+(mouseSeen?'right-click':'tap')+' it with villagers to hunt'
+              +(UNITS[t.type].fierce?' — it will fight back':''))
+            :allied(t.p,0)?'An ally\'s '+nm:'An enemy '+nm);
           mkBtn('<b>Deselect</b>',null,()=>{G.inspect=null;refreshPanel();});
           return;
         }
@@ -7974,7 +8619,7 @@ function refreshPanel(){
     hint('Tap a villager or building');
     mkBtn('<b>Idle villager</b><span class="cost">.</span>',null,cycleIdleVill,false,portraitFor('u','villager',0));
     mkBtn('<b>Select army</b><span class="cost">,</span>',null,()=>{
-      const a=G.units.filter(u=>u.p===0&&u.type!=='villager');
+      const a=G.units.filter(u=>u.p===0&&u.type!=='villager'&&!isAnimal(u));
       if(a.length){G.sel=a.map(u=>u.id);centerOn(a[0].x,a[0].y);refreshPanel();}
       else toast('You have no soldiers yet');},false,portraitFor('u','militia',0));
     mkBtn('<b>Town Hall</b><span class="cost">H</span>',null,selTC,false,portraitFor('b','tc',0));
@@ -7986,22 +8631,23 @@ function refreshPanel(){
     if(!b.built){
       setCard(d.name,portraitFor('b',b.type,0),b.hp,b.maxhp);
       hint('Under construction — '+(mouseSeen?'right-click':'tap')+' it with villagers selected to help build');
-      mkBtn('<b>Demolish</b>','warn',()=>{b.hp=0;});return;}
+      mkBtn('<b>Demolish</b>','warn',()=>{issue('del',{ids:[b.id]});});return;}
     setCard(d.name,portraitFor('b',b.type,0),b.hp,b.maxhp,
       [...(d.atk?[['atk',d.atk]]:[]),...(d.garCap?[['gar',b.gar.length+'/'+d.garCap]]:[])]);
     hint(d.trains&&d.trains.length||b.type==='castle'?'Train from the buttons on the left':'');
     if(b.gar.length)
-      mkBtn('<b>⇱ Ungarrison '+b.gar.length+'</b>',null,()=>{ejectGarrison(b);snd('click');refreshPanel();});
+      mkBtn('<b>⇱ Ungarrison '+b.gar.length+'</b>',null,()=>{issue('ungar',{id:b.id});});
     if(b.type==='market'){
       // Saracens trade at almost no fee (manual: 5% market fee)
       const sar=civOf(0).mktRate,sell=sar?95:70,buy=sar?105:80;
-      const trade=(give,giveN,get,getN)=>{
-        if(G.P[0][give]<giveN){toast('Not enough '+(give==='f'?'food':give==='w'?'wood':'gold'));return;}
-        G.P[0][give]-=giveN;G.P[0][get]+=getN;snd('done');updateTop();refreshPanel();};
-      mkBtn('<i>🍖</i><b>Sell 100 Food</b><span class="cost">→ '+sell+'G</span>',null,()=>trade('f',100,'g',sell),G.P[0].f<100);
-      mkBtn('<i>🪵</i><b>Sell 100 Wood</b><span class="cost">→ '+sell+'G</span>',null,()=>trade('w',100,'g',sell),G.P[0].w<100);
-      mkBtn('<i>🍖</i><b>Buy 100 Food</b><span class="cost">'+buy+'G →</span>',null,()=>trade('g',buy,'f',100),G.P[0].g<buy);
-      mkBtn('<i>🪵</i><b>Buy 100 Wood</b><span class="cost">'+buy+'G →</span>',null,()=>trade('g',buy,'w',100),G.P[0].g<buy);
+      const trade=(give,get)=>{
+        const need=give==='g'?buy:100;
+        if(G.P[0][give]<need){toast('Not enough '+(give==='f'?'food':give==='w'?'wood':'gold'));return;}
+        issue('trade',{give,get});};
+      mkBtn('<i>🍖</i><b>Sell 100 Food</b><span class="cost">→ '+sell+'G</span>',null,()=>trade('f','g'),G.P[0].f<100);
+      mkBtn('<i>🪵</i><b>Sell 100 Wood</b><span class="cost">→ '+sell+'G</span>',null,()=>trade('w','g'),G.P[0].w<100);
+      mkBtn('<i>🍖</i><b>Buy 100 Food</b><span class="cost">'+buy+'G →</span>',null,()=>trade('g','f'),G.P[0].g<buy);
+      mkBtn('<i>🪵</i><b>Buy 100 Wood</b><span class="cost">'+buy+'G →</span>',null,()=>trade('g','w'),G.P[0].g<buy);
     }
     if(b.type==='monastery'){
       const dep=G.relics.filter(r=>r.mon===b.id).length;
@@ -8018,8 +8664,7 @@ function refreshPanel(){
         mkBtn('<i>'+T.icon+'</i><b>'+T.names[tier]+'</b><span class="cost">'+costStr(cost)+'</span>','txt',
           ()=>{if(G.P[0].age<needAge){toast('Requires the '+AGES[needAge]);return;}
             if(!canAfford(0,cost)){toast('Not enough resources');return;}
-            pay(0,cost);bs[line]++;snd('done');
-            feed(T.names[tier]+' — researched');updateTop();refreshPanel();},
+            issue('tech',{kind:'bs',id:line});},
           locked||!canAfford(0,cost));
       }
       if(['atk','arw','ia','aa','ca'].every(l=>bs[l]>=3))
@@ -8036,7 +8681,7 @@ function refreshPanel(){
         mkBtn('<i>'+T.icon+'</i><b>'+T.name+'</b><span class="cost">'+costStr(T.cost)+'</span>','txt',
           ()=>{if(G.P[0].age<T.age){toast('Requires the '+AGES[T.age]);return;}
             if(!canAfford(0,T.cost)){toast('Not enough resources');return;}
-            pay(0,T.cost);uniOf(0)[id]=1;applyUni(0,id);},
+            issue('tech',{kind:'uni',id});},
           locked||!canAfford(0,T.cost));
       }
       if(UNI_ORDER.every(id=>un[id]))hint('Every science is mastered');
@@ -8046,8 +8691,7 @@ function refreshPanel(){
       mkBtn('<i>🐴</i><b>Parthian Tactics</b><span class="cost">'+costStr(cost)+'</span>','txt',
         ()=>{if(G.P[0].age<3){toast('Requires the '+AGES[3]);return;}
           if(!canAfford(0,cost)){toast('Not enough resources');return;}
-          pay(0,cost);G.P[0].pt=true;snd('done');
-          feed('Parthian Tactics — researched');updateTop();refreshPanel();},
+          issue('tech',{kind:'pt'});},
         locked||!canAfford(0,cost));
     }
     // economy & line technologies researched at this building (manual pp. 47-49)
@@ -8063,29 +8707,14 @@ function refreshPanel(){
       mkBtn('<i>'+T.icon+'</i><b>'+nm+'</b><span class="cost">'+costStr(cost)+'</span>','txt',
         ()=>{if(G.P[0].age<needAge){toast('Requires the '+AGES[needAge]);return;}
           if(!canAfford(0,cost)){toast('Not enough resources');return;}
-          pay(0,cost);ecoOf(0)[id]=tier+1;applyEco(0,id);
-          feed(nm+' — researched');},
+          issue('tech',{kind:'eco',id});},
         locked||!canAfford(0,cost));
     }
     if(b.type==='dock'){ // Fish Trap: seed a fresh fishery in the waters beside the dock
       const ftCost={w:100};
       mkBtn('<i>🐟</i><b>Fish Trap</b><span class="cost">100W</span>','txt',()=>{
         if(!canAfford(0,ftCost)){toast('Not enough wood');return;}
-        let spot=null;
-        for(let r=2;r<7&&!spot;r++)for(let dy=-r;dy<=r&&!spot;dy++)for(let dx=-r;dx<=r&&!spot;dx++){
-          if(Math.max(Math.abs(dx),Math.abs(dy))!==r)continue;
-          const x=b.tx+dx,y=b.ty+dy,k=x+','+y;
-          if(x<1||y<1||x>=MAP-1||y>=MAP-1)continue;
-          if(G.water[k]&&!G.res[k]&&!(G.navBlock&&G.navBlock[k]))spot={x,y,k};
-        }
-        if(!spot){toast('No open water near this dock');return;}
-        pay(0,ftCost);snd('place');updateTop();
-        G.res[spot.k]={type:'fish',x:spot.x,y:spot.y,amt:250};
-        miniResDirty=true;
-        feed('Fish Trap set');
-        // idle fishing ships steam straight to it
-        for(const sh of G.units)
-          if(sh.p===0&&UNITS[sh.type].fisher&&sh.hp>0&&sh.state==='idle'){cmdGather(sh,spot.k);break;}
+        issue('fishtrap',{id:b.id});
       },!canAfford(0,ftCost));
     }
     const trainsList=trainsFor(b,0);
@@ -8104,7 +8733,7 @@ function refreshPanel(){
         mkBtn('<i>'+ICO.crown+'</i><b>'+T.name+'</b><span class="cost">'+costStr(T.cost)+'</span>','txt',
           ()=>{if(G.P[0].age<T.age){toast('Requires the '+AGES[T.age]);return;}
             if(!canAfford(0,T.cost)){toast('Not enough resources');return;}
-            pay(0,T.cost);G.P[0].uts.push(nu);applyUt(0,nu);updateTop();},
+            issue('tech',{kind:'ut',id:nu});},
           locked||!canAfford(0,T.cost));
         hint(T.name+': '+T.desc+(locked?' (requires the '+AGES[T.age]+')':''));
       }
@@ -8124,7 +8753,8 @@ function refreshPanel(){
   }
   // units
   const vills=ents.filter(u=>u.type==='villager');
-  const mil=ents.filter(u=>u.type!=='villager');
+  const beasts=ents.filter(u=>isAnimal(u));
+  const mil=ents.filter(u=>u.type!=='villager'&&!isAnimal(u));
   const u0=ents[0],ud=UNITS[u0.type];
   if(ents.length===1){
     setCard(unitName(u0.type,0),portraitFor('u',u0.type,0),u0.hp,u0.maxhp,
@@ -8133,15 +8763,9 @@ function refreshPanel(){
     if(ud.garCap&&u0.gar&&u0.gar.length)
       mkBtn('<b>⇱ '+(ud.ship?'Unload':'Ungarrison')+' '+u0.gar.length+'</b>',null,()=>{
         // transports set their passengers down on the nearest dry land
-        const shore=ud.ship?nearFree(Math.floor(u0.x),Math.floor(u0.y),4):null;
-        if(ud.ship&&!shore){toast('No landing ground — steer closer to shore');return;}
-        let n=0;
-        for(const gu of u0.gar){
-          if(shore){gu.x=shore.x+.5+(n%2)*.4;gu.y=shore.y+.5+((n/2)|0)*.4;}
-          else{gu.x=u0.x+(SR()-.5);gu.y=u0.y+(SR()-.5);}
-          gu.state='idle';gu.path=null;gu.target=null;gu.spd=0;gu.vx=0;gu.vy=0;
-          G.units.push(gu);n++;}
-        u0.gar=[];snd('click');refreshPanel();});
+        if(ud.ship&&!nearFree(Math.floor(u0.x),Math.floor(u0.y),4)){
+          toast('No landing ground — steer closer to shore');return;}
+        issue('unload',{id:u0.id});});
   }else{
     const names={};for(const u of ents){const nm=unitName(u.type,0);names[nm]=(names[nm]||0)+1;}
     setCard(ents.length+' units',portraitFor('u',u0.type,0),null);
@@ -8152,6 +8776,13 @@ function refreshPanel(){
       t2.onclick=()=>{snd('click');G.sel=[u.id];refreshPanel();};
       selGrid.appendChild(t2);}
     if(ents.length>24)selGrid.insertAdjacentHTML('beforeend','<span class="more">+'+(ents.length-24)+'</span>');
+  }
+  if(beasts.length&&!vills.length&&!mil.length){
+    // a herded flock: walk it home, then send villagers to slaughter it
+    hint('Your flock — '+(mouseSeen?'right-click':'tap')+' ground to drive them along. '
+      +beasts.reduce((s,b2)=>s+(UNITS[b2.type].meat||0),0)+' food on the hoof.');
+    mkBtn('<b>Stop</b>',null,()=>{issue('stop',{u:beasts.map(b2=>b2.id)});});
+    return;
   }
   if(vills.length&&!mil.length){
     if(ents.length===1)hint(mouseSeen
@@ -8182,7 +8813,8 @@ function refreshPanel(){
       G.amode=!G.amode;refreshPanel();
       if(G.amode)toast('Now tap the destination');});
   }
-  mkBtn('<b>Stop</b>',null,()=>{for(const u of ents)if(u.x!==undefined){u.state='idle';u.path=null;u.target=null;u.resKey=null;u.farm=null;u.am=null;u.spd=0;u.vx=0;u.vy=0;}G.amode=false;});
+  mkBtn('<b>Stop</b>',null,()=>{
+    issue('stop',{u:ents.filter(e=>e.x!==undefined).map(e=>e.id)});G.amode=false;});
   // (Deselect lives on the always-visible ✕ button beside the zoom controls)
 }
 function updateCard(){ // light HP patcher — no DOM rebuild mid-press
@@ -8209,7 +8841,7 @@ function updateInspect(){ // patch the inspect card in place — never rebuild (
     const r=G.res[insp.res];
     if(!r){G.inspect=null;refreshPanel();return;}
     hint('<b>'+Math.ceil(r.amt)+'</b> '+(r.type==='food'?'food':r.type)+' left · '
-      +(mouseSeen?'right-click':'tap')+' with villagers to gather');
+      +(mouseSeen?'right-click':'tap')+' with villagers to '+(r.sub==='meat'?'butcher':'gather'));
   }else{
     const eu=G.units.find(u=>u.id===insp.id);
     const t=eu||G.blds.find(b=>b.id===insp.id);
@@ -8281,7 +8913,7 @@ function cycleIdleVill(){
   G.sel=[v.id];centerOn(v.x,v.y);refreshPanel();
 }
 function cycleIdleMil(){
-  const ms=G.units.filter(u=>u.p===0&&u.type!=='villager'&&u.state==='idle');
+  const ms=G.units.filter(u=>u.p===0&&u.type!=='villager'&&!isAnimal(u)&&u.state==='idle');
   if(!ms.length){toast('No idle soldiers');return;}
   const m=ms[idleMilIdx++%ms.length];
   G.sel=[m.id];centerOn(m.x,m.y);refreshPanel();
@@ -8299,13 +8931,13 @@ function tryTrainKey(b,ut){
   if(u.age!==undefined&&G.P[0].age<u.age){toast('Requires the '+AGES[u.age]);return;}
   if(!canAfford(0,uc)){toast('Not enough resources');return;}
   if(popUsed(0)>=popCap(0)){toast(civOf(0).noHouse?'Population full':'Build more houses — population full');return;}
-  pay(0,uc);b.queue.push(ut);updateTop();refreshPanel();
+  issue('train',{id:b.id,ut});
 }
 function tryAgeKey(b){
   if(G.P[0].age>=3||G.P[0].aging)return;
   const nc=ageCostOf(0,G.P[0].age+1);
   if(!canAfford(0,nc)){toast('Not enough resources');return;}
-  pay(0,nc);G.P[0].aging=true;b.queue.push('AGE');updateTop();refreshPanel();
+  issue('age',{id:b.id});
 }
 function startBuildKey(bt){
   const d=BLDS[bt];
@@ -8341,12 +8973,7 @@ window.addEventListener('keydown',e=>{
     if(ent){const c=ent.tx!==undefined?bldCenter(ent):ent;centerOn(c.x,c.y);}
     return;}
   if(e.key==='Delete'){
-    for(const id of G.sel){
-      const u=G.units.find(x=>x.id===id);
-      if(u&&u.p===0)u.hp=0;
-      const b=G.blds.find(x=>x.id===id);
-      if(b&&b.p===0&&b.type!=='tc')b.hp=0;
-    }
+    issue('del',{ids:G.sel.slice()});
     G.sel=[];refreshPanel();return;}
   if(k==='h'){selTC();return;}
   if(k==='.'){cycleIdleVill();return;}
