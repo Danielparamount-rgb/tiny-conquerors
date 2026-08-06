@@ -347,6 +347,7 @@
     </div>
     <button class="bigbtn" id="startBtn">⚔ &nbsp;Begin the Conquest</button>
     <button class="bigbtn alt" id="campBtn">📜 &nbsp;Campaign</button>
+    <button class="bigbtn alt" id="mpBtn">🤝 &nbsp;Play with Friends</button>
     <button class="bigbtn alt" id="contBtn" style="display:none">▶ &nbsp;Continue saved game</button>
     <div class="rule"></div>
     <details id="howto"><summary>📖 &nbsp;How to play</summary>
@@ -393,6 +394,76 @@
     <p class="sub">Eight trials of a Tiny Conqueror</p>
     <div id="campList"></div>
     <button class="bigbtn alt" id="campBack">← Back</button>
+  </div>
+</div>
+
+<div class="overlay" id="mpOverlay" style="display:none">
+  <div class="scroll">
+    <h1 style="font-size:24px">Play with Friends</h1>
+    <p class="sub" id="mpSub">One of you hosts and reads out the code</p>
+    <div id="mpConnect">
+      <p style="text-align:center;margin-bottom:2px"><b>Your name</b></p>
+      <input id="mpName" maxlength="16" placeholder="Daniel" autocomplete="off"
+        style="width:100%;padding:10px;border-radius:8px;border:2px solid #6b5330;background:#efe2bd;color:#241a10;font:inherit;font-size:15px;text-align:center">
+      <button class="bigbtn" id="mpHost">🏰 &nbsp;Host a battle</button>
+      <div class="rule"></div>
+      <p style="text-align:center;margin-bottom:2px"><b>Or join with a code</b></p>
+      <input id="mpCode" maxlength="4" placeholder="ABCD" autocomplete="off"
+        style="width:100%;padding:10px;border-radius:8px;border:2px solid #6b5330;background:#efe2bd;color:#241a10;font:inherit;font-size:22px;letter-spacing:.4em;text-align:center;text-transform:uppercase">
+      <button class="bigbtn alt" id="mpJoin">→ &nbsp;Join</button>
+    </div>
+    <div id="mpRoom" style="display:none">
+      <p class="goal" style="text-align:center;margin:2px 0 8px">
+        Room code<br><b id="mpRoomCode" style="font-size:34px;letter-spacing:.35em;font-family:Georgia,serif;color:#8a2f27"></b>
+      </p>
+      <div id="mpPlayers" style="text-align:left;font-size:13.5px;margin:8px 0"></div>
+      <div class="rule"></div>
+      <details id="mpCivPick"><summary>Your civilization: <b id="mpCivName">Britons</b></summary>
+        <div class="diff civgrid" id="mpCivGrid"></div>
+      </details>
+      <div id="mpHostCtl" style="display:none">
+        <p style="text-align:center;margin:9px 0 0"><b>Battlefield</b></p>
+        <div class="diff">
+          <button data-mm="0" class="sel">River</button>
+          <button data-mm="1">Black Forest</button>
+          <button data-mm="2">Hallowed</button>
+        </div>
+        <p style="text-align:center;margin:7px 0 0"><b>Computer opponents</b></p>
+        <div class="diff">
+          <button data-ma="0" class="sel">None</button>
+          <button data-ma="1">1</button>
+          <button data-ma="2">2</button>
+          <button data-ma="3">3</button>
+        </div>
+        <p style="text-align:center;margin:7px 0 0"><b>Their skill · Pace</b></p>
+        <div class="diff">
+          <button data-md="0">Squire</button>
+          <button data-md="1" class="sel">Knight</button>
+          <button data-md="2">Warlord</button>
+        </div>
+        <div class="diff">
+          <button data-mt="0" class="sel">Free-for-all</button>
+          <button data-mt="1">Two teams</button>
+        </div>
+        <div class="diff">
+          <button data-mb="0" class="sel">Standard</button>
+          <button data-mb="1">⚡ Turbo</button>
+        </div>
+        <button class="bigbtn" id="mpStart">⚔ &nbsp;Begin the Battle</button>
+      </div>
+      <p class="sub" id="mpWait" style="margin:10px 0 0">Waiting for the host to begin…</p>
+    </div>
+    <p class="sub" id="mpStatus" style="color:#8a2f27;min-height:18px;margin:8px 0 0"></p>
+    <button class="bigbtn alt" id="mpBack">← Back</button>
+  </div>
+</div>
+
+<div class="overlay" id="netHalt" style="display:none">
+  <div class="scroll">
+    <h1 style="font-size:22px" id="netHaltTitle">Connection lost</h1>
+    <p class="sub" id="netHaltSub"></p>
+    <p id="netHaltBody" style="text-align:center"></p>
+    <button class="bigbtn" id="netHaltBtn">Back to the start screen</button>
   </div>
 </div>
 
@@ -622,8 +693,8 @@ function applyUt(p,id){
   if(id==='eldorado')bump(u=>u.type==='eagle',40);
   if(id==='zealotry')bump(u=>u.type==='mameluke',30);
   if(id==='supremacy')bump(u=>u.type==='villager',40);
-  if(id==='atheism'&&p===0)updateFog();
-  if(p===0){snd('done');toast(UTECHS[id].name+' researched!');
+  if(id==='atheism'&&p===localP)updateFog();
+  if(p===localP){snd('done');toast(UTECHS[id].name+' researched!');
     feed(UTECHS[id].name+' — researched');refreshPanel();}
 }
 function trainTimeOf(b,ut){
@@ -719,12 +790,12 @@ function applyEco(p,id){
   if(id==='bloodlines')bump(u=>UNITS[u.type].cav&&!UNITS[u.type].monk,20);
   if(id==='sanc')for(const u of G.units)if(u.p===p&&UNITS[u.type].monk){
     u.maxhp=Math.round(u.maxhp*1.5);u.hp=Math.round(u.hp*1.5);}
-  if(p===0){snd('done');updateTop();refreshPanel();}
+  if(p===localP){snd('done');updateTop();refreshPanel();}
 }
 function applyUni(p,id){
   if(id==='mas'||id==='arch') // retroactive: standing walls thicken too
     for(const b of G.blds)if(b.p===p){b.maxhp=Math.round(b.maxhp*1.1);b.hp=Math.round(b.hp*1.1);}
-  if(p===0){snd('done');feed(UNI_TECHS[id].name+' — researched');updateTop();refreshPanel();}
+  if(p===localP){snd('done');feed(UNI_TECHS[id].name+' — researched');updateTop();refreshPanel();}
 }
 function bsOf(p){const st=G.P[p];
   if(!st.bs)st.bs={atk:0,arw:0,ia:0,aa:0,ca:0};
@@ -778,6 +849,14 @@ let G=null, diffSel=0, civSel=0, mapSel=0, playersSel=2, teamSel=0, turboSel=0, 
    padded out to this index in newGame so nothing ever indexes a hole. */
 const GAIA=8;
 function isAnimal(u){return !!(u&&UNITS[u.type]&&UNITS[u.type].animal);}
+/* Which slot THIS machine is playing. The simulation is player-indexed and
+   identical on every peer; only the view differs — the panel, the resource bar,
+   the fog, the warnings and the win test all read localP rather than a
+   hardcoded 0. Solo play leaves it at 0, so nothing changes there. */
+let localP=0;
+let humanSlots=[0];   // slots with a person behind them; the rest get an AI
+let netCivs=null;     // per-slot civ choices from a lobby, or null for "roll for the AI"
+let netTeams=null;    // per-slot team ids from a lobby, or null to use teamSel
 /* ---------- deterministic simulation RNG (multiplayer foundation) ----------
    Every random draw that changes GAME STATE must come from SR()/SRi(), seeded
    once per match. Two machines given the same seed and the same command stream
@@ -819,14 +898,14 @@ const MISSIONS=[
   {id:0,name:'First Blood',map:0,diff:0,
    blurb:'A rival squire underestimates you. Raise your village and burn his Town Hall.',
    win:{type:'raze'},
-   setup(){missionSquad(0,'militia',4,START[0][0]+3,START[0][1]+4);},
+   setup(){missionSquad(localP,'militia',4,START[localP][0]+3,START[localP][1]+4);},
    obj:'Destroy the enemy Town Hall. Send a villager at the sheep first — meat beats berries.'},
   {id:1,name:'Hold the Fords',map:0,diff:2,
    blurb:'A warlord marches on the river crossings. Hold out for ten minutes.',
    win:{type:'survive',time:600},
-   setup(){G.P[0].age=1;G.P[0].w+=100;
-     for(let i=0;i<3;i++)addUnit(0,'spearman',START[0][0]+3+i,START[0][1]+4);
-     for(let i=0;i<2;i++)addUnit(0,'archer',START[0][0]+3+i,START[0][1]+5);},
+   setup(){G.P[localP].age=1;G.P[localP].w+=100;
+     for(let i=0;i<3;i++)addUnit(localP,'spearman',START[localP][0]+3+i,START[localP][1]+4);
+     for(let i=0;i<2;i++)addUnit(localP,'archer',START[localP][0]+3+i,START[localP][1]+5);},
    obj:'Survive for 10 minutes. Wall the fords!'},
   {id:2,name:'The Black Forest Gambit',map:1,diff:2,
    blurb:'Deep in the dark woods a Castle-Age tyrant hoards the gold. Cut through and end him.',
@@ -838,18 +917,18 @@ const MISSIONS=[
   {id:3,name:'The Relic War',map:0,diff:1,
    blurb:'Holy relics lie scattered across the land. Your monks must claim three before the enemy claims you.',
    win:{type:'relics',n:3},
-   setup(){G.P[0].age=2;G.P[0].w+=200;G.P[0].g+=100;
-     const [bx,by]=START[0];
+   setup(){G.P[localP].age=2;G.P[localP].w+=200;G.P[localP].g+=100;
+     const [bx,by]=START[localP];
      let placed=false;
      for(let r=3;r<9&&!placed;r++)for(let a=0;a<12&&!placed;a++){
        const tx=Math.round(bx+Math.cos(a/12*6.283)*r),ty=Math.round(by+Math.sin(a/12*6.283)*r);
-       if(canPlace(tx,ty,2,0)){addBld(0,'monastery',tx,ty,true);placed=true;}}
-     addUnit(0,'monk',bx+1,by+4);},
+       if(canPlace(tx,ty,2,0)){addBld(localP,'monastery',tx,ty,true);placed=true;}}
+     addUnit(localP,'monk',bx+1,by+4);},
    obj:'Enshrine 3 relics in your Monastery. Monks pick them up — tap a relic, then tap the Monastery.'},
   {id:4,name:'Two Fronts',map:0,diff:2,foes:2,vsWorld:true,
    blurb:'Two warlords have sworn an alliance to divide your lands between them. Disappoint them both.',
    win:{type:'raze'},
-   setup(){G.P[0].w+=150;},
+   setup(){G.P[localP].w+=150;},
    obj:'Destroy BOTH enemy Town Halls. They share vision — watch every ford.'},
   /* ---- the later campaign, written for the systems the first five never saw:
      siege engines, the navy, and the Wonder ---- */
@@ -857,12 +936,12 @@ const MISSIONS=[
    blurb:'A tyrant sits behind stone and calls it peace. Bring the engines and teach him otherwise.',
    win:{type:'raze'},
    setup(){
-     const st=G.P[0];st.age=2;st.w+=500;st.g+=350;st.f+=250;
-     const [bx,by]=START[0];
-     missionBld(0,'siege',bx,by,3,9);
-     missionBld(0,'blacksmith',bx,by,3,10);
-     addUnit(0,'ram',bx+2,by+4);
-     missionSquad(0,'spearman',3,bx,by+5);
+     const st=G.P[localP];st.age=2;st.w+=500;st.g+=350;st.f+=250;
+     const [bx,by]=START[localP];
+     missionBld(localP,'siege',bx,by,3,9);
+     missionBld(localP,'blacksmith',bx,by,3,10);
+     addUnit(localP,'ram',bx+2,by+4);
+     missionSquad(localP,'spearman',3,bx,by+5);
      // the enemy is dug in: Castle Age, a castle, and a stone curtain with one gate
      G.P[1].age=2;G.P[1].w+=400;G.P[1].g+=300;
      const [ex,ey]=START[1];
@@ -886,8 +965,8 @@ const MISSIONS=[
      }
      G.ford={};
      refreshTerrain();updateFog();
-     const st=G.P[0];st.age=1;st.w+=450;st.g+=200;
-     const [bx,by]=START[0];
+     const st=G.P[localP];st.age=1;st.w+=450;st.g+=200;
+     const [bx,by]=START[localP];
      // the shore is ~30 tiles off — a radius scan from the Town Hall never finds
      // it, so walk the water list for the nearest tile the way the AI does
      let near=null,nd=1e9;
@@ -898,16 +977,16 @@ const MISSIONS=[
      let dk=null;
      if(near)for(let r=0;r<9&&!dk;r++)for(let dy=-r;dy<=r&&!dk;dy++)for(let dx=-r;dx<=r&&!dk;dx++){
        if(Math.max(Math.abs(dx),Math.abs(dy))!==r)continue;
-       if(canPlaceDock(near.x+dx,near.y+dy))dk=addBld(0,'dock',near.x+dx,near.y+dy,true);
+       if(canPlaceDock(near.x+dx,near.y+dy))dk=addBld(localP,'dock',near.x+dx,near.y+dy,true);
      }
      if(dk){
        for(const t of['transport','transport','galley','fishing']){
          const s=nearFree(dk.tx+1,dk.ty+1,7,true);
-         if(s)addUnit(0,t,s.x,s.y);
+         if(s)addUnit(localP,t,s.x,s.y);
        }
        const c=bldCenter(dk);centerOn(c.x,c.y);
      }
-     missionSquad(0,'militia',4,bx+2,by+4);
+     missionSquad(localP,'militia',4,bx+2,by+4);
      G.P[1].age=1;G.P[1].w+=350;
    },
    obj:'No ford remains. Ferry an army across in Transports — or sink his fleet and starve him.'},
@@ -915,15 +994,16 @@ const MISSIONS=[
    blurb:'Let them come. Raise the wonder of the age, and hold it while the world burns.',
    win:{type:'wonder'},
    setup(){
-     const st=G.P[0];st.age=3;st.f+=900;st.w+=1400;st.g+=1200;
-     const [bx,by]=START[0];
-     missionBld(0,'castle',bx,by,3,8);
-     missionBld(0,'blacksmith',bx,by,3,10);
-     missionBld(0,'university',bx,by,3,11);
-     missionSquad(0,'knight',4,bx+2,by+4);
-     missionSquad(0,'archer',4,bx-2,by+4);
-     missionSquad(0,'monk',1,bx,by+3);
-     for(let p=1;p<NP;p++){G.P[p].age=3;G.P[p].w+=600;G.P[p].g+=500;}
+     const st=G.P[localP];st.age=3;st.f+=900;st.w+=1400;st.g+=1200;
+     const [bx,by]=START[localP];
+     missionBld(localP,'castle',bx,by,3,8);
+     missionBld(localP,'blacksmith',bx,by,3,10);
+     missionBld(localP,'university',bx,by,3,11);
+     missionSquad(localP,'knight',4,bx+2,by+4);
+     missionSquad(localP,'archer',4,bx-2,by+4);
+     missionSquad(localP,'monk',1,bx,by+3);
+     for(let p=0;p<NP;p++){if(p===localP)continue;
+       G.P[p].age=3;G.P[p].w+=600;G.P[p].g+=500;}
    },
    obj:'Build a Wonder and hold it until the countdown ends. Both warlords will come for it.'},
 ];
@@ -965,26 +1045,36 @@ function newGame(){
   // frames fast (12k trees at 128 dropped the whole map view to ~22fps).
   setMapSize(mapSel===1?(NP<=4?96:112):(NP<=2?96:NP<=4?112:128));
   START=genStarts(NP);
-  // team assignment: FFA / two teams / everyone against you
+  // team assignment: FFA / two teams / everyone against you.
+  // "you" is localP, not slot 0 — in a match you may be sitting in any seat.
   let teams;
-  if(mission)teams=mission.vsWorld?[0].concat(Array(NP-1).fill(1)):Array.from({length:NP},(_,i)=>i);
+  if(netTeams)teams=netTeams.slice();          // a lobby decided it
+  else if(mission)teams=mission.vsWorld?Array.from({length:NP},(_,i)=>i===localP?0:1)
+                                       :Array.from({length:NP},(_,i)=>i);
   else if(teamSel===1){const half=Math.ceil(NP/2);
     teams=Array.from({length:NP},(_,i)=>i<half?0:1);}
-  else if(teamSel===2)teams=[0].concat(Array(NP-1).fill(1));
+  else if(teamSel===2)teams=Array.from({length:NP},(_,i)=>i===localP?0:1);
   else teams=Array.from({length:NP},(_,i)=>i);
   const mkP=c=>{const cv=CIVS[c]; // manual start bonuses/penalties
     return{f:200+(cv.startF||0),w:200+(cv.startW||0),g:100,age:0,ageT:0,aging:false,civ:c,uts:[],
       bs:{atk:0,arw:0,ia:0,aa:0,ca:0},pt:false,uni:{},
       eco:Object.assign({},cv.freeTech||{}), // 1.0B: Aztec free Loom, Byzantine free Town Watch
       mon:{}};};
-  const P=[mkP(civSel)];
-  const used=[civSel];
-  const ais=[null];
-  for(let p=1;p<NP;p++){
-    let c;do{c=SRi(CIVS.length);}while(used.includes(c));
+  // Player slots. A slot listed in humanSlots gets no AI — solo play is just the
+  // default humanSlots=[0]. Civ choice: mine comes from the start screen, other
+  // people's from the lobby (netCivs), and the rest are rolled from the seeded
+  // RNG so every peer rolls the same ones. The draw order below is unchanged
+  // from the single-player version, so old seeds still reproduce old games.
+  const P=[],used=[],ais=[];
+  for(let p=0;p<NP;p++){
+    let c;
+    if(p===localP)c=civSel;
+    else if(netCivs&&netCivs[p]!=null)c=netCivs[p];
+    else{do{c=SRi(CIVS.length);}while(used.includes(c));}
     used.push(c);
     P.push(mkP(c));
-    ais.push({wave:0,nextAtk:DIFF[diffSel].firstWave+(p-1)*40,tick:.3*(p-1),attacking:false});
+    ais.push(humanSlots.includes(p)?null
+      :{wave:0,nextAtk:DIFF[diffSel].firstWave+(p-1)*40,tick:.3*(p-1),attacking:false});
   }
   // Pad every per-player array out to GAIA with inert entries. Holes in these
   // arrays are the real hazard: stateHash maps over G.P, and a hole there is an
@@ -1015,7 +1105,7 @@ function newGame(){
       addUnit(p,'monk',bx+2,by+3);
     }
   }
-  centerOn(START[0][0]+1,START[0][1]+1);
+  centerOn(START[localP][0]+1,START[localP][1]+1);
   updateFog();
   refreshTerrain();
 }
@@ -1349,6 +1439,8 @@ function addUnit(p,type,tx,ty){
   if(d.cav&&!d.monk&&ecoTier(p,'bloodlines'))hp+=20;          // Bloodlines
   if(d.monk&&ecoTier(p,'sanc'))hp=Math.round(hp*1.5);         // Sanctity (monastery)
   hp=Math.round(hp);
+  // `face` stays keyed to slot 0, NOT localP: it is written into the unit record,
+  // so keying it to the viewer would have two peers build different units.
   const u={id:uid++,p,type,x:tx+.5,y:ty+.5,hp,maxhp:hp,face:p===0?1:-1,flash:0,
     hdg:Math.atan2(MAP/2-(ty+.5),MAP/2-(tx+.5)),spd:0,vx:0,vy:0,gaitPh:0,
     state:'idle',path:null,target:null,carry:0,carryType:null,cd:0,gatherT:0,resKey:null,farm:null};
@@ -1662,18 +1754,18 @@ function finishConvert(u,t,isBld){
   const c=isBld?bldCenter(t):t;
   if(!isBld&&ecoTier(t.p,'her')){                    // Heresy: death before betrayal
     t.hp=0;
-    if(t.p===0)feed('Your soldier chose death over conversion',true);
+    if(t.p===localP)feed('Your soldier chose death over conversion',true);
   }else if(isBld){
     ejectGarrison(t);                                // the old garrison flees its post
     t.queue=[];t.qt=0;
-    if(t.p===0)feed('Warning! Your '+BLDS[t.type].name+' has been converted!',true);
+    if(t.p===localP)feed('Warning! Your '+BLDS[t.type].name+' has been converted!',true);
     t.p=u.p;
-    if(u.p===0)feed(BLDS[t.type].name+' converted!');
+    if(u.p===localP)feed(BLDS[t.type].name+' converted!');
   }else{
-    if(t.p===0)feed('Warning! A monk has converted your '+unitName(t.type,t.p)+'!',true);
+    if(t.p===localP)feed('Warning! A monk has converted your '+unitName(t.type,t.p)+'!',true);
     t.p=u.p;t.state='idle';t.path=null;t.target=null;t.resKey=null;t.farm=null;
     t.am=null;t.wave=null;t.relic=null;
-    if(u.p===0)feed(unitName(t.type,t.p)+' converted!');
+    if(u.p===localP)feed(unitName(t.type,t.p)+' converted!');
   }
   for(let i=0;i<7;i++)G.fx.push({x:c.x+(Math.random()-.5),y:c.y-.4-Math.random(),
     vx:(Math.random()-.5)*.6,vy:-.7-Math.random()*.5,life:.7,max:.7,r:1.6,kind:'chip',col:'#f0e29a'});
@@ -1713,9 +1805,14 @@ function cmdBuild(u,b){if(u.type!=='villager')return;
    Handlers re-validate everything — ownership, cost, age, placement. The UI's
    own checks exist only to grey out buttons and explain refusals; a command
    arriving over a wire is never trusted. */
-let netMode=false;   // true once a lockstep match owns the clock
-let localP=0;        // which player this machine speaks for
+let netMode=false;   // true once a lockstep match owns the clock (localP is declared up with the state)
 let cmdQ=[];         // commands issued this turn, not yet applied
+// Put the seat back to solo. Every path that starts a NON-network game calls
+// this, so a match that ended (or failed) can never leave the next skirmish
+// believing it is player 3 of a room that no longer exists.
+function resetNet(){
+  netMode=false;localP=0;humanSlots=[0];netCivs=null;netTeams=null;cmdQ=[];
+}
 function issue(k,d){
   const c=Object.assign({k,p:localP},d);
   cmdQ.push(c);
@@ -1723,10 +1820,14 @@ function issue(k,d){
   return c;
 }
 function drainCmds(){
-  if(!cmdQ.length)return;
+  // In a match the queue is not ours to apply — it is shipped to the peers and
+  // comes back scheduled onto an agreed turn. Applying it here as well would
+  // execute every local order twice, and only on this machine.
+  if(netMode||!cmdQ.length)return;
   const q=cmdQ;cmdQ=[];
   for(const c of q)applyCmd(c);
 }
+function takeCmds(){const q=cmdQ;cmdQ=[];return q;}
 function applyCmd(c){const h=CMDS[c.k];if(h)h(c);}
 // Lockstep entry point: one command array per player, applied in player order.
 // Deliberately NOT a sort — Array.sort's tie-breaking is one more thing two
@@ -1915,6 +2016,197 @@ const CMDS={
       const b=G.blds.find(x=>x.id===id);
       if(b&&b.p===c.p&&b.type!=='tc')b.hp=0;}},
 };
+/* ===================== lockstep networking (steps 3-5) =====================
+   Peers exchange COMMANDS, never state. Every machine runs the identical
+   deterministic simulation, so if they agree on which commands happened on
+   which turn they agree on everything.
+
+   A turn is one 0.05s sim tick. Orders you give now are scheduled NET_LAG turns
+   ahead; that gap is the budget for the round trip, and it is why the game does
+   not stutter every time a packet is late. A turn may only execute once every
+   peer's command list for it has arrived — so a peer that falls behind stalls
+   everyone rather than quietly playing a different game.
+
+   Every second each peer posts stateHash(); the relay shouts if two disagree.
+   A desync is a bug, not a hiccup, so the match halts loudly instead of
+   drifting for ten minutes. */
+const NET_LAG=5;              // 250ms of scheduling slack
+let netSock=null,netRoom='',netHost=false,netName='';
+let netTurn=0;                // the next turn to execute
+let netIn=new Map();          // turn -> {seat: cmds}
+let netSent=-1;               // highest turn we have shipped commands for
+let netStall=0,netStallSeat=-1;
+let netLobby={players:[],cfg:null,host:0};
+let netPlayers=[];            // seat -> {seat,name,civ,team} for the running match
+let netGone=new Set();        // seats that dropped — we stall on them forever otherwise
+let netLeftName='';           // who dropped, for the message when the stall runs out
+function netUrl(){
+  const h=location.hostname;
+  if(h==='localhost'||h==='127.0.0.1')return 'ws://localhost:8080';
+  return 'wss://tiny-conquerors-relay.onrender.com';
+}
+function netAvailable(){
+  // The artifact sandbox blocks every outbound request, so there is nothing to
+  // connect to there. Say so plainly rather than spinning on a dead socket.
+  return location.protocol==='http:'||location.protocol==='https:';
+}
+function netSend(o){if(netSock&&netSock.readyState===1)netSock.send(JSON.stringify(o));}
+function netClose(){
+  if(netSock){try{netSock.onclose=null;netSock.close();}catch(e){}}
+  netSock=null;
+}
+function netReset(){
+  netClose();netRoom='';netHost=false;
+  netTurn=0;netIn=new Map();netSent=-1;netStall=0;netStallSeat=-1;
+  netLobby={players:[],cfg:null,host:0};netPlayers=[];
+  netGone=new Set();netLeftName='';
+}
+function netConnect(then){
+  if(!netAvailable()){mpStatus('Multiplayer needs the web app — open tiny-conquerors.onrender.com');return;}
+  if(netSock&&netSock.readyState===1)return then&&then();
+  mpStatus('Connecting…');
+  let s;
+  try{s=new WebSocket(netUrl());}catch(e){mpStatus('Could not reach the relay');return;}
+  netSock=s;
+  s.onopen=()=>{mpStatus('');then&&then();};
+  s.onerror=()=>{
+    // Two honest possibilities, and the player can't tell them apart from here:
+    // the free relay is cold-starting, or this is the artifact preview, whose
+    // sandbox blocks every outbound connection.
+    mpStatus('Could not reach the relay. If this is the shared preview link, use the web app at tiny-conquerors.onrender.com — otherwise the relay is waking up, try again in half a minute.');
+  };
+  s.onclose=()=>{
+    netSock=null;
+    if(netMode)netHalt('Connection lost','The relay stopped answering.',
+      'Everyone else has stopped too — a lockstep match cannot go on without every player.');
+    else mpStatus('Disconnected');
+  };
+  s.onmessage=e=>{
+    let m;try{m=JSON.parse(e.data);}catch(err){return;}
+    netOn(m);
+  };
+}
+function netOn(m){
+  switch(m.t){
+    case 'joined':
+      netRoom=m.code;netHost=m.host;localP=m.seat;
+      mpShowRoom();break;
+    case 'lobby':
+      netLobby=m;netHost=(m.host===localP);mpRenderLobby();break;
+    case 'left':
+      netGone.add(m.seat);
+      mpStatus(m.name+' left the room');
+      if(netMode){
+        feed(m.name+' has left the battle',true);
+        if(netPlayers.some(p=>p.seat===m.seat))netLeftName=m.name;
+      }
+      break;
+    case 'err':
+      mpStatus(m.msg);break;
+    case 'chat':
+      if(G)feed(m.name+': '+m.msg);break;
+    case 'start':
+      netBegin(m);break;
+    case 'cmds':{
+      let bag=netIn.get(m.turn);
+      if(!bag){bag={};netIn.set(m.turn,bag);}
+      bag[m.seat]=m.cmds;
+      break;}
+    case 'desync':
+      netHalt('The battle has drifted apart',
+        'Turn '+m.turn+' — the players stopped agreeing on the state of the world.',
+        'This is a bug in the game, not your connection. Nothing you did caused it.');
+      break;
+  }
+}
+/* ---- starting a match from a lobby ---- */
+function netBegin(m){
+  const players=m.players||[];
+  netPlayers=players;
+  humanSlots=players.map(p=>p.seat);
+  const cfg=m.cfg||{};
+  const ai=Math.max(0,Math.min(8-players.length,cfg.ai|0));
+  NP=players.length+ai;
+  playersSel=NP;
+  mapSel=cfg.map|0;diffSel=cfg.diff==null?1:cfg.diff|0;turboSel=cfg.turbo|0;
+  teamSel=cfg.team|0;
+  // Civs and teams come from the lobby, not from this machine's start screen,
+  // so every peer builds the same players.
+  netCivs=[];netTeams=null;
+  for(const p of players)netCivs[p.seat]=p.civ;
+  civSel=netCivs[localP]!=null?netCivs[localP]:0;
+  if((cfg.team|0)===1){
+    netTeams=[];
+    const half=Math.ceil(NP/2);
+    for(let q=0;q<NP;q++)netTeams[q]=q<half?0:1;
+  }
+  mission=null;
+  netMode=true;
+  netTurn=0;netIn=new Map();netSent=-1;netStall=0;
+  cmdQ=[];
+  pendingSeed=m.seed>>>0;
+  document.getElementById('mpOverlay').style.display='none';
+  document.getElementById('startOverlay').style.display='none';
+  initAudio();if(AC&&AC.state==='suspended')AC.resume();
+  begin();
+  netTopUp();      // open the command window before the first turn runs
+  const names=players.map(p=>p.name).join(', ');
+  toast('Battle begun — '+names+(ai?' and '+ai+' computer opponent'+(ai>1?'s':''):''));
+  feed('Multiplayer battle begun');
+}
+/* ---- the turn machinery ---- */
+function netSeatCmds(turn){
+  const bag=netIn.get(turn);
+  if(!bag)return null;
+  const arr=[];
+  for(const p of netPlayers){
+    const c=bag[p.seat];
+    if(!c)return null;          // still waiting on this seat
+    arr[p.seat]=c;
+  }
+  return arr;
+}
+function netWaitingOn(turn){
+  const bag=netIn.get(turn)||{};
+  for(const p of netPlayers)if(!bag[p.seat])return p;
+  return null;
+}
+function netStore(seat,turn,cmds){
+  let bag=netIn.get(turn);
+  if(!bag){bag={};netIn.set(turn,bag);}
+  bag[seat]=cmds;
+}
+function netTopUp(){
+  // keep the outbound window full: every turn up to netTurn+NET_LAG has been
+  // told what we intend to do, even if the answer is "nothing"
+  while(netSent<netTurn+NET_LAG){
+    const turn=netSent+1;
+    const cmds=takeCmds();
+    netStore(localP,turn,cmds);
+    netSend({t:'cmds',turn,cmds});
+    netSent=turn;
+  }
+}
+function netStepReady(){return !!netSeatCmds(netTurn);}
+function netRunTurn(){
+  const arr=netSeatCmds(netTurn);
+  if(!arr)return false;
+  applyTick(arr);
+  netIn.delete(netTurn);
+  step(.05);
+  netTurn++;
+  netTopUp();
+  if(netTurn%20===0)netSend({t:'hash',turn:netTurn,h:stateHash()});
+  return true;
+}
+function netHalt(title,sub,body){
+  netMode=false;netClose();
+  if(G)G.paused=true;
+  document.getElementById('netHaltTitle').textContent=title;
+  document.getElementById('netHaltSub').textContent=sub||'';
+  document.getElementById('netHaltBody').textContent=body||'';
+  document.getElementById('netHalt').style.display='flex';
+}
 function dropoffFor(u){let best=null,bd=1e9;
   const fisher=UNITS[u.type].fisher;
   for(const b of G.blds)if(b.p===u.p&&b.built&&BLDS[b.type].drop){
@@ -2008,9 +2300,11 @@ function step(dt){
     G.inspT=(G.inspT||0)+dt;
     if(G.inspT>.3){G.inspT=0;updateCard();}
   }
-  // AI trickle (cheat by difficulty)
+  // AI trickle (cheat by difficulty) — every slot with an AI behind it, which in
+  // a multiplayer match is no longer simply "everyone but player 0"
   const tr=DIFF[diffSel].trickle*dt;
-  for(let p=1;p<NP;p++){G.P[p].f+=tr;G.P[p].w+=tr;G.P[p].g+=tr*.6;}
+  for(let p=0;p<NP;p++){if(!G.ais[p])continue;
+    G.P[p].f+=tr;G.P[p].w+=tr;G.P[p].g+=tr*.6;}
   // buildings
   for(const b of G.blds){
     const d=BLDS[b.type];
@@ -2021,8 +2315,8 @@ function step(dt){
         const ut=b.queue[0];
         if(ut==='AGE'){
           if(b.qt>=AGE_TIME[G.P[b.p].age+1]){b.queue.shift();b.qt=0;G.P[b.p].age++;G.P[b.p].aging=false;
-            if(b.p===0){toast('You have advanced to the '+AGES[G.P[0].age]+'!');
-              feed('You have advanced to the '+AGES[G.P[0].age]);snd('age');updateTop();refreshPanel();
+            if(b.p===localP){toast('You have advanced to the '+AGES[G.P[localP].age]+'!');
+              feed('You have advanced to the '+AGES[G.P[localP].age]);snd('age');updateTop();refreshPanel();
               G.ageFx=1.4; // golden bloom over the new age
               const ac=bldCenter(b);
               for(let i=0;i<22;i++)G.fx.push({x:ac.x+(Math.random()-.5)*2.4,y:ac.y+(Math.random()-.5)*1.6,
@@ -2034,9 +2328,9 @@ function step(dt){
             ?nearFree(b.tx+1,b.ty+1,5,true)   // ships launch onto open water
             :nearFree(b.tx+Math.floor(b.size/2),b.ty+b.size,4))||{x:b.tx,y:b.ty+b.size};
           const u=addUnit(b.p,ut,spot.x,spot.y);
-          if(b.p===0&&ut!=='villager')G.stats.trained++;
+          if(b.p===localP&&ut!=='villager')G.stats.trained++;
           if(b.p>0&&ut!=='villager')aiJoinDefense(u);
-          if(b.p===0){snd('train');refreshPanel();feed(unitName(ut,0)+' Created');}
+          if(b.p===localP){snd('train');refreshPanel();feed(unitName(ut,localP)+' Created');}
         }
       }
       // the garrison mends inside safe walls; Herbal Medicine works wonders
@@ -2085,11 +2379,11 @@ function step(dt){
     if(u._gar){const b=u._gar;u._gar=null;u.path=null;
       G.units.splice(i,1);b.gar.push(u);
       G.sel=G.sel.filter(id=>id!==u.id);
-      if(b.p===0)garred=true;}
+      if(b.p===localP)garred=true;}
     else if(u._garU){const rm=u._garU;u._garU=null;u.path=null;
       G.units.splice(i,1);rm.gar.push(u);
       G.sel=G.sel.filter(id=>id!==u.id);
-      if(rm.p===0)garred=true;}}
+      if(rm.p===localP)garred=true;}}
   if(garred){snd('done');refreshPanel();}
   // separation — stationary push + weak lateral shove between MOVING allies so
   // marching blobs spread out instead of stacking.
@@ -2206,7 +2500,7 @@ function step(dt){
   // fog
   G.visT-=dt;if(G.visT<=0){G.visT=.35;updateFog();}
   // AI think
-  for(let p=1;p<NP;p++){const ai=G.ais[p];if(!ai)continue;
+  for(let p=0;p<NP;p++){const ai=G.ais[p];if(!ai)continue;
     ai.tick-=dt;if(ai.tick<=0){ai.tick=.6;aiThink(p,ai);}}
   // relic gold trickle + monastery loss handling
   for(const r of G.relics){
@@ -2219,9 +2513,9 @@ function step(dt){
   if((!mission||mission.win.type==='wonder')&&G.wonderT){
     const wb=G.blds.find(b=>b.id===G.wonderT.id&&b.built&&b.hp>0);
     if(!wb){
-      feed(allied(G.wonderT.p,0)?'Your Wonder has fallen!':'The enemy Wonder has fallen!',!allied(G.wonderT.p,0)?false:true);
+      feed(allied(G.wonderT.p,localP)?'Your Wonder has fallen!':'The enemy Wonder has fallen!',!allied(G.wonderT.p,localP)?false:true);
       snd('horn');G.wonderT=null;updateTop();
-    }else if(G.t>=G.wonderT.end)return endGame(allied(G.wonderT.p,0));
+    }else if(G.t>=G.wonderT.end)return endGame(allied(G.wonderT.p,localP));
   }
   // Relic victory: one team holds every relic long enough
   if(!mission&&G.relics.length>=3){
@@ -2247,17 +2541,17 @@ function step(dt){
   if(mission&&mission.win.type==='survive'&&G.t>=mission.win.time)return endGame(true);
   if(mission&&mission.win.type==='relics'){
     const dep=G.relics.filter(r=>{if(!r.mon)return false;
-      const b=G.blds.find(bb=>bb.id===r.mon);return b&&b.p===0;}).length;
+      const b=G.blds.find(bb=>bb.id===r.mon);return b&&b.p===localP;}).length;
     if(dep>=mission.win.n)return endGame(true);
   }
-  const pTC=G.blds.find(b=>b.p===0&&b.type==='tc');
-  const eTC=G.blds.find(b=>!allied(b.p,0)&&b.type==='tc');
+  const pTC=G.blds.find(b=>b.p===localP&&b.type==='tc');
+  const eTC=G.blds.find(b=>!allied(b.p,localP)&&b.type==='tc');
   if(!eTC)endGame(true);else if(!pTC)endGame(false);
 }
 function wonderRaised(b){
   const bonus=G.P.some((st,q)=>hasUt(q,'atheism'))?100:0; // Hun Atheism stretches the clock
   G.wonderT={p:b.p,id:b.id,end:G.t+300+bonus};
-  if(allied(b.p,0))feed('Your Wonder is complete! Defend it until the countdown ends!');
+  if(allied(b.p,localP))feed('Your Wonder is complete! Defend it until the countdown ends!');
   else feed('Warning! The '+CIVS[G.P[b.p].civ].name+' have raised a Wonder — destroy it!',true);
   snd('horn');updateTop();
 }
@@ -2438,7 +2732,7 @@ function dealDamage(hit,amt,fromP,ranged){
     amt=Math.max(1,amt-bsArmorOf(hit.ent)); // blacksmith armor: flat reduction
   hit.ent.hp-=amt;hit.ent.flash=.16;
   const hx=hit.bld?bldCenter(hit.ent).x:hit.ent.x,hy=hit.bld?bldCenter(hit.ent).y:hit.ent.y;
-  if(fromP!==0&&hit.ent.p===0){ // minimap attack ping (separate from the toast throttle)
+  if(fromP!==localP&&hit.ent.p===localP){ // minimap attack ping (separate from the toast throttle)
     const pgs=G.pings||(G.pings=[]);
     const lp=pgs[pgs.length-1];
     if(!lp||G.t-lp.t>2||Math.hypot(hx-lp.x,hy-lp.y)>10){
@@ -2447,7 +2741,7 @@ function dealDamage(hit,amt,fromP,ranged){
   if(tileVis(hx,hy))snd(ranged==='siege'?'crash':ranged?'hit':'sword',hx,hy);
   G.fx.push({x:hx+(Math.random()-.5)*.5,y:hy+(Math.random()-.5)*.5,vx:0,vy:-.6,
     life:.28,max:.28,r:3,kind:'spark'});
-  if(fromP!==0&&hit.ent.p===0&&G.t-G.lastRaidToast>18){G.lastRaidToast=G.t;
+  if(fromP!==localP&&hit.ent.p===localP&&G.t-G.lastRaidToast>18){G.lastRaidToast=G.t;
     if(fromP===GAIA)feed('A wild boar has turned on your hunters!',true);
     else{feed('Warning! You are being attacked by the '+CIVS[G.P[fromP].civ].name+'!',true);snd('horn');}}
 }
@@ -2574,7 +2868,7 @@ function updateUnit(u,dt){
         if(ecoTier(u.p,'caravan'))gold=Math.round(gold*1.3);   // Caravan
         if(teamHas(u.p,'tradeGold'))gold=Math.round(gold*1.33); // Spanish team bonus
         G.P[u.p].g+=gold;
-        if(u.p===0){updateTop();
+        if(u.p===localP){updateTop();
           G.fx.push({x:u.x,y:u.y-.6,vx:0,vy:-.8,life:.5,max:.5,r:2,kind:'chip',col:'#ffd75e'});}
         u.state='idle';u.scanT=.5; // brief rest, then sail again
       }else if(done){u.path=uPath(u,c.x,c.y)||[];if(!u.path.length)u.state='idle';}
@@ -2625,7 +2919,7 @@ function updateUnit(u,dt){
       const done=followPath(u,dt);
       if(Math.hypot(r.x+.5-u.x,r.y+.5-u.y)<1.2){
         r.held=u.id;u.relic=r.id;u.relicT=null;u.state='idle';
-        if(u.p===0)toast('Relic recovered — bring it to a Monastery');
+        if(u.p===localP)toast('Relic recovered — bring it to a Monastery');
       }else if(done){u.path=uPath(u,r.x,r.y,u.p)||[];if(!u.path.length)u.state='idle';}
       break;}
     case 'toMon':{
@@ -2636,7 +2930,7 @@ function updateUnit(u,dt){
         const r=G.relics.find(x=>x.id===u.relic);
         if(r){r.mon=b.id;r.held=null;r.x=b.tx;r.y=b.ty;}
         u.relic=null;u.monB=null;u.state='idle';
-        if(b.p===0){toast('Relic enshrined — it generates gold');snd('done');}
+        if(b.p===localP){toast('Relic enshrined — it generates gold');snd('done');}
       }else if(done){u.path=uPath(u,c.x,c.y,u.p)||[];if(!u.path.length)u.state='idle';}
       break;}
     case 'move':if(followPath(u,dt))u.state='idle';break;
@@ -2720,9 +3014,9 @@ function updateUnit(u,dt){
         if(b.food<=0){
           const rc=bldCostOf(u.p,'farm');
           if(canAfford(u.p,rc)){pay(u.p,rc);b.food=farmFoodOf(u.p);
-            if(u.p===0){updateTop();feed('Farm replanted');}}
+            if(u.p===localP){updateTop();feed('Farm replanted');}}
           else{b.hp=0; // the field lies fallow
-            if(u.p===0)feed('A farm has gone fallow — no wood to replant',true);}
+            if(u.p===localP)feed('A farm has gone fallow — no wood to replant',true);}
         }
         if(u.carry>=carryCap(u)){const dp=dropoffFor(u);if(!dp){u.state='idle';break;}
           u.state='return';const c=bldCenter(dp);u.path=uPath(u,c.x,c.y,u.p)||[];}}
@@ -2734,7 +3028,7 @@ function updateUnit(u,dt){
         if(Math.hypot(c.x-u.x,c.y-u.y)<b.size*.5+1.7){
           if(u.carryType){
             G.P[u.p][u.carryType[0]]+=u.carry;
-            if(u.p===0&&tileVis(u.x,u.y)) // floating tally over the drop-off
+            if(u.p===localP&&tileVis(u.x,u.y)) // floating tally over the drop-off
               G.fx.push({x:u.x,y:u.y-.6,vx:0,vy:-1.1,life:1,max:1,r:0,kind:'text',
                 txt:'+'+Math.round(u.carry),col:RES_COL[u.carryType]||'#f0e29a'});
           }
@@ -2769,7 +3063,7 @@ function updateUnit(u,dt){
       b.prog+=bRate;b.hp=Math.min(b.maxhp,b.hp+b.maxhp*bRate/def.bt);
       if(b.prog>=def.bt){b.built=true;b.hp=b.maxhp;b.pendCost=null;
         if(!def.thin&&b.type!=='farm'&&b.type!=='dock')stampWorn(b);
-        if(b.p===0&&!def.thin){feed('— '+def.name+' Built —');snd('done');refreshPanel();}
+        if(b.p===localP&&!def.thin){feed('— '+def.name+' Built —');snd('done');refreshPanel();}
         if(b.type==='wonder')wonderRaised(b);
         if(b.type==='farm')cmdFarm(u,b);
         else{
@@ -3176,10 +3470,10 @@ function aiThink(p,ai){
       if(tgt){
         ai.wave++;ai.nextAtk=G.t+cfg.waveEvery;ai.attacking=true;ai.tgtId=tgt.ent.id;
         for(const a of army){a.wave=tgt.ent.id;cmdAttack(a,tgt.ent,tgt.bld);}
-        if(tgt.ent.p===0){feed('Warning! An enemy army marches on your town!',true);snd('horn');
+        if(tgt.ent.p===localP){feed('Warning! An enemy army marches on your town!',true);snd('horn');
           const wc=tgt.bld?bldCenter(tgt.ent):tgt.ent;
           const pgs=G.pings||(G.pings=[]);pgs.push({x:wc.x,y:wc.y,t:G.t});if(pgs.length>6)pgs.shift();}
-        else if(allied(tgt.ent.p,0))feed('Your ally is under attack!',true);
+        else if(allied(tgt.ent.p,localP))feed('Your ally is under attack!',true);
       }
     } else ai.nextAtk=G.t+25;
   }
@@ -3286,11 +3580,11 @@ function updateFog(){
     for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
       const dx=x+.5-cx,dy=y+.5-cy;
       if(dx*dx+dy*dy<=r2)V[y*MAP+x]=2;}};
-  const spy=hasUt(0,'atheism'); // Huns: spies — see what your enemies see
-  for(const u of G.units)if((allied(u.p,0)||spy)&&u.p!==GAIA){
+  const spy=hasUt(localP,'atheism'); // Huns: spies — see what your enemies see
+  for(const u of G.units)if((allied(u.p,localP)||spy)&&u.p!==GAIA){
     // a herded sheep is a walking (short-sighted) scout — that's half the point of them
     let r=u.type==='scout'?9:isAnimal(u)?3:6;
-    if(allied(u.p,0)){
+    if(allied(u.p,localP)){
       if(u.type==='villager')r+=civOf(u.p).vilLos||0;
       if(u.type==='scout'&&teamHas(u.p,'scoutLos'))r+=2;      // Mongol TB
       if(u.type==='knight'&&teamHas(u.p,'knightLos'))r+=2;    // Frank TB
@@ -3300,9 +3594,9 @@ function updateFog(){
     }
     mark(u.x,u.y,r);
   }
-  for(const b of G.blds)if(allied(b.p,0)&&b.built){const c=bldCenter(b);
+  for(const b of G.blds)if(allied(b.p,localP)&&b.built){const c=bldCenter(b);
     mark(c.x,c.y,(b.type==='tower'||b.type==='tc'?9:6)+2*ecoTier(b.p,'watch'));} // Town Watch/Patrol
-  for(const b of G.blds)if(b.p!==0&&!b.seen){const c=bldCenter(b);
+  for(const b of G.blds)if(b.p!==localP&&!b.seen){const c=bldCenter(b);
     if(V[(c.y|0)*MAP+(c.x|0)]===2)b.seen=true;}
   fogDirty=true;
 }
@@ -3392,6 +3686,8 @@ function updateContBtn(){
 /* ================= end / toast ================= */
 function endGame(win){
   if(G.over)return;G.over=true;
+  // Every peer reaches this on the same turn, so nobody is cut off mid-battle.
+  if(netMode){netMode=false;netClose();}
   snd(win?'win':'lose');
   const m=Math.floor(G.t/60),s=Math.floor(G.t%60);
   let sub=win?'The enemy Town Hall lies in ruins.':'Your Town Hall has fallen.';
@@ -3407,7 +3703,7 @@ function endGame(win){
   document.getElementById('endTitle').className=win?'win':'lose';
   document.getElementById('endSub').textContent=sub;
   document.getElementById('endStats').innerHTML=
-    'Battle length: <b>'+m+'m '+s+'s</b> · Age reached: <b>'+AGES[G.P[0].age]+'</b><br>'+
+    'Battle length: <b>'+m+'m '+s+'s</b> · Age reached: <b>'+AGES[G.P[localP].age]+'</b><br>'+
     'Soldiers trained: <b>'+G.stats.trained+'</b> · Enemy buildings razed: <b>'+G.stats.razed+'</b>';
   document.getElementById('endOverlay').style.display='flex';
 }
@@ -3439,7 +3735,7 @@ function updateOverlays(){ // throttled: writes at most once per game-second
 function updateArmyCounts(){
   let cav=0,rng=0,inf=0,sg=0;
   for(const u of G.units){
-    if(u.p!==0||u.hp<=0||u.type==='villager'||isAnimal(u))continue;
+    if(u.p!==localP||u.hp<=0||u.type==='villager'||isAnimal(u))continue;
     const d=UNITS[u.type];
     if(d.ram)sg++;else if(d.cav)cav++;else if(d.ranged)rng++;else if(!d.monk)inf++;
   }
@@ -3450,16 +3746,21 @@ function updateScores(){
   const cv=c=>(c.f||0)+(c.w||0)+(c.g||0);
   let html='';
   const cap=innerWidth<560&&NP>5?5:NP; // phones: don't stack 8 lines over the zoom buttons
-  for(let p=0;p<cap;p++){
+  // your own line is never the one that gets cut, whatever seat you're in
+  const rows=[];
+  for(let p=0;p<NP&&rows.length<cap;p++)if(p!==localP)rows.push(p);
+  if(rows.length>=cap)rows.pop();
+  rows.unshift(localP);
+  for(const p of rows){
     let s=Math.floor(G.P[p].f+G.P[p].w+G.P[p].g);
     for(const u of G.units)if(u.p===p&&u.hp>0)s+=cv(UNITS[u.type].cost);
     for(const b of G.blds)if(b.p===p&&b.built)s+=cv(BLDS[b.type].cost);
     const dead=!G.blds.some(b=>b.p===p&&b.type==='tc');
     html+='<div style="color:'+TEAMS[p].trim+(dead?';opacity:.45':'')+'">'
-      +CIVS[G.P[p].civ].name+(p===0?' (You)':'')+' '+s
+      +CIVS[G.P[p].civ].name+(p===localP?' (You)':'')+' '+s
       +' ('+AGES[G.P[p].age].replace(' Age','')+')</div>';
   }
-  if(cap<NP)html+='<div style="color:#c9b587">+'+(NP-cap)+' more</div>';
+  if(rows.length<NP)html+='<div style="color:#c9b587">+'+(NP-rows.length)+' more</div>';
   scoreEl.innerHTML=html;
 }
 /* ================= sound (synthesized, no assets) ================= */
@@ -7107,7 +7408,7 @@ function unitOccluded(u,px,py){
 }
 function drawGhosts(){
   for(const u of G.units){
-    if(u.hp<=0||!allied(u.p,0))continue;
+    if(u.hp<=0||!allied(u.p,localP))continue;
     const pp=isoE(u.x,u.y),px=pp.x,py=pp.y;
     if(px<cullX0||px>cullX1||py<cullY0||py>cullY1)continue;
     if(!tileVis(u.x,u.y))continue;
@@ -8048,10 +8349,10 @@ function draw(){
     if(rl.held||rl.mon||!tileKnown(rl.x,rl.y))continue;
     ents.push({sy:(rl.x+rl.y+1)*IH,relic:rl});}
   for(const b of G.blds){
-    if(!allied(b.p,0)&&!b.seen)continue;
+    if(!allied(b.p,localP)&&!b.seen)continue;
     ents.push({sy:(b.tx+b.ty+b.size)*IH,b});}
   for(const u of G.units){
-    if(!allied(u.p,0)&&!tileVis(u.x,u.y))continue;
+    if(!allied(u.p,localP)&&!tileVis(u.x,u.y))continue;
     ents.push({sy:(u.x+u.y)*IH+.1,u});}
   ents.sort((a,b)=>a.sy-b.sy);
   const inspR=G.inspect&&G.inspect.res?G.res[G.inspect.res]:null;
@@ -8156,12 +8457,12 @@ function drawMini(){
   mctx.fillStyle='#f5da7a';
   for(const rl of G.relics)if(!rl.held&&!rl.mon)mctx.fillRect(rl.x-.5,rl.y-.5,2,2);
   for(const b of G.blds){
-    if(!allied(b.p,0)&&!b.seen)continue;
-    mctx.fillStyle=b.p===0?'#e8f0ff':TEAMS[b.p].main;
+    if(!allied(b.p,localP)&&!b.seen)continue;
+    mctx.fillStyle=b.p===localP?'#e8f0ff':TEAMS[b.p].main;
     mctx.fillRect(b.tx-.4,b.ty-.4,b.size+.8,b.size+.8);}
   for(const u of G.units){
-    if(!allied(u.p,0)&&!tileVis(u.x,u.y))continue;
-    mctx.fillStyle=u.p===0?'#fff':TEAMS[u.p].main;
+    if(!allied(u.p,localP)&&!tileVis(u.x,u.y))continue;
+    mctx.fillStyle=u.p===localP?'#fff':TEAMS[u.p].main;
     mctx.fillRect(u.x-.8,u.y-.8,1.6,1.6);}
   mctx.drawImage(fogC,0,0,MAP,MAP);
   mctx.drawImage(maskC,0,0,MAP,MAP); // unexplored = pure black on the minimap
@@ -8247,7 +8548,7 @@ function applyBox(x0,y0,x1,y1){
   const bx0=Math.min(x0,x1),bx1=Math.max(x0,x1);
   const by0=Math.min(y0,y1),by1=Math.max(y0,y1);
   const ids=G.units.filter(u=>{
-    if(u.p!==0)return false;
+    if(u.p!==localP)return false;
     const p=isoPt(u.x,u.y);
     const sx=(p.x-G.cam.x)*z+r.left,sy=(p.y-8-G.cam.y)*z+r.top;
     return sx>=bx0&&sx<=bx1&&sy>=by0&&sy<=by1;
@@ -8298,7 +8599,7 @@ document.getElementById('panelBtn').onclick=()=>{
 // idle-villager counter, refreshed on the same 1/sec tick as the overlays
 function updateIdleBtn(){
   const b=document.getElementById('idleBtn');if(!b||!G)return;
-  const n=G.units.filter(u=>u.p===0&&u.type==='villager'&&u.state==='idle'&&u.hp>0).length;
+  const n=G.units.filter(u=>u.p===localP&&u.type==='villager'&&u.state==='idle'&&u.hp>0).length;
   b.classList.toggle('live',n>0);
   b.innerHTML='🧑‍🌾'+(n>0?'<b>'+(n>99?'99+':n)+'</b>':'');
   b.title=n?'Jump to an idle villager — '+n+' idle (.)':'No idle villagers (.)';
@@ -8381,24 +8682,24 @@ function handleTap(cx,cy,mouse,right){
   // canopies/roofs rise above their ground tile; a tile-only test made you click "under" things
   let hitU=null,hd=(mouse?13:22)/Math.min(1,G.cam.z); // touch keeps a fingertip-sized target at any zoom
   for(const u of G.units){
-    if(!allied(u.p,0)&&!tileVis(u.x,u.y))continue;
+    if(!allied(u.p,localP)&&!tileVis(u.x,u.y))continue;
     const p=isoE(u.x,u.y);
     const big=!!UNITS[u.type].cav||u.type==='ram'||!!UNITS[u.type].ship||!!UNITS[u.type].siege;
     const d=Math.hypot(p.x-wx,(p.y-(big?10:8)-wy)*.8);
     if(d<hd){hd=d;hitU=u;}}
   let hitB=null;
   for(const b of G.blds){
-    if(!allied(b.p,0)&&!b.seen)continue;
+    if(!allied(b.p,localP)&&!b.seen)continue;
     if(tx>=b.tx&&ty>=b.ty&&tx<b.tx+b.size&&ty<b.ty+b.size){hitB=b;break;}}
   if(!hitB&&!hitU){ // roof click: box from the visual top down to the footprint
     for(const b of G.blds){
-      if(!allied(b.p,0)&&!b.seen)continue;
+      if(!allied(b.p,localP)&&!b.seen)continue;
       const pc=isoPt(b.tx+b.size/2,b.ty+b.size/2);
       pc.y-=elevTile(b.tx+b.size/2,b.ty+b.size/2)*10;
       const ht=(IHT[b.type]||18)*(b.built?1:.35);
       if(Math.abs(wx-pc.x)<b.size*IW*.7&&wy>pc.y-ht-IH&&wy<pc.y+b.size*IH*.8){hitB=b;break;}}
   }
-  const selUnits=G.sel.map(id=>G.units.find(u=>u.id===id)).filter(u=>u&&u.p===0);
+  const selUnits=G.sel.map(id=>G.units.find(u=>u.id===id)).filter(u=>u&&u.p===localP);
   const haveSel=selUnits.length>0;
   let resKey=tx+','+ty;
   let res=G.res[resKey];
@@ -8419,26 +8720,26 @@ function handleTap(cx,cy,mouse,right){
   // carries it out; nothing here touches a unit directly any more.
   const selIds=selUnits.map(s=>s.id);
   if(haveSel&&(right||!mouse||G.amode)){
-    if(hitU&&!allied(hitU.p,0)){issue('attack',{u:selIds,id:hitU.id,bld:false});flashSel();return;}
+    if(hitU&&!allied(hitU.p,localP)){issue('attack',{u:selIds,id:hitU.id,bld:false});flashSel();return;}
     // a beast you already own is still meat — send anyone who can swing at it
     if(hitU&&isAnimal(hitU)&&selUnits.some(s=>!UNITS[s.type].passive&&!UNITS[s.type].monk)){
       issue('attack',{u:selIds,id:hitU.id,bld:false});
-      if(hitU.p===0)toast('Slaughtering — villagers will butcher the carcass');
+      if(hitU.p===localP)toast('Slaughtering — villagers will butcher the carcass');
       flashSel();return;}
-    if(hitB&&!allied(hitB.p,0)){issue('attack',{u:selIds,id:hitB.id,bld:true});flashSel();return;}
+    if(hitB&&!allied(hitB.p,localP)){issue('attack',{u:selIds,id:hitB.id,bld:true});flashSel();return;}
     if(res){issue('gather',{u:selIds,key:resKey});flashSel();return;}
     const relic=G.relics.find(r=>!r.held&&!r.mon&&Math.hypot(r.x+.5-tw.x,r.y+.5-tw.y)<1);
     const monks=selUnits.filter(s=>UNITS[s.type].monk&&!UNITS[s.type].noRelic); // Missionaries can't carry relics
     if(relic&&monks.length){
       issue('relic',{u:monks.map(m=>m.id),rid:relic.id});
       toast('Monk moving to the relic');return;}
-    if(hitB&&hitB.p===0&&hitB.built&&hitB.type==='monastery'&&monks.some(m=>m.relic)){
+    if(hitB&&hitB.p===localP&&hitB.built&&hitB.type==='monastery'&&monks.some(m=>m.relic)){
       issue('enshrine',{u:monks.map(m=>m.id),id:hitB.id});return;}
-    if(hitB&&hitB.p===0&&!hitB.built&&selUnits.some(s=>s.type==='villager')){
+    if(hitB&&hitB.p===localP&&!hitB.built&&selUnits.some(s=>s.type==='villager')){
       issue('build',{u:selIds,id:hitB.id});flashSel();return;}
-    if(hitB&&hitB.p===0&&hitB.type==='farm'&&selUnits.some(s=>s.type==='villager')){
+    if(hitB&&hitB.p===localP&&hitB.type==='farm'&&selUnits.some(s=>s.type==='villager')){
       issue('farm',{u:selIds,id:hitB.id});flashSel();return;}
-    if(hitB&&hitB.p===0&&hitB.built&&BLDS[hitB.type].garCap){
+    if(hitB&&hitB.p===localP&&hitB.built&&BLDS[hitB.type].garCap){
       // count locally only to phrase the toast — the handler decides who fits
       const room=bldGarCap(hitB)-hitB.gar.length
         -selUnits.filter(s=>s.garB===hitB.id).length;
@@ -8449,7 +8750,7 @@ function handleTap(cx,cy,mouse,right){
     }
     // manual: infantry can garrison inside a Battering Ram (faster ram, harder
     // hits); any land unit can board a Transport Ship moored at the shore
-    if(hitU&&hitU.p===0&&UNITS[hitU.type].garCap&&selUnits.some(s=>s.id!==hitU.id&&!UNITS[s.type].ship)){
+    if(hitU&&hitU.p===localP&&UNITS[hitU.type].garCap&&selUnits.some(s=>s.id!==hitU.id&&!UNITS[s.type].ship)){
       const isRam=hitU.type==='ram';
       const room=UNITS[hitU.type].garCap-(hitU.gar?hitU.gar.length:0);
       const eligible=selUnits.filter(s=>s.id!==hitU.id&&!UNITS[s.type].ship&&(!isRam||INF.has(s.type)));
@@ -8471,24 +8772,24 @@ function handleTap(cx,cy,mouse,right){
   G.amode=false;
   G.inspect=null;
   // selection (double-tap an own unit: select all of that type on screen)
-  if(hitU&&hitU.p===0){
+  if(hitU&&hitU.p===localP){
     const now=performance.now();
     if(now-lastTapT<400&&lastTapId===hitU.id){
       const z=G.cam.z;
       const ids=G.units.filter(u=>{
-        if(u.p!==0||u.type!==hitU.type)return false;
+        if(u.p!==localP||u.type!==hitU.type)return false;
         const p=isoPt(u.x,u.y);
         const sx=(p.x-G.cam.x)*z,sy=(p.y-G.cam.y)*z;
         return sx>=0&&sx<=vw&&sy>=0&&sy<=vh;
       }).map(u=>u.id);
       G.sel=ids.length?ids:[hitU.id];
-      toast(G.sel.length+' '+(hitU.type==='villager'?'villagers':unitName(hitU.type,0)+'s')+' selected');
+      toast(G.sel.length+' '+(hitU.type==='villager'?'villagers':unitName(hitU.type,localP)+'s')+' selected');
     }else G.sel=[hitU.id];
     snd('sel');
     lastTapT=now;lastTapId=hitU.id;
     refreshPanel();return;
   }
-  if(hitB&&hitB.p===0){G.sel=[hitB.id];refreshPanel();return;}
+  if(hitB&&hitB.p===localP){G.sel=[hitB.id];refreshPanel();return;}
   // inspect anything else: enemy/ally units & buildings, trees, gold, berries
   if(hitU){G.sel=[];G.inspect={id:hitU.id};refreshPanel();return;}
   if(hitB){G.sel=[];G.inspect={id:hitB.id};refreshPanel();return;}
@@ -8519,7 +8820,7 @@ const ICO={atk:'<svg viewBox="0 0 16 16"><path d="M2 14l8-8 1-3 3-1-1 3-3 1-8 8z
   gar:'<svg viewBox="0 0 16 16"><path d="M8 2l6 4v8H2V6z" fill="none" stroke="#c9b587" stroke-width="1.4"/></svg>',
   crown:'<svg viewBox="0 0 16 16"><path d="M2 11l1-6 3 3 2-5 2 5 3-3 1 6z" fill="#f0d878" stroke="#8a6a1a" stroke-width=".8"/><rect x="2" y="11" width="12" height="2.5" fill="#c9a227" stroke="#8a6a1a" stroke-width=".6"/></svg>'};
 function setCard(name,port,hp,maxhp,stats){
-  cardName.textContent=name;cardPort.src=port||portraitFor('crest',0,0);
+  cardName.textContent=name;cardPort.src=port||portraitFor('crest',0,localP);
   if(hp!=null){hpFill.style.width=(100*hp/maxhp)+'%';
     hpFill.style.background=hp/maxhp>.4?'linear-gradient(#7fce5a,#3f7d26)':'linear-gradient(#e06a52,#a03325)';
     hpTxt.textContent=Math.ceil(hp)+'/'+maxhp;}
@@ -8527,7 +8828,7 @@ function setCard(name,port,hp,maxhp,stats){
   statRows.innerHTML=(stats||[]).map(([i,v])=>'<span>'+ICO[i]+v+'</span>').join('');
 }
 const hint=s=>{scrollHint.innerHTML=s||'';};
-function setCiv(){civLine.innerHTML='<b>'+CIVS[G.P[0].civ||0].name+'</b><span>'+AGES[G.P[0].age]+'</span>';}
+function setCiv(){civLine.innerHTML='<b>'+CIVS[G.P[localP].civ||0].name+'</b><span>'+AGES[G.P[localP].age]+'</span>';}
 function mkBtn(html,cls,fn,dis,icon){
   const b=document.createElement('button');
   b.className='cmd'+(cls?' '+cls:'')+((icon||/<i>/.test(html))?'':' txt');
@@ -8550,15 +8851,15 @@ function refreshPanel(){
   btnRow.innerHTML='';selGrid.innerHTML='';setCiv();
   if(G.placing){
     const d=BLDS[G.placing];
-    setCard('Place '+d.name,portraitFor('b',G.placing,0),null);
+    setCard('Place '+d.name,portraitFor('b',G.placing,localP),null);
     if(G.placing==='wall'||G.placing==='swall'){
       hint(!G.wallA?'Tap where the wall starts':
         (G.pendLine?'Confirm, or tap a new end point':'Tap where the wall ends'));
       if(G.pendLine){
         const segs=G.pendLine.filter(s2=>canPlaceType(G.placing,s2.tx,s2.ty));
-        const lc=bldCostOf(0,G.placing); // Mayan walls are half price — say so
+        const lc=bldCostOf(localP,G.placing); // Mayan walls are half price — say so
         mkBtn('<b>✓ Build '+segs.length+' sections</b><span class="cost">'+costStr(lc)+' each</span>','go',()=>{
-          const afford=Math.floor(Math.min(...['f','w','g'].map(r2=>lc[r2]?G.P[0][r2]/lc[r2]:Infinity)));
+          const afford=Math.floor(Math.min(...['f','w','g'].map(r2=>lc[r2]?G.P[localP][r2]/lc[r2]:Infinity)));
           if(afford<segs.length)toast('Out of resources — placing '+Math.max(0,afford)+' sections');
           issue('placeLine',{t:G.placing,tiles:segs.map(s2=>[s2.tx,s2.ty]),
             u:G.sel.map(id=>G.units.find(u=>u.id===id)).filter(u=>u&&u.type==='villager').map(u=>u.id)});
@@ -8575,7 +8876,7 @@ function refreshPanel(){
       const ok=canPlaceType(G.placing,G.pend.tx,G.pend.ty);
       mkBtn('<b>✓ Build here</b>','go',()=>{
         if(!canPlaceType(G.placing,G.pend.tx,G.pend.ty)){toast('Blocked — pick open ground');return;}
-        if(!canAfford(0,bldCostOf(0,G.placing))){toast('Not enough resources');return;}
+        if(!canAfford(localP,bldCostOf(localP,G.placing))){toast('Not enough resources');return;}
         issue('place',{t:G.placing,tx:G.pend.tx,ty:G.pend.ty,
           u:G.sel.map(id=>G.units.find(u=>u.id===id)).filter(u=>u&&u.type==='villager').map(u=>u.id)});
         G.placing=null;G.pend=null;updateTop();refreshPanel();
@@ -8609,144 +8910,144 @@ function refreshPanel(){
           hint(eu&&isAnimal(t)
             ?(UNITS[t.type].meat+' food · '+(mouseSeen?'right-click':'tap')+' it with villagers to hunt'
               +(UNITS[t.type].fierce?' — it will fight back':''))
-            :allied(t.p,0)?'An ally\'s '+nm:'An enemy '+nm);
+            :allied(t.p,localP)?'An ally\'s '+nm:'An enemy '+nm);
           mkBtn('<b>Deselect</b>',null,()=>{G.inspect=null;refreshPanel();});
           return;
         }
         G.inspect=null;
       }
     }
-    setCard('Tiny Conquerors',portraitFor('crest',0,0),null);
+    setCard('Tiny Conquerors',portraitFor('crest',0,localP),null);
     hint('Tap a villager or building');
-    mkBtn('<b>Idle villager</b><span class="cost">.</span>',null,cycleIdleVill,false,portraitFor('u','villager',0));
+    mkBtn('<b>Idle villager</b><span class="cost">.</span>',null,cycleIdleVill,false,portraitFor('u','villager',localP));
     mkBtn('<b>Select army</b><span class="cost">,</span>',null,()=>{
-      const a=G.units.filter(u=>u.p===0&&u.type!=='villager'&&!isAnimal(u));
+      const a=G.units.filter(u=>u.p===localP&&u.type!=='villager'&&!isAnimal(u));
       if(a.length){G.sel=a.map(u=>u.id);centerOn(a[0].x,a[0].y);refreshPanel();}
-      else toast('You have no soldiers yet');},false,portraitFor('u','militia',0));
-    mkBtn('<b>Town Hall</b><span class="cost">H</span>',null,selTC,false,portraitFor('b','tc',0));
+      else toast('You have no soldiers yet');},false,portraitFor('u','militia',localP));
+    mkBtn('<b>Town Hall</b><span class="cost">H</span>',null,selTC,false,portraitFor('b','tc',localP));
     return;
   }
   const first=ents[0];
   if(first.tx!==undefined){ // building
     const b=first,d=BLDS[b.type];
     if(!b.built){
-      setCard(d.name,portraitFor('b',b.type,0),b.hp,b.maxhp);
+      setCard(d.name,portraitFor('b',b.type,localP),b.hp,b.maxhp);
       hint('Under construction — '+(mouseSeen?'right-click':'tap')+' it with villagers selected to help build');
       mkBtn('<b>Demolish</b>','warn',()=>{issue('del',{ids:[b.id]});});return;}
-    setCard(d.name,portraitFor('b',b.type,0),b.hp,b.maxhp,
+    setCard(d.name,portraitFor('b',b.type,localP),b.hp,b.maxhp,
       [...(d.atk?[['atk',d.atk]]:[]),...(d.garCap?[['gar',b.gar.length+'/'+d.garCap]]:[])]);
     hint(d.trains&&d.trains.length||b.type==='castle'?'Train from the buttons on the left':'');
     if(b.gar.length)
       mkBtn('<b>⇱ Ungarrison '+b.gar.length+'</b>',null,()=>{issue('ungar',{id:b.id});});
     if(b.type==='market'){
       // Saracens trade at almost no fee (manual: 5% market fee)
-      const sar=civOf(0).mktRate,sell=sar?95:70,buy=sar?105:80;
+      const sar=civOf(localP).mktRate,sell=sar?95:70,buy=sar?105:80;
       const trade=(give,get)=>{
         const need=give==='g'?buy:100;
-        if(G.P[0][give]<need){toast('Not enough '+(give==='f'?'food':give==='w'?'wood':'gold'));return;}
+        if(G.P[localP][give]<need){toast('Not enough '+(give==='f'?'food':give==='w'?'wood':'gold'));return;}
         issue('trade',{give,get});};
-      mkBtn('<i>🍖</i><b>Sell 100 Food</b><span class="cost">→ '+sell+'G</span>',null,()=>trade('f','g'),G.P[0].f<100);
-      mkBtn('<i>🪵</i><b>Sell 100 Wood</b><span class="cost">→ '+sell+'G</span>',null,()=>trade('w','g'),G.P[0].w<100);
-      mkBtn('<i>🍖</i><b>Buy 100 Food</b><span class="cost">'+buy+'G →</span>',null,()=>trade('g','f'),G.P[0].g<buy);
-      mkBtn('<i>🪵</i><b>Buy 100 Wood</b><span class="cost">'+buy+'G →</span>',null,()=>trade('g','w'),G.P[0].g<buy);
+      mkBtn('<i>🍖</i><b>Sell 100 Food</b><span class="cost">→ '+sell+'G</span>',null,()=>trade('f','g'),G.P[localP].f<100);
+      mkBtn('<i>🪵</i><b>Sell 100 Wood</b><span class="cost">→ '+sell+'G</span>',null,()=>trade('w','g'),G.P[localP].w<100);
+      mkBtn('<i>🍖</i><b>Buy 100 Food</b><span class="cost">'+buy+'G →</span>',null,()=>trade('g','f'),G.P[localP].g<buy);
+      mkBtn('<i>🪵</i><b>Buy 100 Wood</b><span class="cost">'+buy+'G →</span>',null,()=>trade('g','w'),G.P[localP].g<buy);
     }
     if(b.type==='monastery'){
       const dep=G.relics.filter(r=>r.mon===b.id).length;
       if(dep)hint('✨ '+dep+' relic'+(dep>1?'s':'')+' enshrined (+'+(dep*33)+' gold/min)');
     }
     if(b.type==='blacksmith'){
-      const bs=bsOf(0);
+      const bs=bsOf(localP);
       hint('Research upgrades — each line has three tiers, gated by age');
       for(const line of ['atk','arw','ia','aa','ca']){
         const tier=bs[line];
         if(tier>=3)continue;
         const T=BS_TECHS[line],cost=T.costs[tier],needAge=tier+1;
-        const locked=G.P[0].age<needAge;
+        const locked=G.P[localP].age<needAge;
         mkBtn('<i>'+T.icon+'</i><b>'+T.names[tier]+'</b><span class="cost">'+costStr(cost)+'</span>','txt',
-          ()=>{if(G.P[0].age<needAge){toast('Requires the '+AGES[needAge]);return;}
-            if(!canAfford(0,cost)){toast('Not enough resources');return;}
+          ()=>{if(G.P[localP].age<needAge){toast('Requires the '+AGES[needAge]);return;}
+            if(!canAfford(localP,cost)){toast('Not enough resources');return;}
             issue('tech',{kind:'bs',id:line});},
-          locked||!canAfford(0,cost));
+          locked||!canAfford(localP,cost));
       }
       if(['atk','arw','ia','aa','ca'].every(l=>bs[l]>=3))
         hint('The forge is quiet — every upgrade is complete');
     }
     if(b.type==='university'){
-      const un=uniOf(0);
+      const un=uniOf(localP);
       hint('Research the sciences of war and works');
       for(const id of UNI_ORDER){
         if(un[id])continue;
         const T=UNI_TECHS[id];
         if(T.req&&!un[T.req])continue; // Architecture needs Masonry, Bombard Tower needs Chemistry
-        const locked=G.P[0].age<T.age;
+        const locked=G.P[localP].age<T.age;
         mkBtn('<i>'+T.icon+'</i><b>'+T.name+'</b><span class="cost">'+costStr(T.cost)+'</span>','txt',
-          ()=>{if(G.P[0].age<T.age){toast('Requires the '+AGES[T.age]);return;}
-            if(!canAfford(0,T.cost)){toast('Not enough resources');return;}
+          ()=>{if(G.P[localP].age<T.age){toast('Requires the '+AGES[T.age]);return;}
+            if(!canAfford(localP,T.cost)){toast('Not enough resources');return;}
             issue('tech',{kind:'uni',id});},
-          locked||!canAfford(0,T.cost));
+          locked||!canAfford(localP,T.cost));
       }
       if(UNI_ORDER.every(id=>un[id]))hint('Every science is mastered');
     }
-    if(b.type==='range'&&!G.P[0].pt){
-      const cost={f:200,g:250},locked=G.P[0].age<3;
+    if(b.type==='range'&&!G.P[localP].pt){
+      const cost={f:200,g:250},locked=G.P[localP].age<3;
       mkBtn('<i>🐴</i><b>Parthian Tactics</b><span class="cost">'+costStr(cost)+'</span>','txt',
-        ()=>{if(G.P[0].age<3){toast('Requires the '+AGES[3]);return;}
-          if(!canAfford(0,cost)){toast('Not enough resources');return;}
+        ()=>{if(G.P[localP].age<3){toast('Requires the '+AGES[3]);return;}
+          if(!canAfford(localP,cost)){toast('Not enough resources');return;}
           issue('tech',{kind:'pt'});},
-        locked||!canAfford(0,cost));
+        locked||!canAfford(localP,cost));
     }
     // economy & line technologies researched at this building (manual pp. 47-49)
     for(const id in ECO_TECHS){
       const T=ECO_TECHS[id];
       if(T.bld!==b.type)continue;
-      const tier=ecoTier(0,id);
+      const tier=ecoTier(localP,id);
       if(tier>=ecoMax(id))continue;
       const nm=T.names?T.names[tier]:T.name;
       const cost=T.costs?T.costs[tier]:T.cost;
       const needAge=T.ages?T.ages[tier]:T.age;
-      const locked=G.P[0].age<needAge;
+      const locked=G.P[localP].age<needAge;
       mkBtn('<i>'+T.icon+'</i><b>'+nm+'</b><span class="cost">'+costStr(cost)+'</span>','txt',
-        ()=>{if(G.P[0].age<needAge){toast('Requires the '+AGES[needAge]);return;}
-          if(!canAfford(0,cost)){toast('Not enough resources');return;}
+        ()=>{if(G.P[localP].age<needAge){toast('Requires the '+AGES[needAge]);return;}
+          if(!canAfford(localP,cost)){toast('Not enough resources');return;}
           issue('tech',{kind:'eco',id});},
-        locked||!canAfford(0,cost));
+        locked||!canAfford(localP,cost));
     }
     if(b.type==='dock'){ // Fish Trap: seed a fresh fishery in the waters beside the dock
       const ftCost={w:100};
       mkBtn('<i>🐟</i><b>Fish Trap</b><span class="cost">100W</span>','txt',()=>{
-        if(!canAfford(0,ftCost)){toast('Not enough wood');return;}
+        if(!canAfford(localP,ftCost)){toast('Not enough wood');return;}
         issue('fishtrap',{id:b.id});
-      },!canAfford(0,ftCost));
+      },!canAfford(localP,ftCost));
     }
-    const trainsList=trainsFor(b,0);
+    const trainsList=trainsFor(b,localP);
     for(const ut of trainsList){
       const u=UNITS[ut];
-      const uc=unitCostOf(0,ut);
-      const locked=u.age!==undefined&&G.P[0].age<u.age;
-      const afford=canAfford(0,uc)&&popUsed(0)<popCap(0);
-      mkBtn('<b>'+unitName(ut,0)+'</b><span class="cost">'+costStr(uc)+'</span>',null,
-        ()=>tryTrainKey(b,ut),locked||!afford,portraitFor('u',ut,0));
+      const uc=unitCostOf(localP,ut);
+      const locked=u.age!==undefined&&G.P[localP].age<u.age;
+      const afford=canAfford(localP,uc)&&popUsed(localP)<popCap(localP);
+      mkBtn('<b>'+unitName(ut,localP)+'</b><span class="cost">'+costStr(uc)+'</span>',null,
+        ()=>tryTrainKey(b,ut),locked||!afford,portraitFor('u',ut,localP));
     }
     if(b.type==='castle'){
-      const nu=nextUtFor(0);
+      const nu=nextUtFor(localP);
       if(nu){
-        const T=UTECHS[nu],locked=G.P[0].age<T.age;
+        const T=UTECHS[nu],locked=G.P[localP].age<T.age;
         mkBtn('<i>'+ICO.crown+'</i><b>'+T.name+'</b><span class="cost">'+costStr(T.cost)+'</span>','txt',
-          ()=>{if(G.P[0].age<T.age){toast('Requires the '+AGES[T.age]);return;}
-            if(!canAfford(0,T.cost)){toast('Not enough resources');return;}
+          ()=>{if(G.P[localP].age<T.age){toast('Requires the '+AGES[T.age]);return;}
+            if(!canAfford(localP,T.cost)){toast('Not enough resources');return;}
             issue('tech',{kind:'ut',id:nu});},
-          locked||!canAfford(0,T.cost));
+          locked||!canAfford(localP,T.cost));
         hint(T.name+': '+T.desc+(locked?' (requires the '+AGES[T.age]+')':''));
       }
     }
-    if(b.type==='tc'&&G.P[0].age<3){
-      const nc=ageCostOf(0,G.P[0].age+1);
-      const busy=G.P[0].aging;
-      mkBtn('<i>'+ICO.crown+'</i><b>Advance to '+AGES[G.P[0].age+1]+'</b><span class="cost">'+costStr(nc)+' · A</span>','go',
-        ()=>tryAgeKey(b),busy||!canAfford(0,nc));
+    if(b.type==='tc'&&G.P[localP].age<3){
+      const nc=ageCostOf(localP,G.P[localP].age+1);
+      const busy=G.P[localP].aging;
+      mkBtn('<i>'+ICO.crown+'</i><b>Advance to '+AGES[G.P[localP].age+1]+'</b><span class="cost">'+costStr(nc)+' · A</span>','go',
+        ()=>tryAgeKey(b),busy||!canAfford(localP,nc));
     }
     if(b.queue.length){
-      const label=b.queue[0]==='AGE'?'Advancing…':'Training '+unitName(b.queue[0],0)+' ×'+b.queue.filter(q=>q===b.queue[0]).length;
+      const label=b.queue[0]==='AGE'?'Advancing…':'Training '+unitName(b.queue[0],localP)+' ×'+b.queue.filter(q=>q===b.queue[0]).length;
       const w=document.createElement('div');w.style.cssText='grid-column:1/-1;font-size:11.5px;color:#bfae86;';
       w.textContent=label;btnRow.appendChild(w);
     }
@@ -8758,7 +9059,7 @@ function refreshPanel(){
   const mil=ents.filter(u=>u.type!=='villager'&&!isAnimal(u));
   const u0=ents[0],ud=UNITS[u0.type];
   if(ents.length===1){
-    setCard(unitName(u0.type,0),portraitFor('u',u0.type,0),u0.hp,u0.maxhp,
+    setCard(unitName(u0.type,localP),portraitFor('u',u0.type,localP),u0.hp,u0.maxhp,
       [['atk',atkOf(u0)],...(ud.range>1?[['rng',rangeOf(u0)]]:[]),['spd',speedOf(u0).toFixed(1)],
        ...(ud.garCap?[['gar',(u0.gar?u0.gar.length:0)+'/'+ud.garCap]]:[])]);
     if(ud.garCap&&u0.gar&&u0.gar.length)
@@ -8768,12 +9069,12 @@ function refreshPanel(){
           toast('No landing ground — steer closer to shore');return;}
         issue('unload',{id:u0.id});});
   }else{
-    const names={};for(const u of ents){const nm=unitName(u.type,0);names[nm]=(names[nm]||0)+1;}
-    setCard(ents.length+' units',portraitFor('u',u0.type,0),null);
+    const names={};for(const u of ents){const nm=unitName(u.type,localP);names[nm]=(names[nm]||0)+1;}
+    setCard(ents.length+' units',portraitFor('u',u0.type,localP),null);
     hint(Object.entries(names).map(([n,c])=>c>1?c+' '+n+'s':n).join(', '));
     for(const u of ents.slice(0,24)){ // AoE2 portrait row — tap a tile to pick that unit
       const t2=document.createElement('button');t2.className='ptile';t2.dataset.id=u.id;
-      t2.innerHTML='<img src="'+portraitFor('u',u.type,0)+'"><i style="width:'+(100*u.hp/u.maxhp)+'%"></i>';
+      t2.innerHTML='<img src="'+portraitFor('u',u.type,localP)+'"><i style="width:'+(100*u.hp/u.maxhp)+'%"></i>';
       t2.onclick=()=>{snd('click');G.sel=[u.id];refreshPanel();};
       selGrid.appendChild(t2);}
     if(ents.length>24)selGrid.insertAdjacentHTML('beforeend','<span class="more">+'+(ents.length-24)+'</span>');
@@ -8798,13 +9099,13 @@ function refreshPanel(){
       return b;};
     tabBtn('eco','Economy','🌾');tabBtn('mil','Military','⚔️');tabBtn('def','Defense','🗼');
     for(const bt of BUILD_TABS[buildTab]){
-      if(bt==='stable'&&civOf(0).noStable)continue; // Aztecs/Mayans field no cavalry
-      if(bt==='house'&&civOf(0).noHouse)continue;   // Huns need no Houses
+      if(bt==='stable'&&civOf(localP).noStable)continue; // Aztecs/Mayans field no cavalry
+      if(bt==='house'&&civOf(localP).noHouse)continue;   // Huns need no Houses
       const d=BLDS[bt];
-      const bc=bldCostOf(0,bt);
-      const locked=d.age!==undefined&&G.P[0].age<d.age;
+      const bc=bldCostOf(localP,bt);
+      const locked=d.age!==undefined&&G.P[localP].age<d.age;
       mkBtn('<b>'+d.name+'</b><span class="cost">'+costStr(bc)+'</span>',null,
-        ()=>startBuildKey(bt),locked||!canAfford(0,bc),portraitFor('b',bt,0));
+        ()=>startBuildKey(bt),locked||!canAfford(localP,bc),portraitFor('b',bt,localP));
     }
   }else{
     if(ents.length===1)hint(G.amode?'Tap the map — they will fight their way there':mouseSeen
@@ -8860,18 +9161,18 @@ function centerOn(x,y){const p=isoPt(x,y);
   G.cam.x=p.x-vw/G.cam.z/2;G.cam.y=p.y-vh/G.cam.z/2;clampCam();}
 function updateTop(){
   if(!G)return;
-  document.getElementById('rFood').textContent=Math.floor(G.P[0].f);
-  document.getElementById('rWood').textContent=Math.floor(G.P[0].w);
-  document.getElementById('rGold').textContent=Math.floor(G.P[0].g);
-  document.getElementById('rPop').textContent=popUsed(0)+'/'+popCap(0);
-  let age=AGES[G.P[0].age];
+  document.getElementById('rFood').textContent=Math.floor(G.P[localP].f);
+  document.getElementById('rWood').textContent=Math.floor(G.P[localP].w);
+  document.getElementById('rGold').textContent=Math.floor(G.P[localP].g);
+  document.getElementById('rPop').textContent=popUsed(localP)+'/'+popCap(localP);
+  let age=AGES[G.P[localP].age];
   if(mission&&mission.win.type==='survive'&&!G.over){
     const left=Math.max(0,mission.win.time-G.t);
     age+=' · '+Math.floor(left/60)+':'+('0'+Math.floor(left%60)).slice(-2);
   }
   const cds=[];
   if(G.wonderT){const l=Math.max(0,G.wonderT.end-G.t);
-    cds.push((allied(G.wonderT.p,0)?'🏯 ':'⚠️🏯 ')+Math.floor(l/60)+':'+('0'+Math.floor(l%60)).slice(-2));}
+    cds.push((allied(G.wonderT.p,localP)?'🏯 ':'⚠️🏯 ')+Math.floor(l/60)+':'+('0'+Math.floor(l%60)).slice(-2));}
   if(G.relicT){const l=Math.max(0,G.relicT.end-G.t);
     cds.push((G.relicT.team===G.teams[0]?'✨ ':'⚠️✨ ')+Math.floor(l/60)+':'+('0'+Math.floor(l%60)).slice(-2));}
   if(cds.length)age+=' · '+cds.join(' ');
@@ -8908,44 +9209,44 @@ const BUILD_TABS={
 let buildTab='eco';
 let idleVillIdx=0,idleMilIdx=0;
 function cycleIdleVill(){
-  const vs=G.units.filter(u=>u.p===0&&u.type==='villager'&&u.state==='idle');
+  const vs=G.units.filter(u=>u.p===localP&&u.type==='villager'&&u.state==='idle');
   if(!vs.length){toast('No idle villagers');return;}
   const v=vs[idleVillIdx++%vs.length];
   G.sel=[v.id];centerOn(v.x,v.y);refreshPanel();
 }
 function cycleIdleMil(){
-  const ms=G.units.filter(u=>u.p===0&&u.type!=='villager'&&!isAnimal(u)&&u.state==='idle');
+  const ms=G.units.filter(u=>u.p===localP&&u.type!=='villager'&&!isAnimal(u)&&u.state==='idle');
   if(!ms.length){toast('No idle soldiers');return;}
   const m=ms[idleMilIdx++%ms.length];
   G.sel=[m.id];centerOn(m.x,m.y);refreshPanel();
 }
 function selTC(){
-  const tc=G.blds.find(b=>b.p===0&&b.type==='tc');
+  const tc=G.blds.find(b=>b.p===localP&&b.type==='tc');
   if(!tc)return;
   G.sel=[tc.id];const c=bldCenter(tc);centerOn(c.x,c.y);refreshPanel();
 }
 function tryTrainKey(b,ut){
   if(!b||!b.built)return;
-  if(!trainsFor(b,0).includes(ut))return; // tech-tree gate (eagles, huskarls, missionaries)
+  if(!trainsFor(b,localP).includes(ut))return; // tech-tree gate (eagles, huskarls, missionaries)
   const u=UNITS[ut];
-  const uc=unitCostOf(0,ut);
-  if(u.age!==undefined&&G.P[0].age<u.age){toast('Requires the '+AGES[u.age]);return;}
-  if(!canAfford(0,uc)){toast('Not enough resources');return;}
-  if(popUsed(0)>=popCap(0)){toast(civOf(0).noHouse?'Population full':'Build more houses — population full');return;}
+  const uc=unitCostOf(localP,ut);
+  if(u.age!==undefined&&G.P[localP].age<u.age){toast('Requires the '+AGES[u.age]);return;}
+  if(!canAfford(localP,uc)){toast('Not enough resources');return;}
+  if(popUsed(localP)>=popCap(localP)){toast(civOf(localP).noHouse?'Population full':'Build more houses — population full');return;}
   issue('train',{id:b.id,ut});
 }
 function tryAgeKey(b){
-  if(G.P[0].age>=3||G.P[0].aging)return;
-  const nc=ageCostOf(0,G.P[0].age+1);
-  if(!canAfford(0,nc)){toast('Not enough resources');return;}
+  if(G.P[localP].age>=3||G.P[localP].aging)return;
+  const nc=ageCostOf(localP,G.P[localP].age+1);
+  if(!canAfford(localP,nc)){toast('Not enough resources');return;}
   issue('age',{id:b.id});
 }
 function startBuildKey(bt){
   const d=BLDS[bt];
-  if(bt==='stable'&&civOf(0).noStable){toast(civOf(0).name+' field no cavalry');return;}
-  if(bt==='house'&&civOf(0).noHouse){toast('The Huns need no houses');return;}
-  if(d.age!==undefined&&G.P[0].age<d.age){toast('Requires the '+AGES[d.age]);return;}
-  if(!canAfford(0,bldCostOf(0,bt))){toast('Not enough resources');return;}
+  if(bt==='stable'&&civOf(localP).noStable){toast(civOf(localP).name+' field no cavalry');return;}
+  if(bt==='house'&&civOf(localP).noHouse){toast('The Huns need no houses');return;}
+  if(d.age!==undefined&&G.P[localP].age<d.age){toast('Requires the '+AGES[d.age]);return;}
+  if(!canAfford(localP,bldCostOf(localP,bt))){toast('Not enough resources');return;}
   G.placing=bt;G.pend=null;G.wallA=null;G.pendLine=null;refreshPanel();
   toast((bt==='wall'||bt==='swall')?'Tap where the wall starts':'Tap the map to place the '+d.name);
 }
@@ -8999,7 +9300,7 @@ window.addEventListener('keydown',e=>{
     const b=selB[0];
     const km=TRAIN_KEYS_BY_BLD[b.type];
     if(km&&km[k]){tryTrainKey(b,km[k]);return;}
-    if(b.type==='castle'&&k==='u'){tryTrainKey(b,CIVS[G.P[0].civ].uu);return;}
+    if(b.type==='castle'&&k==='u'){tryTrainKey(b,CIVS[G.P[localP].civ].uu);return;}
     if(b.type==='tc'&&k==='a'){tryAgeKey(b);return;}
   }
   if(selV.length){
@@ -9047,6 +9348,7 @@ document.querySelectorAll('.diff button[data-m]').forEach(b=>{
 document.getElementById('startBtn').onclick=()=>{
   initAudio();
   if(AC&&AC.state==='suspended')AC.resume();
+  resetNet();
   mission=null;
   document.getElementById('startOverlay').style.display='none';
   begin();
@@ -9054,6 +9356,7 @@ document.getElementById('startBtn').onclick=()=>{
 document.getElementById('contBtn').onclick=()=>{
   initAudio();
   if(AC&&AC.state==='suspended')AC.resume();
+  resetNet();
   resize();
   if(loadGame()){
     document.getElementById('startOverlay').style.display='none';
@@ -9074,6 +9377,104 @@ document.getElementById('campBtn').onclick=()=>{showCampaign();};
 document.getElementById('campBack').onclick=()=>{
   document.getElementById('campOverlay').style.display='none';
 };
+/* ================= multiplayer lobby ================= */
+let mpCfg={map:0,diff:1,turbo:0,ai:0,team:0};
+let mpCiv=0;
+const mpEl=id=>document.getElementById(id);
+function mpStatus(s){mpEl('mpStatus').textContent=s||'';}
+function mpShow(){
+  netReset();resetNet();
+  mpEl('mpConnect').style.display='';
+  mpEl('mpRoom').style.display='none';
+  mpEl('mpName').value=localStorage.getItem('tq_name')||'';
+  mpEl('mpCode').value='';
+  mpStatus(netAvailable()?'':'Multiplayer needs the web app at tiny-conquerors.onrender.com — the preview sandbox blocks connections.');
+  mpEl('mpOverlay').style.display='flex';
+}
+function mpShowRoom(){
+  mpEl('mpConnect').style.display='none';
+  mpEl('mpRoom').style.display='';
+  mpEl('mpRoomCode').textContent=netRoom;
+  mpEl('mpSub').textContent='Read the code out — anyone can join with it';
+  mpRenderLobby();
+}
+function mpRenderLobby(){
+  const ps=netLobby.players||[];
+  mpEl('mpPlayers').innerHTML=ps.map(p=>{
+    const me=p.seat===localP;
+    return '<div style="padding:3px 0;color:'+TEAMS[p.seat].dark+'">'
+      +'<b>'+(p.seat+1)+'.</b> '+p.name+(me?' <i>(you)</i>':'')
+      +(p.seat===netLobby.host?' 👑':'')
+      +' — '+CIVS[p.civ]?.name+'</div>';
+  }).join('')||'<div>Waiting for players…</div>';
+  mpEl('mpHostCtl').style.display=netHost?'':'none';
+  mpEl('mpWait').style.display=netHost?'none':'';
+  mpEl('mpCivName').textContent=CIVS[mpCiv].name;
+  if(netLobby.cfg&&!netHost){
+    const c=netLobby.cfg;
+    mpEl('mpWait').textContent='Waiting for the host to begin — '+MAPS[c.map|0].name
+      +(c.ai?' · '+c.ai+' computer opponent'+(c.ai>1?'s':''):'')
+      +(c.turbo?' · Turbo':'');
+  }
+}
+(function(){
+  const grid=mpEl('mpCivGrid');
+  CIVS.forEach((cv,i)=>{
+    const b=document.createElement('button');
+    b.textContent=cv.name;
+    if(i===0)b.classList.add('sel');
+    b.onclick=()=>{
+      mpCiv=i;
+      grid.querySelectorAll('button').forEach(x=>x.classList.remove('sel'));
+      b.classList.add('sel');
+      mpEl('mpCivName').textContent=cv.name;
+      mpEl('mpCivPick').open=false;
+      netSend({t:'seat',civ:i});
+    };
+    grid.appendChild(b);
+  });
+})();
+function mpHostBtnRow(sel,key,after){
+  document.querySelectorAll('#mpHostCtl button['+sel+']').forEach(b=>{
+    b.onclick=()=>{
+      document.querySelectorAll('#mpHostCtl button['+sel+']').forEach(x=>x.classList.remove('sel'));
+      b.classList.add('sel');
+      mpCfg[key]=+b.getAttribute(sel);
+      netSend({t:'cfg',cfg:mpCfg});
+      if(after)after();
+    };
+  });
+}
+mpHostBtnRow('data-mm','map');mpHostBtnRow('data-ma','ai');
+mpHostBtnRow('data-md','diff');mpHostBtnRow('data-mt','team');mpHostBtnRow('data-mb','turbo');
+mpEl('mpBtn').onclick=()=>{initAudio();mpShow();};
+mpEl('mpBack').onclick=()=>{netReset();resetNet();mpEl('mpOverlay').style.display='none';};
+mpEl('mpHost').onclick=()=>{
+  const name=(mpEl('mpName').value||'Player').trim();
+  localStorage.setItem('tq_name',name);netName=name;
+  netConnect(()=>{netSend({t:'host',name});netSend({t:'seat',civ:mpCiv});netSend({t:'cfg',cfg:mpCfg});});
+};
+mpEl('mpJoin').onclick=()=>{
+  const name=(mpEl('mpName').value||'Player').trim();
+  const code=(mpEl('mpCode').value||'').toUpperCase().trim();
+  if(code.length!==4){mpStatus('A room code is four letters');return;}
+  localStorage.setItem('tq_name',name);netName=name;
+  netConnect(()=>{netSend({t:'join',code,name});netSend({t:'seat',civ:mpCiv});});
+};
+mpEl('mpStart').onclick=()=>{
+  if(!netHost)return;
+  const ps=netLobby.players||[];
+  if(ps.length+ (mpCfg.ai|0) < 2){mpStatus('You need at least one opponent — a friend or a computer');return;}
+  netSend({t:'cfg',cfg:mpCfg});
+  netSend({t:'start',seed:(Math.random()*4294967296)>>>0});
+};
+mpEl('netHaltBtn').onclick=()=>{
+  mpEl('netHalt').style.display='none';
+  netReset();resetNet();
+  G=null;
+  mpEl('startOverlay').style.display='flex';
+  updateContBtn();
+};
 function showCampaign(){
   const prog=+(localStorage.getItem('tq_camp')||0);
   const list=document.getElementById('campList');list.innerHTML='';
@@ -9085,6 +9486,7 @@ function showCampaign(){
     if(locked)btn.disabled=true;
     else btn.onclick=()=>{
       initAudio();if(AC&&AC.state==='suspended')AC.resume();
+      resetNet();
       mission=mn;mapSel=mn.map;diffSel=mn.diff;
       document.getElementById('campOverlay').style.display='none';
       document.getElementById('startOverlay').style.display='none';
@@ -9106,8 +9508,14 @@ document.getElementById('againBtn').onclick=()=>{
   updateContBtn();
 };
 document.getElementById('menuBtn').onclick=()=>{
-  if(!G||G.over)return;G.paused=true;
+  if(!G||G.over)return;
+  // In a match the clock belongs to everyone: pausing here would stall every
+  // other player, so the menu opens over a running battle instead.
+  if(!netMode)G.paused=true;
   document.getElementById('menuOverlay').style.display='flex';
+  const sb=document.getElementById('saveBtn');
+  sb.style.display=netMode?'none':'';
+  document.getElementById('restartBtn').textContent=netMode?'Leave the battle':'Restart Battle';
 };
 document.getElementById('resumeBtn').onclick=()=>{
   G.paused=false;document.getElementById('menuOverlay').style.display='none';
@@ -9115,6 +9523,7 @@ document.getElementById('resumeBtn').onclick=()=>{
 document.getElementById('restartBtn').onclick=()=>{
   document.getElementById('menuOverlay').style.display='none';
   document.getElementById('startOverlay').style.display='flex';
+  netReset();resetNet();
   G=null;updateContBtn();
 };
 /* ================= main loop ================= */
@@ -9127,8 +9536,9 @@ function begin(){
   if(mission)toast('Mission: '+mission.name+' — '+mission.obj);
   else{
     const allies=[],foes=[];
-    for(let p=1;p<NP;p++)(allied(p,0)?allies:foes).push(CIVS[G.P[p].civ].name);
-    toast('You lead the '+CIVS[G.P[0].civ].name
+    for(let p=0;p<NP;p++){if(p===localP)continue;
+      (allied(p,localP)?allies:foes).push(CIVS[G.P[p].civ].name);}
+    toast('You lead the '+CIVS[G.P[localP].civ].name
       +(allies.length?' beside the '+allies.join(', '):'')
       +' — against the '+foes.join(', ')+'!');
   }
@@ -9145,7 +9555,36 @@ function frame(now){
   if(!G.paused&&!G.over){
     acc+=dt;
     let guard=0;
-    while(acc>=.05&&guard++<6){step(.05);acc-=.05;}
+    if(netMode){
+      // A networked turn runs only when every peer's orders for it have landed.
+      // Falling behind is not a reason to skip ahead — that is exactly the
+      // divergence lockstep exists to prevent — so we wait, and say who for.
+      while(acc>=.05&&guard++<6){
+        if(!netRunTurn())break;
+        acc-=.05;
+      }
+      if(acc>=.05){
+        const w=netWaitingOn(netTurn);
+        netStall+=dt;
+        acc=Math.min(acc,.05);            // don't bank a debt we'd sprint to repay
+        if(netStall>2.5&&w&&netStallSeat!==w.seat){
+          netStallSeat=w.seat;toast('Waiting for '+w.name+'…');
+        }
+        // Someone who has gone will never send another turn. Waiting on them
+        // forever is worse than saying so — a dropped player currently ends the
+        // battle, because handing their town to an AI would have to be a command
+        // every peer agreed on, and there is nobody left to agree with.
+        if(w&&netGone.has(w.seat)&&netStall>4)
+          netHalt(w.name+' left the battle',
+            'A lockstep match needs every player present.',
+            'Their towns cannot be handed to the computer mid-game — every machine would have to agree on the moment, and one of them is gone.');
+        else if(netStall>45)
+          netHalt('Lost contact','Nothing has arrived from '+(w?w.name:'the other players')+' for 45 seconds.',
+            'Your connection, or theirs, has gone quiet.');
+      }else{netStall=0;netStallSeat=-1;}
+    }else{
+      while(acc>=.05&&guard++<6){step(.05);acc-=.05;}
+    }
     if((now|0)%500<20)updateTop();
   }
   updateTop();

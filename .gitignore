@@ -1,3 +1,5 @@
 # local dev only — app/index.html is the deployable build
 test.html
+test-old.html
 *.jpg
+relay/node_modules/
