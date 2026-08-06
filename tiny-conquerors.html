@@ -56,10 +56,18 @@
   #deselBtn.live{opacity:1;border-color:#c25a48;color:#ffb9ad;
     background:linear-gradient(rgba(96,42,32,.95),rgba(58,24,18,.95));
     box-shadow:0 2px 4px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,190,170,.22);}
-  #deselBtn b{position:absolute;right:-3px;top:-4px;min-width:15px;padding:0 3px;
+  #deselBtn b,#idleBtn b{position:absolute;right:-3px;top:-4px;min-width:15px;padding:0 3px;
     font-size:9.5px;line-height:14px;border-radius:8px;background:#c25a48;color:#fff;
     border:1px solid #3a1812;font-weight:700;}
   #zoomBtns button{position:relative;}
+  /* idle-villager caller: quiet when everyone is working, gold when someone idles */
+  #idleBtn{opacity:.4;font-size:15px;transition:opacity .12s,border-color .12s;}
+  #idleBtn.live{opacity:1;border-color:var(--gold);
+    background:linear-gradient(rgba(84,66,26,.95),rgba(48,38,16,.95));}
+  #idleBtn.live b{background:#c9a227;color:#241a10;border-color:#3a2c10;}
+  /* collapsed panel: map takes the whole screen, one tap brings it back */
+  #panel.hidden{display:none;}
+  #panelBtn.up{color:var(--gold);border-color:var(--gold);}
   .ovt{position:absolute;pointer-events:none;z-index:3;font-size:12.5px;line-height:1.35;
     color:#fff;text-shadow:-1px 0 0 #000,1px 0 0 #000,0 -1px 0 #000,0 1px 0 #000,1px 2px 3px rgba(0,0,0,.7);}
   #clock{left:8px;top:6px;}
@@ -254,7 +262,9 @@
       <button id="zout" aria-label="Zoom out">−</button>
       <button id="boxBtn" aria-label="Box select" title="Drag a box to select multiple units">⬚</button>
       <button id="homeBtn" aria-label="Go to Town Hall" title="Jump to your Town Hall">⌂</button>
+      <button id="idleBtn" aria-label="Idle villager" title="Jump to an idle villager (.)">🧑‍🌾</button>
       <button id="deselBtn" aria-label="Deselect" title="Deselect everything (Esc)">✕</button>
+      <button id="panelBtn" aria-label="Hide panel" title="Hide the command panel for a bigger map">▾</button>
     </div>
     <div id="clock" class="ovt"></div>
     <div id="feed" class="ovt"></div>
@@ -733,6 +743,7 @@ const BLDS={
   monastery:{name:'Monastery',hp:900,size:2,cost:{w:175,g:100},bt:18,trains:['monk'],age:2},
 };
 const RES_META={food:{amt:175},wood:{amt:100},gold:{amt:450},fish:{amt:350}};
+const RES_COL={food:'#e6705e',wood:'#d8b070',gold:'#ffd75e',fish:'#bcd8e4'};
 const POP_MAX=80;
 const DIFF=[{trickle:0,firstWave:380,waveEvery:210,waveGrow:2,vT:[6,9,12,14]},
             {trickle:.8,firstWave:250,waveEvery:125,waveGrow:3,vT:[7,11,14,16]},
@@ -1498,7 +1509,12 @@ function step(dt){
         if(ut==='AGE'){
           if(b.qt>=AGE_TIME[G.P[b.p].age+1]){b.queue.shift();b.qt=0;G.P[b.p].age++;G.P[b.p].aging=false;
             if(b.p===0){toast('You have advanced to the '+AGES[G.P[0].age]+'!');
-              feed('You have advanced to the '+AGES[G.P[0].age]);snd('age');updateTop();refreshPanel();}}
+              feed('You have advanced to the '+AGES[G.P[0].age]);snd('age');updateTop();refreshPanel();
+              G.ageFx=1.4; // golden bloom over the new age
+              const ac=bldCenter(b);
+              for(let i=0;i<22;i++)G.fx.push({x:ac.x+(Math.random()-.5)*2.4,y:ac.y+(Math.random()-.5)*1.6,
+                vx:(Math.random()-.5)*1.2,vy:-1.4-Math.random()*1.6,life:1.1+Math.random()*.5,max:1.6,
+                r:1.5,kind:'chip',col:i%2?'#ffe9a0':'#c9a227'});}}
         }else if(b.qt>=trainTimeOf(b,ut)){
           b.queue.shift();b.qt=0;
           const spot=(UNITS[ut].ship
@@ -1595,6 +1611,7 @@ function step(dt){
   for(let i=G.fx.length-1;i>=0;i--){const f=G.fx[i];
     f.life-=dt;f.x+=f.vx*dt;f.y+=f.vy*dt;
     if(f.kind==='chip')f.vy+=8*dt;
+    if(f.kind==='text')f.vy*=.97; // gentle rise, easing out
     if(f.life<=0)G.fx.splice(i,1);}
   for(const u of G.units)if(u.flash>0)u.flash-=dt;
   for(const b of G.blds){
@@ -2067,7 +2084,12 @@ function updateUnit(u,dt){
       const b=dropoffFor(u);
       if(b){const c=bldCenter(b);
         if(Math.hypot(c.x-u.x,c.y-u.y)<b.size*.5+1.7){
-          if(u.carryType)G.P[u.p][u.carryType[0]]+=u.carry;
+          if(u.carryType){
+            G.P[u.p][u.carryType[0]]+=u.carry;
+            if(u.p===0&&tileVis(u.x,u.y)) // floating tally over the drop-off
+              G.fx.push({x:u.x,y:u.y-.6,vx:0,vy:-1.1,life:1,max:1,r:0,kind:'text',
+                txt:'+'+Math.round(u.carry),col:RES_COL[u.carryType]||'#f0e29a'});
+          }
           u.carry=0;updateTop();
           if(u.farm){u.state='toFarm';const cc=bldCenter(G.blds.find(x=>x.id===u.farm)||b);
             if(G.blds.find(x=>x.id===u.farm)){u.path=uPath(u,cc.x,cc.y,u.p)||[];}else u.state='idle';}
@@ -2691,6 +2713,7 @@ function updateOverlays(){ // throttled: writes at most once per game-second
   clockEl.textContent=hh+':'+mm+':'+ss+' ('+(mission?mission.name:DIFF_NAMES[diffSel])+')';
   updateArmyCounts();
   updateScores();
+  updateIdleBtn();
 }
 function updateArmyCounts(){
   let cav=0,rng=0,inf=0,sg=0;
@@ -6896,6 +6919,17 @@ function drawArrow(p){
 function drawFx(f){
   const a=Math.max(0,f.life/f.max);
   const fp=isoE(f.x,f.y),px=fp.x,py=fp.y;
+  if(f.kind==='text'){ // floating resource tally
+    ctx.save();
+    ctx.font='bold 11px "Segoe UI",system-ui,sans-serif';
+    ctx.textAlign='center';
+    ctx.lineWidth=3;ctx.strokeStyle='rgba(12,9,4,'+(a*.85)+')';
+    ctx.strokeText(f.txt,px,py);
+    ctx.fillStyle=f.col||'#f0e29a';
+    ctx.globalAlpha=a;ctx.fillText(f.txt,px,py);
+    ctx.restore();
+    return;
+  }
   if(f.kind==='smoke'){
     ctx.fillStyle='rgba('+(f.col||'66,62,58')+','+(a*.4)+')';
     ctx.beginPath();ctx.arc(px,py,f.r*(2.2-a),0,7);ctx.fill();
@@ -7095,6 +7129,14 @@ function draw(){
     ctx.setLineDash([6,4]);ctx.strokeRect(bx,by,bw,bh);ctx.setLineDash([]);
   }
   if(vig&&vig.width&&vig.height)ctx.drawImage(vig,0,0,vw,vh);
+  if(G.ageFx>0){ // age-up bloom: warm wash that fades from the screen edges
+    const a=Math.min(1,G.ageFx/1.4);
+    const gr=ctx.createRadialGradient(vw/2,vh/2,Math.min(vw,vh)*.2,vw/2,vh/2,Math.hypot(vw,vh)*.55);
+    gr.addColorStop(0,'rgba(255,226,140,0)');
+    gr.addColorStop(1,'rgba(255,214,110,'+(a*.5).toFixed(3)+')');
+    ctx.fillStyle=gr;ctx.fillRect(0,0,vw,vh);
+    G.ageFx-=1/60;
+  }
   drawMini();
 }
 function miniDiamond(){mctx.beginPath();mctx.moveTo(100,10);mctx.lineTo(196,58);
@@ -7248,6 +7290,24 @@ function zoomAt(nz,cx,cy){
   G.cam.x=wx-(cx-rect.left)/nz;G.cam.y=wy-(cy-rect.top)/nz;clampCam();
 }
 document.getElementById('homeBtn').onclick=()=>{if(G&&!G.over)selTC();};
+document.getElementById('idleBtn').onclick=()=>{if(G&&!G.over){snd('click');cycleIdleVill();}};
+document.getElementById('panelBtn').onclick=()=>{
+  const pn=document.getElementById('panel'),btn=document.getElementById('panelBtn');
+  const hide=!pn.classList.contains('hidden');
+  pn.classList.toggle('hidden',hide);
+  btn.classList.toggle('up',hide);
+  btn.textContent=hide?'▴':'▾';
+  btn.title=hide?'Show the command panel':'Hide the command panel for a bigger map';
+  snd('click');chkView(); // the map just grew/shrank — recalibrate immediately
+};
+// idle-villager counter, refreshed on the same 1/sec tick as the overlays
+function updateIdleBtn(){
+  const b=document.getElementById('idleBtn');if(!b||!G)return;
+  const n=G.units.filter(u=>u.p===0&&u.type==='villager'&&u.state==='idle'&&u.hp>0).length;
+  b.classList.toggle('live',n>0);
+  b.innerHTML='🧑‍🌾'+(n>0?'<b>'+(n>99?'99+':n)+'</b>':'');
+  b.title=n?'Jump to an idle villager — '+n+' idle (.)':'No idle villagers (.)';
+}
 // remember whether the manual was left open
 {const ht=document.getElementById('howto');
  if(ht){
@@ -7273,16 +7333,38 @@ function updateDeselBtn(){
 }
 document.getElementById('zin').onclick=()=>{if(G)zoomAt(Math.min(2.2,G.cam.z*1.25),vw/2,vh/2);};
 document.getElementById('zout').onclick=()=>{if(G)zoomAt(Math.max(.45,G.cam.z/1.25),vw/2,vh/2);};
-mini.addEventListener('pointerdown',e=>{
-  if(!G)return;
+// minimap: tap to jump, DRAG to scan, double-tap to drop a rally ping
+let miniDrag=false,miniLastTap=0;
+function miniToTile(e){
   const r=mini.getBoundingClientRect();
   const mx=(e.clientX-r.left)/r.width*200,my=(e.clientY-r.top)/r.height*116;
-  if(Math.abs(mx-100)/96+Math.abs(my-58)/48>1.06)return; // ignore the transparent corners
+  if(Math.abs(mx-100)/96+Math.abs(my-58)/48>1.06)return null; // transparent corners
   const a=96/MAP,b2=48/MAP;
   const u=(mx-100)/a,v=(my-10)/b2;
-  const tx=Math.max(0,Math.min(MAP,(u+v)/2)),ty=Math.max(0,Math.min(MAP,(v-u)/2));
-  centerOn(tx,ty);
+  return{tx:Math.max(0,Math.min(MAP,(u+v)/2)),ty:Math.max(0,Math.min(MAP,(v-u)/2))};
+}
+mini.addEventListener('pointerdown',e=>{
+  if(!G)return;
+  const t=miniToTile(e);if(!t)return;
+  const now=performance.now();
+  if(now-miniLastTap<330){ // double tap — ping the spot for yourself and your allies
+    const pgs=G.pings||(G.pings=[]);
+    pgs.push({x:t.tx,y:t.ty,t:G.t});if(pgs.length>6)pgs.shift();
+    snd('click');feed('Ping — attention marked');
+    miniLastTap=0;return;
+  }
+  miniLastTap=now;
+  miniDrag=true;mini.setPointerCapture(e.pointerId);
+  centerOn(t.tx,t.ty);
 });
+mini.addEventListener('pointermove',e=>{
+  if(!miniDrag||!G)return;
+  const t=miniToTile(e);if(t)centerOn(t.tx,t.ty);
+});
+const miniEnd=e=>{miniDrag=false;
+  try{mini.releasePointerCapture(e.pointerId);}catch(err){}};
+mini.addEventListener('pointerup',miniEnd);
+mini.addEventListener('pointercancel',miniEnd);
 function handleTap(cx,cy,mouse,right){
   const rect=view.getBoundingClientRect();
   const wx=G.cam.x+(cx-rect.left)/G.cam.z,wy=G.cam.y+(cy-rect.top)/G.cam.z;
