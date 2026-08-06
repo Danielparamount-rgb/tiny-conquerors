@@ -1815,6 +1815,20 @@ function followPath(u,dt){
   if(Math.abs(sdx)>.08)u.face=sdx>0?1:-1;
   return false;
 }
+/* Close the last of the gap on foot. The A* radii stay generous (tight ones
+   deadlocked villagers twice — see HANDOFF gotcha 1), so instead of shrinking
+   them we let an arrived unit creep the final stretch directly. walkTile is the
+   limiter, so a unit presses up against a tree/wall and simply stops there. */
+function creepToward(u,tx,ty,want,dt){
+  const dx=tx-u.x,dy=ty-u.y,d=Math.hypot(dx,dy);
+  if(d<=want||d<1e-4)return;
+  const step=Math.min(d-want,speedOf(u)*.55*dt);
+  const nx=u.x+dx/d*step,ny=u.y+dy/d*step;
+  const nav=!!UNITS[u.type].ship;
+  if(walkTile(nx,ny,u.p,nav)){u.x=nx;u.y=ny;}
+  else if(walkTile(nx,u.y,u.p,nav))u.x=nx;
+  else if(walkTile(u.x,ny,u.p,nav))u.y=ny;
+}
 function targetEnt(t){return t.bld?G.blds.find(b=>b.id===t.id):G.units.find(x=>x.id===t.id);}
 function nearestEnemy(p,x,y,r,unitsOnly){
   let best=null,bd=r;
@@ -2032,6 +2046,7 @@ function updateUnit(u,dt){
       const r=G.res[u.resKey];
       if(!r){autoNext(u);break;}
       slewHdg(u,r.x+.5,r.y+.5,dt);
+      creepToward(u,r.x+.5,r.y+.5,.95,dt); // stand right at the trunk/vein
       u.gatherT+=dt;
       if(u.gatherT>=1){u.gatherT=0;
         const cv=civOf(u.p);
@@ -2063,7 +2078,7 @@ function updateUnit(u,dt){
     case 'farming':{
       const b=G.blds.find(x=>x.id===u.farm);
       if(!b){u.state='idle';break;}
-      {const fc=bldCenter(b);slewHdg(u,fc.x,fc.y,dt);}
+      {const fc=bldCenter(b);slewHdg(u,fc.x,fc.y,dt);creepToward(u,fc.x,fc.y,.62,dt);}
       u.gatherT+=dt;
       if(u.gatherT>=1.25/((civOf(u.p).farmFast||1)*TB())){u.gatherT=0;u.carry+=1;u.carryType='food';
         // farms exhaust (manual); replant automatically while wood allows
@@ -2109,7 +2124,8 @@ function updateUnit(u,dt){
     case 'building':{
       const b=targetEnt(u.target);
       if(!b){u.state='idle';break;}
-      {const bc=bldCenter(b);slewHdg(u,bc.x,bc.y,dt);}
+      {const bc=bldCenter(b);slewHdg(u,bc.x,bc.y,dt);
+       creepToward(u,bc.x,bc.y,b.size*.5+.55,dt);} // hands on the scaffolding
       if(b.built){u.state='idle';
         if(b.type==='farm')cmdFarm(u,b);
         break;}
@@ -2154,10 +2170,15 @@ function updateUnit(u,dt){
       const rad=u.target.bld?t.size*.5:.3;
       const dist=Math.hypot(c.x-u.x,c.y-u.y)-rad;
       const uRng=rangeOf(u);
-      const rng=u.target.bld?Math.max(uRng,1.3):Math.max(uRng,.65);
+      // engagement radius: ranged units keep their range; melee close right up
+      const rng=u.target.bld?Math.max(uRng,1.25):Math.max(uRng,.62);
       if(dist<=rng){
         u.path=null;u.spd=0;u.vx=0;u.vy=0;
         slewHdg(u,c.x,c.y,dt); // face the victim so the windup aims right
+        if(uRng<=1){ // melee: press in to sword's length instead of hovering
+          const want=u.target.bld?rad+.5:.44;
+          creepToward(u,c.x,c.y,want,dt);
+        }
         if(d.treb&&!u.setup){ // a trebuchet unpacks before its first shot
           u.setup=true;u.cd=Math.max(u.cd,hasUt(u.p,'kataparuto')?1.5:3);}
         if(u.cd<=0){u.cd=rofOf(u);
@@ -4988,7 +5009,9 @@ function drawManRig(u,t,TC,mc){
   const phi=octPhi(u),pr=rigProj(phi),s=pr.s,c=pr.c,sgn=c>=0?1:-1;
   const g=gaitOf(u,t);
   const ap=atkPhase(u);
-  const bob=g.mv?Math.abs(Math.sin(Math.PI*2*g.ph))*.3:0; // stiffer, sprite-like gait
+  // stiffer, sprite-like gait; standing units breathe so they never read as frozen
+  const bob=g.mv?Math.abs(Math.sin(Math.PI*2*g.ph))*.3
+                :Math.sin(t*.55+(u.id||0)*1.7)*.22;
   const tunicC=mc.tunic==='team'?TC.main:mc.tunic==='dark'?TC.dark:mc.tunic;
   const working=u.state==='gather'||u.state==='farming'||u.state==='building';
   ctx.save();ctx.translate(0,-bob);
@@ -5106,7 +5129,15 @@ function drawManRig(u,t,TC,mc){
     limb(el.x,el.y,hd2.x,hd2.y,SKIN,1.5);hand(hd2.x,hd2.y);};
   if(mc.weapon==='tool'){
     if(working){
-      const a=Math.sin(u.gatherT*6.283)*0.95-0.5;
+      // real tool stroke: slow lift, snap down on the strike, brief settle —
+      // a plain sine read as limp waving
+      // phased so the blade bottoms out exactly as the resource tick fires
+      // (gatherT wraps at 1 and spawns the chips) — the hit and the chips land together
+      const ph=(u.gatherT||0)%1;
+      let a;
+      if(ph<.18)a=-1.1+(ph/.18)*.6;                      // settle after the last blow
+      else if(ph<.80)a=-.5+Math.pow((ph-.18)/.62,.8)*1.5; // lift and hold high
+      else a=1.0-Math.pow((ph-.80)/.20,.7)*2.1;           // snap down onto the wood
       const sh=pr(2.3,1,10.2);
       ctx.save();ctx.translate(sh.x,sh.y);ctx.rotate(pr.a*.6+a);
       limb(0,0,2.4,.6,tunicC,1.7);
