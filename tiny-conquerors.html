@@ -751,6 +751,16 @@ const DIFF=[{trickle:0,firstWave:380,waveEvery:210,waveGrow:2,vT:[6,9,12,14]},
 
 /* ================= state ================= */
 let G=null, diffSel=0, civSel=0, mapSel=0, playersSel=2, teamSel=0, turboSel=0, NP=2, uid=1;
+/* ---------- deterministic simulation RNG (multiplayer foundation) ----------
+   Every random draw that changes GAME STATE must come from SR()/SRi(), seeded
+   once per match. Two machines given the same seed and the same command stream
+   then produce byte-identical games — the lockstep model real RTS netcode uses.
+   Cosmetic randomness (particles, corpse poses, sound variation) deliberately
+   stays on Math.random(): it never touches G, so it may differ between peers. */
+let gameSeed=0,simR=null;
+function seedSim(s){gameSeed=s>>>0;simR=mulberry(gameSeed);}
+function SR(){return simR?simR():Math.random();}      // [0,1)
+function SRi(n){return Math.floor(SR()*n);}            // integer [0,n)
 // Turbo pace (CD WHATSNEW): work rates x2.5 (military training, construction,
 // gathering, carry), trade x2 — economy unit training stays normal.
 function TB(){return turboSel?2.5:1;}
@@ -796,7 +806,34 @@ const MISSIONS=[
    setup(){G.P[0].w+=150;},
    obj:'Destroy BOTH enemy Town Halls. They share vision — watch every ford.'},
 ];
+/* Fingerprint of everything that IS the game state. Two peers running the same
+   seed and the same commands must agree on this every tick; the first tick they
+   disagree is the desync, and comparing hashes is how a match detects it early
+   rather than drifting silently. Deliberately excludes cosmetics (fx, corpses,
+   rubble, camera, selection) — those are allowed to differ between machines. */
+function stateHash(){
+  if(!G)return '0';
+  const r=n=>Math.round(n*1e6)/1e6;
+  const U=G.units.map(u=>[u.id,u.p,u.type,r(u.x),r(u.y),r(u.hp),u.state,r(u.cd)].join(',')).join('|');
+  const B=G.blds.map(b=>[b.id,b.p,b.type,b.tx,b.ty,r(b.hp),b.built?1:0,b.queue.join('+')].join(',')).join('|');
+  const R=Object.keys(G.res).sort().map(k=>k+':'+r(G.res[k].amt)).join('|');
+  const P=G.P.map(s=>[r(s.f),r(s.w),r(s.g),s.age,s.civ,(s.uts||[]).join('+'),
+    JSON.stringify(s.eco||{}),JSON.stringify(s.uni||{}),s.pt?1:0].join(',')).join('|');
+  const A=G.ais.map(a=>a?[a.wave,r(a.nextAtk),a.tgtId||0].join(','):'-').join('|');
+  const str=U+'#'+B+'#'+R+'#'+P+'#'+A+'#'+r(G.t)+'#'+uid;
+  let h=2166136261;
+  for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619);}
+  return (h>>>0).toString(16);
+}
+let pendingSeed=0; // set by a replay or an incoming multiplayer match; 0 = fresh
 function newGame(){
+  // Seed FIRST: map generation and civ assignment both draw from it, so the
+  // whole match is reproducible from this one number.
+  seedSim(pendingSeed||((Math.random()*4294967296)>>>0));
+  pendingSeed=0;
+  // Entity ids MUST restart every match: commands reference units by id, and
+  // unit behaviour reads it (creep stagger), so a stale counter desyncs peers.
+  uid=1;
   NP=mission?(1+(mission.foes||1)):playersSel;
   // Roomier battlefields. Ceiling is 128: the terrain canvas is MAP*TILE*TREZT
   // square, and 144 would be 3744px — close to the 4096px canvas limit phones
@@ -822,7 +859,7 @@ function newGame(){
   const used=[civSel];
   const ais=[null];
   for(let p=1;p<NP;p++){
-    let c;do{c=Math.floor(Math.random()*CIVS.length);}while(used.includes(c));
+    let c;do{c=SRi(CIVS.length);}while(used.includes(c));
     used.push(c);
     P.push(mkP(c));
     ais.push({wave:0,nextAtk:DIFF[diffSel].firstWave+(p-1)*40,tick:.3*(p-1),attacking:false});
@@ -874,7 +911,7 @@ function placeRelics(){
     spots=[];
     let guard=0;
     while(spots.length<8&&guard++<300){
-      const x=4+Math.floor(Math.random()*(MAP-8)),y=4+Math.floor(Math.random()*(MAP-8));
+      const x=4+SRi(MAP-8),y=4+SRi(MAP-8);
       if(START.some(([bx,by])=>Math.hypot(x-bx,y-by)<8))continue;
       if(spots.some(([sx,sy])=>Math.hypot(x-sx,y-sy)<7))continue;
       spots.push([x,y]);
@@ -897,7 +934,7 @@ function genMapForest(){
   G.map=Array.from({length:MAP},()=>Array(MAP).fill(0));
   G.water={};G.ford={};
   G.elev=new Uint8Array(MAP*MAP);
-  const rng=(n)=>Math.floor(Math.random()*n);
+  const rng=(n)=>SRi(n);
   const C=MAP/2;
   // carve open ground out of what will otherwise be solid forest
   const open=new Uint8Array(MAP*MAP);
@@ -913,7 +950,7 @@ function genMapForest(){
     let x=x0,y=y0,guard=0;
     while(Math.hypot(x1-x,y1-y)>1.5&&guard++<400){
       carve(Math.round(x),Math.round(y),w);
-      const a=Math.atan2(y1-y,x1-x)+(Math.random()-.5)*.9;
+      const a=Math.atan2(y1-y,x1-x)+(SR()-.5)*.9;
       x+=Math.cos(a)*1.3;y+=Math.sin(a)*1.3;
     }};
   // a spoke trail from every base to the contested center, plus two pocket trails
@@ -950,7 +987,7 @@ function placeForest(cx,cy,n,minStart){
   let placed=0,guard=0;
   const near=(x,y)=>START.some(([bx,by])=>Math.hypot(x-bx,y-by)<(minStart||10));
   while(open.length&&placed<n&&guard++<n*14){
-    const i=Math.floor(Math.random()*open.length);
+    const i=SRi(open.length);
     const spot=open.splice(i,1)[0],x=spot[0],y=spot[1],k=x+','+y;
     if(seen.has(k))continue;
     seen.add(k);
@@ -958,14 +995,14 @@ function placeForest(cx,cy,n,minStart){
     if(G.map[y][x]||G.res[k]||G.ford[k]||G.water[k]||near(x,y))continue;
     G.res[k]={type:'wood',amt:RES_META.wood.amt,x,y};G.map[y][x]=1;placed++;
     for(const d of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]])
-      if(Math.random()<.74)open.push([x+d[0],y+d[1]]);
+      if(SR()<.74)open.push([x+d[0],y+d[1]]);
   }
   return placed;
 }
 function genMapRiver(){
   G.map=Array.from({length:MAP},()=>Array(MAP).fill(0)); // 0 grass 1 blocked
   G.water={};G.ford={};
-  const rng=(n)=>Math.floor(Math.random()*n);
+  const rng=(n)=>SRi(n);
   // meandering river NW->SE with three sandy fords — four tiles wide so a
   // navy has room to maneuver and docks find a 2x2 berth
   for(let x=0;x<MAP;x++){
@@ -1031,7 +1068,7 @@ function genMapHallowed(){
   // generator built to the proportions in the CD's HALLOWED.RMS sample script
   G.map=Array.from({length:MAP},()=>Array(MAP).fill(0));
   G.water={};G.ford={};
-  const rng=(n)=>Math.floor(Math.random()*n);
+  const rng=(n)=>SRi(n);
   // ponds (the script's little oases), never near a start; fish in each
   for(let p2=0,nP=Math.round(8*MAP*MAP/4096);p2<nP;p2++){
     const px=6+rng(MAP-12),py=6+rng(MAP-12),pr=2+rng(2);
@@ -1711,7 +1748,7 @@ function step(dt){
       for(const gu of u.gar){
         if(UNITS[u.type].ship&&!shore){gu.hp=0;continue;} // drowned mid-channel
         const bx2=shore?shore.x+.5:u.x,by2=shore?shore.y+.5:u.y;
-        gu.x=bx2+(Math.random()-.5);gu.y=by2+(Math.random()-.5);
+        gu.x=bx2+(SR()-.5);gu.y=by2+(SR()-.5);
         gu.state='idle';gu.path=null;gu.target=null;gu.spd=0;gu.vx=0;gu.vy=0;
         G.units.push(gu);}
       u.gar=[];
@@ -2749,7 +2786,7 @@ function saveGame(){
     const strip=u=>{const o=Object.assign({},u);o.path=null;o._gar=null;o._garU=null;
       if(o.gar)o.gar=o.gar.map(g=>Object.assign({},g,{path:null,_gar:null,_garU:null}));
       return o;};
-    const data={v:1,t:G.t,mapSel,diffSel,turboSel,uid,np:NP,mapN:MAP,starts:START,teams:G.teams,
+    const data={v:1,t:G.t,mapSel,diffSel,turboSel,seed:gameSeed,uid,np:NP,mapN:MAP,starts:START,teams:G.teams,
       wonderT:G.wonderT||null,relicT:G.relicT||null,
       mission:mission?mission.id:null,
       P:G.P,ais:G.ais,relics:G.relics,groups:G.groups,stats:G.stats,cam:G.cam,
@@ -2766,6 +2803,7 @@ function loadGame(){
   try{data=JSON.parse(localStorage.getItem('tq_save'));}catch(e){return false;}
   if(!data||data.v!==1)return false;
   mapSel=data.mapSel;diffSel=data.diffSel;turboSel=data.turboSel||0;uid=data.uid||1;
+  seedSim(data.seed||1);
   NP=data.np||data.P.length||2;
   setMapSize(data.mapN||64);
   START=data.starts||genStarts(NP);
@@ -8090,7 +8128,7 @@ function refreshPanel(){
         let n=0;
         for(const gu of u0.gar){
           if(shore){gu.x=shore.x+.5+(n%2)*.4;gu.y=shore.y+.5+((n/2)|0)*.4;}
-          else{gu.x=u0.x+(Math.random()-.5);gu.y=u0.y+(Math.random()-.5);}
+          else{gu.x=u0.x+(SR()-.5);gu.y=u0.y+(SR()-.5);}
           gu.state='idle';gu.path=null;gu.target=null;gu.spd=0;gu.vx=0;gu.vy=0;
           G.units.push(gu);n++;}
         u0.gar=[];snd('click');refreshPanel();});
