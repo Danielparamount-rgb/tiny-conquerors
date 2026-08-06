@@ -52,7 +52,7 @@ A mobile-friendly, browser-based RTS inspired by Age of Empires II: The Conquero
 
 ## Render app deployment — ✅ LIVE
 - **https://tiny-conquerors.onrender.com** — Render static site `tiny-conquerors`, service ID `srv-d9pibf5bedkc73c5qumg`, connected to GitHub repo Danielparamount-rgb/tiny-conquerors, branch `main`, **publish directory `app`**, no build command. Auto-deploys on push to main.
-- Current live version: **sw `tq-v17`** (closer-engagement). Verified after every deploy by fetching sw.js + index.html from the shell (bypasses the cache-first SW).
+- Current live version: **sw `tq-v18`** (death-animation). Verified after every deploy by fetching sw.js + index.html from the shell (bypasses the cache-first SW).
 - **Commit-message gotcha**: PowerShell here-strings choke on messages containing double quotes (`git commit -m @'...'@` split mid-message once). Use the Bash tool with `git commit -F - << 'EOF'` for multi-line messages.
 - First verified live 2026-08-05 (tq-v1): SW active, manifest served as `application/manifest+json` (installable), icons OK, zero console errors.
 - **GOTCHA — Render header rule for the manifest**: Render serves `.webmanifest` as `binary/octet-stream`, which can block Add-to-Home-Screen. Fixed with a dashboard Headers rule: path `/manifest.webmanifest`, name `Content-Type`, value `application/manifest+json`. Saving headers triggers a redeploy — during it files 404 inconsistently for ~30s; that's transient, re-check before diagnosing.
@@ -74,6 +74,11 @@ A mobile-friendly, browser-based RTS inspired by Age of Empires II: The Conquero
 - IP boundary told to user (they asked for "exactly like AoE2", "just for friends"): imitate style with ORIGINAL art/sounds only; no ripped Microsoft assets, especially once hosted on Render.
 
 ## Recent fixes (last published state)
+- Label "death-animation" (2026-08-05, sw tq-v18, commit 4141d53): units topple instead of popping to a corpse.
+  - Corpse records now carry `hdg`, `face`, `fall` (±1) captured at death (in the dead-cleanup block of step()).
+  - `drawCorpse` first 0.5s: draws the **living rig** via `drawUnitBody` on a fake unit (same trick portraitFor uses), rotating `fall*1.32*smoothstep`, sinking 2.2px, scaling 1.18 (matching drawUnit) and flattening 30%. **Stepped in 6 hard poses on purpose — period sheets ran ~12fps; do not smooth this out.**
+  - Ships/rams skip it (wreck sprites) and corpses lacking `hdg` (older saves) fall back to the previous squash — that fallback is why nothing throws; keep it.
+  - Corpses are never serialized, so save/load is unaffected. Cost: 25 simultaneous deaths = 1.2ms/frame.
 - Label "closer-engagement" (2026-08-05, sw tq-v17, commit b7aabfa): user — units stood too far from what they gather/fight.
   - **`creepToward(u,tx,ty,want,dt)`** (defined just above targetEnt): after the state machine has ARRIVED, walk the last stretch directly at .55×speed with `walkTile` as the limiter (slides on one axis if blocked). **This is the safe way to close distance — the A* arrival radii (gather 1.8 / farm 1.85 / build size*.5+1.7) are UNCHANGED, so gotcha 1's deadlock protection still holds.** Called from gather (.95), farming (.62), building (size*.5+.55), and melee attack.
   - Melee engagement: `rng` for units .65→.62, buildings 1.3→1.25, and **only when `rangeOf(u)<=1`** does the attack case creep in (unit .44, building rad+.5). Ranged/siege never creep — verified an archer holds 5.26 with range 5.
