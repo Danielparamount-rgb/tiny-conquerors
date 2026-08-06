@@ -52,7 +52,7 @@ A mobile-friendly, browser-based RTS inspired by Age of Empires II: The Conquero
 
 ## Render app deployment — ✅ LIVE
 - **https://tiny-conquerors.onrender.com** — Render static site `tiny-conquerors`, service ID `srv-d9pibf5bedkc73c5qumg`, connected to GitHub repo Danielparamount-rgb/tiny-conquerors, branch `main`, **publish directory `app`**, no build command. Auto-deploys on push to main.
-- Current live version: **sw `tq-v20`** (sound-pass). Verified after every deploy by fetching sw.js + index.html from the shell (bypasses the cache-first SW).
+- Current live version: **sw `tq-v21`** (bigger-maps). Verified after every deploy by fetching sw.js + index.html from the shell (bypasses the cache-first SW).
 - **Commit-message gotcha**: PowerShell here-strings choke on messages containing double quotes (`git commit -m @'...'@` split mid-message once). Use the Bash tool with `git commit -F - << 'EOF'` for multi-line messages.
 - First verified live 2026-08-05 (tq-v1): SW active, manifest served as `application/manifest+json` (installable), icons OK, zero console errors.
 - **GOTCHA — Render header rule for the manifest**: Render serves `.webmanifest` as `binary/octet-stream`, which can block Add-to-Home-Screen. Fixed with a dashboard Headers rule: path `/manifest.webmanifest`, name `Content-Type`, value `application/manifest+json`. Saving headers triggers a redeploy — during it files 404 inconsistently for ~30s; that's transient, re-check before diagnosing.
@@ -74,6 +74,13 @@ A mobile-friendly, browser-based RTS inspired by Age of Empires II: The Conquero
 - IP boundary told to user (they asked for "exactly like AoE2", "just for friends"): imitate style with ORIGINAL art/sounds only; no ripped Microsoft assets, especially once hosted on Render.
 
 ## Recent fixes (last published state)
+- Label "bigger-maps" (2026-08-05, sw tq-v21, commit c198e1d): user asked for much bigger, more detailed maps with clumpier trees.
+  - **Sizes**: `setMapSize(mapSel===1?(NP<=4?96:112):(NP<=2?96:NP<=4?112:128))`. **128 is the hard ceiling** — terrain canvas is `MAP*TILE*TREZT` square, so 144→3744px and 160→4160px, and phones cap canvas dimensions at 4096px. Measured: 128@TREZT1 = 3328px / 42MB. Black Forest stays one size down (it fills every non-clearing tile; 12k trees at 128 made the whole-map view 44.5ms — at 112 it's 10.5ms).
+  - **A* budget** now `Math.max(7000,MAP*MAP*.75)` — the old fixed 7000 could not path across a 128 board.
+  - **`placeForest(cx,cy,n,minStart)`**: grows a dense blob by splicing a RANDOM frontier tile each step (random order = ragged lobes; sequential = circles) and pushing 8-neighbours at p=.74. River uses `11*MAP²/4096` forests of 26–78; Hallowed `8*MAP²/4096` of 16–46. Clumping metric (avg orthogonal neighbours per tree): **0.5 → 2.8**. Re-run that metric if you retune.
+  - **Doodads** widened ~15%→~24% of tiles (bands in the refreshTerrain per-tile loop: tufts <11, flowers <15, pebbles <18, bush <21, rock <23, log ===23).
+  - **Two bugs fixed**: (1) `Math.sign(MAP/2-bx)` returns **0** for a start exactly on the centre axis — the woodline `bx+dx,by+9*dy` then collapsed onto the Town Hall; hit 4 of 8 ring starts. Now `||1` (genMapHallowed already had it). (2) `genMap` now strips any resource from every TC footprint + 1-tile ring after generation, whichever generator ran — cheaper than auditing each path.
+  - Verified 8p on all three maps: 0 blocked TCs, all AI economies 0-idle, whole-map frames 19.8/10.5/7.9ms, save/load + cross-map path OK.
 - Label "sound-pass" (2026-08-05, sw tq-v20, commit 993ad4b): audio had gone untouched since before siege/gunpowder/monks/collapse existed — cannons were silent, conversion played the age fanfare, buildings fell without a sound.
   - New synth voices beside the existing ones: **`sBoom`** (sub-bass thump, sine+triangle), **`sCreak`** (sawtooth through a sweeping high-Q bandpass = rope under load), **`sChant`** (stacked fifths through a vowel formant).
   - New kinds: `gun`, `cannon`, `treb`, `sling`, `twang`, `crash`, `collapse`, `convert` (all with throttle gaps in the `gap` map — add one for any new kind or it inherits 120ms).
