@@ -52,7 +52,7 @@ A mobile-friendly, browser-based RTS inspired by Age of Empires II: The Conquero
 
 ## Render app deployment — ✅ LIVE
 - **https://tiny-conquerors.onrender.com** — Render static site `tiny-conquerors`, service ID `srv-d9pibf5bedkc73c5qumg`, connected to GitHub repo Danielparamount-rgb/tiny-conquerors, branch `main`, **publish directory `app`**, no build command. Auto-deploys on push to main.
-- Current live version: **sw `tq-v15`** (phone-ui-pass). Verified after every deploy by fetching sw.js + index.html from the shell (bypasses the cache-first SW).
+- Current live version: **sw `tq-v16`** (quality-of-life). Verified after every deploy by fetching sw.js + index.html from the shell (bypasses the cache-first SW).
 - **Commit-message gotcha**: PowerShell here-strings choke on messages containing double quotes (`git commit -m @'...'@` split mid-message once). Use the Bash tool with `git commit -F - << 'EOF'` for multi-line messages.
 - First verified live 2026-08-05 (tq-v1): SW active, manifest served as `application/manifest+json` (installable), icons OK, zero console errors.
 - **GOTCHA — Render header rule for the manifest**: Render serves `.webmanifest` as `binary/octet-stream`, which can block Add-to-Home-Screen. Fixed with a dashboard Headers rule: path `/manifest.webmanifest`, name `Content-Type`, value `application/manifest+json`. Saving headers triggers a redeploy — during it files 404 inconsistently for ~30s; that's transient, re-check before diagnosing.
@@ -74,6 +74,13 @@ A mobile-friendly, browser-based RTS inspired by Age of Empires II: The Conquero
 - IP boundary told to user (they asked for "exactly like AoE2", "just for friends"): imitate style with ORIGINAL art/sounds only; no ripped Microsoft assets, especially once hosted on Render.
 
 ## Recent fixes (last published state)
+- Label "quality-of-life" (2026-08-05, sw tq-v16, commit e7d97c9): the five suggestions from the tq-v15 audit, all shipped.
+  - **`#idleBtn`** in the zoomBtns cluster; `updateIdleBtn()` called from `updateOverlays()` (1/sec throttle) toggles `.live` + count badge. Cheap: one filter over G.units per second.
+  - **Floating tallies**: new fx kind `'text'` (fields `txt`,`col`; `drawFx` early-returns for it with stroke-then-fill so it reads over any terrain). Pushed in the `return` state when carry is banked, player 0 + visible only. `RES_COL` map added beside RES_META.
+  - **Minimap**: `miniToTile(e)` extracted; pointerdown = jump + arm drag (`miniDrag`, pointer capture), pointermove = continuous scan, double-tap (<330ms) = push to `G.pings`. **Gotcha: a tap immediately followed by a drag reads as a double-tap — that's intended double-tap semantics, don't "fix" it.**
+  - **Age-up fanfare**: `G.ageFx=1.4` + 22 gold chip sparks at the TC; draw() paints a radial warm bloom and decays `G.ageFx` by 1/60 per frame (transient, never serialized).
+  - **`#panelBtn`** toggles `#panel.hidden` (display:none) → +201px map on a phone (~36% more); calls `chkView()` so the canvas recalibrates instantly and clicks stay true.
+  - Verified: 8-min sim 276ms, frame 1.4ms, fx array stable at 15 (no leak), pings capped at 6, save/load clean.
 - Label "phone-ui-pass" (2026-08-05, sw tq-v15, commit 4ef734b): full UI audit at 375x812. **Measured problems**: start screen 2506px tall / 618 words / 3.4 screens with `#startBtn` at offsetTop **2421px**; villager build menu showed **10 of 20** buildings. Fixes:
   - Start overlay restructured: title → goal → `#setupBlock` (civ/map/foe/players/teams/turbo) → Start/Campaign/Continue → rule → `<details id="howto">` **closed by default**, state in `localStorage['tq_howto']`. Page now **779px**, Start fully on-screen at phone AND desktop (desktop needed the compaction rules to be global, not inside the 560px media query — watch that if adding setup rows).
   - `<details id="civPick">` wraps `#civGrid`; summary shows `#civPickName`, and picking a civ closes it (civGrid button onclick).
