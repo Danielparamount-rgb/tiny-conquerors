@@ -1605,7 +1605,15 @@ function step(dt){
           r:3+Math.random()*2.5,kind:'smoke',col:'150,136,104'});
         for(let di=0;di<3;di++)G.fx.push({x:pr.x1,y:pr.y1,vx:(Math.random()-.5)*3,
           vy:-1-Math.random()*1.4,life:.4,max:.4,r:1.4,kind:'chip',col:'#a89878'});
-      }else G.fx.push({x:pr.x1,y:pr.y1,vx:0,vy:0,life:.18,max:.18,r:2,kind:'spark'});
+      }else{
+        G.fx.push({x:pr.x1,y:pr.y1,vx:0,vy:0,life:.18,max:.18,r:2,kind:'spark'});
+        if(pr.tid){ // arrow buried in the target — rides along until it fades
+          const vic=G.units.find(x=>x.id===pr.tid&&x.hp>0);
+          if(vic)G.stuck.push({uid:pr.tid,ox:(Math.random()-.5)*.34,oy:-.35-Math.random()*.3,
+            t:2.2,max:2.2,a:(Math.random()-.5)*1.5,x:vic.x,y:vic.y});
+          if(G.stuck.length>50)G.stuck.shift();
+        }
+      }
       G.proj.splice(i,1);}}
   // particles / flashes / corpses / smoke
   for(let i=G.fx.length-1;i>=0;i--){const f=G.fx[i];
@@ -1727,9 +1735,18 @@ function removeBld(i){
   ejectGarrison(b);
   for(const r of G.relics)if(r.mon===b.id)r.mon=null; // relics tumble out of a razed monastery
   if(b.built&&!BLDS[b.type].farm){ // collapse into rubble under a dust burst
-    G.rubble.push({tx:b.tx,ty:b.ty,size:b.size,p:b.p,t:45,max:45,v:(b.tx*7+b.ty*13)%2});
+    // remember the structure so it can be seen collapsing before the pile shows
+    G.rubble.push({tx:b.tx,ty:b.ty,size:b.size,p:b.p,t:45,max:45,v:(b.tx*7+b.ty*13)%2,
+      type:b.type,tilt:Math.random()<.5?-1:1});
     if(G.rubble.length>40)G.rubble.shift();
     const cc=bldCenter(b);
+    // dust rolls outward from the footprint as it comes down
+    for(let fi=0;fi<14;fi++){
+      const an=Math.random()*6.283,rr=b.size*(.4+Math.random()*.7);
+      G.fx.push({x:cc.x+Math.cos(an)*rr,y:cc.y+Math.sin(an)*rr*.6,
+        vx:Math.cos(an)*.9,vy:Math.sin(an)*.4-.25,
+        life:1.3+Math.random()*.9,max:2.2,r:4+Math.random()*4,kind:'smoke',col:'163,148,116'});
+    }
     for(let fi=0;fi<8;fi++)G.fx.push({x:cc.x+(Math.random()-.5)*b.size,y:cc.y+(Math.random()-.5)*b.size,
       vx:(Math.random()-.5)*.8,vy:-.5-Math.random()*.6,life:1.1+Math.random()*.6,max:1.7,
       r:3.5+Math.random()*3,kind:'smoke',col:'156,140,104'});
@@ -2222,6 +2239,13 @@ function updateUnit(u,dt){
           }
           const rangedKind=d.range>1?((d.siege||d.gun)?'siege':true):false;
           dealDamage({ent:t,bld:u.target.bld},dmg,u.p,rangedKind);
+          // heavy melee shoves its victim back a touch — sells the weight of the blow
+          if(!u.target.bld&&!rangedKind&&dmg>=8&&t.hp>0&&!UNITS[t.type].ship){
+            const kx=t.x-u.x,ky=t.y-u.y,kd=Math.hypot(kx,ky)||1;
+            const push=Math.min(.16,.012*dmg);
+            const nx2=t.x+kx/kd*push,ny2=t.y+ky/kd*push;
+            if(walkTile(nx2,ny2,t.p)){t.x=nx2;t.y=ny2;}
+          }
           if(d.petard){ // hoisted by its own petard — the charge consumes the unit
             u.hp=0;
             G.fx.push({x:u.x,y:u.y-.3,vx:0,vy:-.4,life:.5,max:.5,r:9,kind:'smoke',col:'#e8b45a'});
@@ -2258,7 +2282,7 @@ function updateUnit(u,dt){
             G.proj.push({x0:u.x,y0:u.y-.4,
               x1:c.x+(ms?(Math.random()-.5)*.9:0),y1:c.y+(ms?(Math.random()-.5)*.9:0),t:0,
               dur:Math.max(.14,Math.hypot(c.x-u.x,c.y-u.y)*(kind==='ball'?.045:kind==='stone'?.11:.07)),
-              miss:ms,kind});
+              miss:ms,kind,tid:(!kind&&!u.target.bld)?t.id:null}); // arrows remember their mark
             if(kind==='ball')G.fx.push({x:u.x,y:u.y-.5,vx:0,vy:-.3,life:.3,max:.3,r:3.5,kind:'smoke',col:'200,196,186'});
           }}
       }else{
@@ -7048,17 +7072,41 @@ function draw(){
   for(const rb of G.rubble){
     if(!tileKnown(rb.tx+rb.size/2,rb.ty+rb.size/2))continue;
     const p2=isoPt(rb.tx,rb.ty);p2.y-=elevTile(rb.tx+rb.size/2,rb.ty+rb.size/2)*10;
+    const age=rb.max-rb.t;
+    // COLLAPSE: for the first .7s the structure itself buckles — it leans,
+    // drops through its own footprint and squashes, then the pile takes over
+    if(age<.7&&rb.type&&ISO_ART[rb.type]){
+      const f=Math.min(1,age/.7),e=f*f;              // accelerating fall
+      const bs=getBldSpr(rb.type,rb.p,true,0,hash2(rb.tx,rb.ty)%3);
+      const southY=p2.y+2*rb.size*IH;
+      ctx.save();
+      ctx.translate(p2.x,southY);
+      ctx.rotate(rb.tilt*.13*e);
+      ctx.scale(1.13,1.13*(1-.72*e));                 // sink into its own base
+      ctx.globalAlpha=1-.35*e;
+      ctx.drawImage(bs.c,-bs.ox,-(bs.oy+2*rb.size*IH),bs.w,bs.h);
+      ctx.restore();ctx.globalAlpha=1;
+      continue;
+    }
     const sp=getRubbleSpr(rb.size,rb.p,rb.v);
-    ctx.globalAlpha=Math.min(.95,rb.t/15);
+    ctx.globalAlpha=Math.min(.95,Math.min(rb.t/15,(age-.55)/.35));
     ctx.drawImage(sp.c,p2.x-sp.ox,p2.y-sp.oy,sp.w,sp.h);
     ctx.globalAlpha=1;
   }
-  // spent arrows bristling from the ground
+  // spent arrows bristling from the ground — and from whoever caught one
   for(const s2 of G.stuck){
+    if(s2.uid){ // riding a victim: track them, vanish when they fall
+      const vic=G.units.find(x=>x.id===s2.uid&&x.hp>0);
+      if(!vic){s2.t=0;continue;}
+      s2.x=vic.x;s2.y=vic.y;
+    }
     if(!tileVis(s2.x,s2.y))continue;
     const p2=isoE(s2.x,s2.y);
     ctx.globalAlpha=Math.min(.9,s2.t/2);
-    ctx.save();ctx.translate(p2.x,p2.y);ctx.rotate(-.9+s2.a);
+    ctx.save();
+    if(s2.uid)ctx.translate(p2.x+s2.ox*IW,p2.y+s2.oy*IH*2);
+    else ctx.translate(p2.x,p2.y);
+    ctx.rotate(-.9+s2.a);
     ctx.strokeStyle='#4a3a24';ctx.lineWidth=1.1;
     ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(6.5,0);ctx.stroke();
     ctx.strokeStyle='rgba(240,230,200,.85)';ctx.lineWidth=.8;
