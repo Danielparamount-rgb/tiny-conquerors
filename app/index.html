@@ -808,7 +808,13 @@ const MISSIONS=[
 ];
 function newGame(){
   NP=mission?(1+(mission.foes||1)):playersSel;
-  setMapSize(NP<=3?64:96);
+  // Roomier battlefields. Ceiling is 128: the terrain canvas is MAP*TILE*TREZT
+  // square, and 144 would be 3744px — close to the 4096px canvas limit phones
+  // enforce, with 160 (4160px) over it outright.
+  // Black Forest fills every tile that isn't a carved clearing, so it carries
+  // ~8x the trees of an open map — it stays one size down to keep zoomed-out
+  // frames fast (12k trees at 128 dropped the whole map view to ~22fps).
+  setMapSize(mapSel===1?(NP<=4?96:112):(NP<=2?96:NP<=4?112:128));
   START=genStarts(NP);
   // team assignment: FFA / two teams / everyone against you
   let teams;
@@ -862,6 +868,13 @@ function genMap(){
   if(mapSel===1)genMapForest();
   else if(mapSel===2)genMapHallowed();
   else genMapRiver();
+  // Belt and braces: no generator may leave anything inside a Town Hall's
+  // footprint or hard against it. Cheaper than auditing every placement path.
+  for(const [bx,by] of START)
+    for(let y=by-1;y<by+3;y++)for(let x=bx-1;x<bx+3;x++){
+      const k=x+','+y;
+      if(G.res[k]){delete G.res[k];if(G.map[y]&&G.map[y][x])G.map[y][x]=0;}
+    }
   placeRelics();
 }
 function placeRelics(){
@@ -939,6 +952,26 @@ function genMapForest(){
   placeRes('gold',C,C,6);placeRes('food',C-3,C+3,4);
   placeRes('gold',12,12,4);placeRes('gold',MAP-13,MAP-13,4);
 }
+/* Grow one dense, organic forest from a seed tile. Frontier tiles are consumed
+   in random order, so the mass comes out ragged and lobed rather than circular,
+   and it FILLS — a forest you must path around, not a scatter of lone trees. */
+function placeForest(cx,cy,n,minStart){
+  const open=[[cx,cy]],seen=new Set();
+  let placed=0,guard=0;
+  const near=(x,y)=>START.some(([bx,by])=>Math.hypot(x-bx,y-by)<(minStart||10));
+  while(open.length&&placed<n&&guard++<n*14){
+    const i=Math.floor(Math.random()*open.length);
+    const spot=open.splice(i,1)[0],x=spot[0],y=spot[1],k=x+','+y;
+    if(seen.has(k))continue;
+    seen.add(k);
+    if(x<1||y<1||x>=MAP-1||y>=MAP-1)continue;
+    if(G.map[y][x]||G.res[k]||G.ford[k]||G.water[k]||near(x,y))continue;
+    G.res[k]={type:'wood',amt:RES_META.wood.amt,x,y};G.map[y][x]=1;placed++;
+    for(const d of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]])
+      if(Math.random()<.74)open.push([x+d[0],y+d[1]]);
+  }
+  return placed;
+}
 function genMapRiver(){
   G.map=Array.from({length:MAP},()=>Array(MAP).fill(0)); // 0 grass 1 blocked
   G.water={};G.ford={};
@@ -982,13 +1015,18 @@ function genMapRiver(){
       if(x<1||y<1||x>=MAP-1||y>=MAP-1)continue;const k=x+','+y;
       if(G.map[y][x]||G.res[k]||G.ford[k]||nearFord(x,y))continue;
       G.res[k]={type,amt:RES_META[type].amt,x,y};G.map[y][x]=1;placed++;}};
-  // forests: blobs
-  for(let b=0;b<48;b++){const cx=2+rng(MAP-4),cy=2+rng(MAP-4);
-    if(Math.hypot(cx-START[0][0],cy-START[0][1])<9||Math.hypot(cx-START[1][0],cy-START[1][1])<9)continue;
-    placeRes('wood',cx,cy,4+rng(5));}
+  // forests: proper dense woods, scaled to the board (was 48 scattered handfuls
+  // that checked only the first two starts — they landed on player 3-8's base)
+  for(let b=0,nF=Math.round(11*MAP*MAP/4096);b<nF;b++){
+    const cx=3+rng(MAP-6),cy=3+rng(MAP-6);
+    if(G.water[cx+','+cy]||G.ford[cx+','+cy])continue;
+    placeForest(cx,cy,26+rng(52),10);
+  }
   // per-player berries, gold, nearby woods
   for(const [bx,by] of START){
-    const dx=Math.sign(MAP/2-bx),dy=Math.sign(MAP/2-by);
+    // ||1: a start sitting exactly on the centre axis gives sign()===0, which
+    // collapsed its whole woodline onto the Town Hall (4 of 8 starts on a ring)
+    const dx=Math.sign(MAP/2-bx)||1,dy=Math.sign(MAP/2-by)||1;
     placeRes('food',bx+5*dx,by-4*dy,6);
     placeRes('food',bx-3*dx,by+6*dy,4);
     placeRes('gold',bx+8*dx,by+8*dy,5);
@@ -1032,11 +1070,11 @@ function genMapHallowed(){
       if(x<1||y<1||x>=MAP-1||y>=MAP-1)continue;const k=x+','+y;
       if(G.map[y][x]||G.res[k])continue;
       G.res[k]={type,amt:RES_META[type].amt,x,y};G.map[y][x]=1;placed++;}};
-  // forest clumps — sparser than the river map; this is open ground
-  for(let b=0,nF=Math.round(38*MAP*MAP/4096);b<nF;b++){
+  // forest clumps — fewer and smaller than the river map; this is open steppe
+  for(let b=0,nF=Math.round(8*MAP*MAP/4096);b<nF;b++){
     const cx=3+rng(MAP-6),cy=3+rng(MAP-6);
-    if(START.some(([bx,by])=>Math.hypot(cx-bx,cy-by)<9))continue;
-    placeRes('wood',cx,cy,5+rng(5));
+    if(G.water[cx+','+cy])continue;
+    placeForest(cx,cy,16+rng(30),11);
   }
   // per-player berries, gold and woodlots
   for(const [bx,by] of START){
@@ -1199,7 +1237,9 @@ function findPath(sx,sy,tx,ty,team,naval){
   hpush(start);
   const seen=new Map();seen.set(key(sx,sy),start);
   let best=null,exp=0;
-  while(heap.length&&exp++<7000){
+  // node budget scales with the board — a fixed 7000 could not cross a 128 map
+  const EXP_CAP=Math.max(7000,Math.round(MAP*MAP*.75));
+  while(heap.length&&exp++<EXP_CAP){
     const n=hpop();
     if(n.x===tx&&n.y===ty){best=n;break;}
     for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
@@ -3561,7 +3601,9 @@ function refreshTerrain(){
     if(G.map[y][x]||G.ford[x+','+y])continue;
     const h=hash2(x*3+7,y*5+1)%100;
     const cx=x*TILE+6+(hash2(x,y*7)%14),cy=y*TILE+6+(hash2(x*7,y)%14);
-    if(h<7){ // grass tufts, two-tone so they pop like AoE2's pale tufts
+    // doodad bands widened (was 15% of tiles, now ~24%) — bigger boards need
+    // denser ground clutter or they read as empty lawn
+    if(h<11){ // grass tufts, two-tone so they pop like AoE2's pale tufts
       tctx.strokeStyle='rgba(44,62,28,.55)';tctx.lineWidth=1.1;
       tctx.beginPath();
       tctx.moveTo(cx-2,cy+2);tctx.lineTo(cx-3,cy-3);
@@ -3570,17 +3612,17 @@ function refreshTerrain(){
       tctx.strokeStyle='rgba(200,215,150,.5)';tctx.lineWidth=1;
       tctx.beginPath();tctx.moveTo(cx-1,cy+1.6);tctx.lineTo(cx-2,cy-2.6);
       tctx.moveTo(cx+1,cy+1.6);tctx.lineTo(cx+1.6,cy-3.2);tctx.stroke();
-    }else if(h<10){ // flowers
+    }else if(h<15){ // flowers
       const fc=['#e8e0c8','#e5c95c','#d9a0b8'][h%3];
       tctx.fillStyle=fc;
       tctx.beginPath();tctx.arc(cx,cy,1.4,0,7);tctx.fill();
       tctx.beginPath();tctx.arc(cx+4,cy+2,1.2,0,7);tctx.fill();
-    }else if(h<12){ // pebbles
+    }else if(h<18){ // pebbles
       tctx.fillStyle='rgba(130,126,112,.6)';
       tctx.beginPath();tctx.ellipse(cx,cy,2.2,1.5,.4,0,7);tctx.fill();
       tctx.fillStyle='rgba(90,88,78,.5)';
       tctx.beginPath();tctx.ellipse(cx+3,cy+2,1.4,1,0,0,7);tctx.fill();
-    }else if(h<14){ // low bush
+    }else if(h<21){ // low bush
       tctx.fillStyle='rgba(18,30,12,.4)';
       tctx.beginPath();tctx.ellipse(cx+1.5,cy+2.2,5.5,2.4,0,0,7);tctx.fill();
       tctx.fillStyle='#27441d';
@@ -3588,7 +3630,7 @@ function refreshTerrain(){
       tctx.fillStyle='#3d662c';
       tctx.beginPath();tctx.arc(cx-2.6,cy-1,1.9,0,7);tctx.arc(cx+.2,cy-2.6,1.5,0,7);tctx.fill();
       tctx.fillStyle='#578740';tctx.beginPath();tctx.arc(cx-3,cy-1.6,1,0,7);tctx.fill();
-    }else if(h<15){ // rock cluster
+    }else if(h<23){ // rock cluster
       const rock=(rx3,ry3,r1,r2)=>{
         tctx.fillStyle='#7d786a';tctx.beginPath();tctx.ellipse(rx3,ry3,r1,r2,.35,0,7);tctx.fill();
         tctx.fillStyle='#a09a88';tctx.beginPath();tctx.ellipse(rx3-r1*.28,ry3-r2*.32,r1*.55,r2*.5,.35,0,7);tctx.fill();
@@ -3597,7 +3639,7 @@ function refreshTerrain(){
       tctx.fillStyle='rgba(18,26,10,.3)';
       tctx.beginPath();tctx.ellipse(cx+2,cy+2.5,6.5,2.6,0,0,7);tctx.fill();
       rock(cx,cy,3.6,2.6);rock(cx+4.6,cy+1.6,2.4,1.7);rock(cx-3.4,cy+2,1.8,1.3);
-    }else if(h===15&&hash2(x*11,y*23)%3===0){ // fallen log
+    }else if(h===23&&hash2(x*11,y*23)%3===0){ // fallen log
       tctx.save();tctx.translate(cx,cy);tctx.rotate((hash2(x,y)%314)/100);
       tctx.fillStyle='rgba(18,26,10,.32)';
       tctx.beginPath();tctx.ellipse(1,2.6,10,2.6,0,0,7);tctx.fill();
