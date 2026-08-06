@@ -150,7 +150,7 @@
   @media(max-width:759px){
     #panel{grid-template-areas:"cmd card" "cmd scroll";grid-template-columns:minmax(0,1fr) 126px;}
     #miniDock{display:none;}
-    #btnRow{grid-template-columns:repeat(auto-fill,44px);grid-auto-rows:44px;max-height:124px;}
+    #btnRow{grid-template-columns:repeat(auto-fill,44px);grid-auto-rows:44px;max-height:152px;}
     #scrollArea{padding:4px 8px 12px;}
   }
 
@@ -187,7 +187,48 @@
   .diff button.sel{background:linear-gradient(#3d2e1c,#241a10);color:var(--parch);
     box-shadow:inset 0 1px 0 rgba(255,230,180,.2), 0 0 6px rgba(201,162,39,.35);}
   .civgrid{flex-wrap:wrap;gap:6px;}
-  .civgrid button{flex:1 1 22%;min-width:72px;font-size:12.5px;padding:7px 2px;}
+  .civgrid button{flex:1 1 22%;min-width:72px;font-size:12.5px;padding:9px 2px;}
+  /* collapsible manual — closed by default so Begin the Conquest is always in reach */
+  #howto{margin-top:10px;text-align:left;}
+  #howto summary{cursor:pointer;list-style:none;padding:10px 12px;border-radius:9px;
+    border:2px solid #6b5330;background:rgba(107,83,48,.1);
+    font-family:Georgia,serif;font-size:14.5px;letter-spacing:.03em;text-align:center;
+    color:#3a2c1b;}
+  #howto summary::-webkit-details-marker{display:none;}
+  #howto summary::after{content:' ▾';opacity:.6;}
+  #howto[open] summary::after{content:' ▴';}
+  #howto summary:active{transform:translateY(1px);}
+  #howto[open] summary{margin-bottom:6px;background:rgba(107,83,48,.18);}
+  /* compact setup stack at every size so Begin the Conquest never needs a scroll */
+  #startOverlay .scroll .goal{text-align:center;font-size:12.5px;margin:6px 0;}
+  #setupBlock p{margin:7px 0 0;}
+  #setupBlock .sub{margin:3px 0 0;font-size:11.5px;line-height:1.35;}
+  #setupBlock .diff{margin-top:5px;}
+  #startOverlay .rule{margin:9px 0;}
+  #civPick{margin:8px 0 0;}
+  #civPick summary{cursor:pointer;list-style:none;padding:10px 12px;border-radius:9px;
+    border:2px solid #6b5330;background:rgba(107,83,48,.1);text-align:center;
+    font-family:Georgia,serif;font-size:14px;color:#3a2c1b;}
+  #civPick summary::-webkit-details-marker{display:none;}
+  #civPick summary::after{content:' ▾';opacity:.6;}
+  #civPick[open] summary::after{content:' ▴';}
+  #civPick[open] .civgrid{margin-top:6px;}
+  #civPick summary b{color:#8a2f27;}
+  @media(max-width:560px){
+    .scroll{padding:14px 14px;}
+    .scroll h1{font-size:25px;margin-bottom:0;}
+    .scroll p{font-size:13px;}
+    .scroll .sub{margin-bottom:8px;font-size:12.5px;}
+    .diff button{padding:11px 4px;}      /* taller tap targets on phones */
+    .civgrid button{flex:1 1 30%;padding:11px 2px;}
+    /* compact the setup stack so Begin the Conquest sits above the fold */
+    #setupBlock p{margin:7px 0 0;font-size:12.5px;}
+    #setupBlock .sub{margin:3px 0 0;font-size:11.5px;line-height:1.3;}
+    #setupBlock .diff{margin-top:5px;gap:6px;}
+    #startOverlay .goal{font-size:12.5px;margin:6px 0;}
+    #startOverlay .rule{margin:9px 0;}
+    .bigbtn{margin-top:7px;padding:12px;}
+  }
   #endOverlay{display:none;}
   #endTitle.win{color:#4f7d3a;} #endTitle.lose{color:#8a2f27;}
   button{cursor:pointer;font-family:inherit;}
@@ -244,25 +285,12 @@
   <div class="scroll">
     <h1>Tiny <span>Conquerors</span></h1>
     <p class="sub">A pocket-sized age of kings</p>
-    <p><b>Goal:</b> gather food, wood and gold, advance through four Ages, raise an army, and destroy the enemy <b>Town Hall</b> before they destroy yours.</p>
+    <p class="goal"><b>Goal:</b> gather food, wood and gold, advance through four Ages, raise an army, and destroy the enemy <b>Town Hall</b> before they destroy yours.</p>
     <div class="rule"></div>
-    <p><b>Touch controls</b><br>
-    • <b>Tap</b> a villager or building to select it — commands appear below.<br>
-    • With units selected, <b>tap</b> berries, trees or gold to gather, tap ground to move, tap an enemy to attack.<br>
-    • <b>Drag</b> to pan the map, <b>pinch</b> or use +/− to zoom. Tap the minimap to jump.<br>
-    • <b>Select many:</b> tap the <b>⬚</b> button then drag a box (with a mouse, just drag), or <b>double-tap</b> a unit to grab every unit of that type on screen.</p>
-    <p><b>Mouse controls</b> — just like the classics: <b>left-click</b> selects anything (units, buildings, even trees, berries and gold mines, to see what's left in them); <b>right-click</b> gives orders — gather, build, attack, garrison, move. Right-click also cancels building placement.</p>
-    <p><b>Tips:</b> scout the fog of war with Scout Cavalry, drop resources at Storage Camps near far-off woods and gold, use Spearmen against cavalry and Skirmishers against archers, wall off the fords with Palisades and Gates, smash defenses with Battering Rams, and hold the high ground — units on hills deal +25% damage and take less in return.</p>
-    <p><b>New:</b> tap your Town Hall, Tower or Castle with units selected to <b>garrison</b> them inside (each adds arrow damage — ungarrison from the building's panel). Soldiers have an <b>⚔ Attack-move</b> button: they'll fight their way to wherever you point. Save anytime from the pause menu, and try the <b>📜 Campaign</b> — now five missions.</p>
-    <p><b>Also new:</b> upgrade to <b>Stone Walls</b> in the Castle Age, trade at the <b>Market</b>, and build a <b>Monastery</b> — its Monks heal your troops and can carry the golden <b>relics</b> scattered around the map back home for a steady gold income. On a keyboard, Ctrl+1–9 sets control groups.</p>
-    <p><b>The Conquerors update:</b> all <b>18 civilizations</b>, each with true bonuses, a unique unit, and a <b>unique technology</b> researched at the Castle. Units now upgrade through their lines as you age — Militia become Champions, Scouts become Hussars. Garrison infantry <b>inside Battering Rams</b> to speed and strengthen them, and blow gates open with the <b>Petard</b>. The Aztecs and Mayans field fleet <b>Eagle Warriors</b> instead of cavalry, and the Huns never build a single house. Raise a <b>Blacksmith</b> to forge attack and armor upgrades through the ages, and research <b>Parthian Tactics</b> at the Archery Range to harden your horse archers. Build a <b>Dock</b> on the riverbank for Fishing Ships, Trade Cogs, Transports, and war Galleys — Vikings launch <b>Longboats</b> and Koreans the armored <b>Turtle Ship</b>.</p>
-    <div class="rule"></div>
-    <p><b>Keyboard (when played on a computer)</b><br>
-    <b>H</b> Town Hall · <b>C</b> create villager · <b>A</b> advance age · <b>.</b> idle villager · <b>,</b> idle soldier · <b>arrows</b> scroll · <b>+/−</b> zoom · <b>Space</b> go to selection · <b>Del</b> delete · <b>Esc</b> cancel<br>
-    With villagers selected: <b>E</b> House · <b>F</b> Farm · <b>C</b> Camp · <b>W</b> Wall · <b>O</b> Gate · <b>B</b> Barracks · <b>A</b> Range · <b>L</b> Stable · <b>S</b> Blacksmith · <b>G</b> Siege · <b>T</b> Tower. Train keys are shown on each button.</p>
-    <div class="rule"></div>
-    <p style="text-align:center;margin-bottom:0"><b>Choose your civilization</b></p>
-    <div class="diff civgrid" id="civGrid"></div>
+    <div id="setupBlock">
+    <details id="civPick"><summary>Civilization: <b id="civPickName">Britons</b></summary>
+      <div class="diff civgrid" id="civGrid"></div>
+    </details>
     <p class="sub" id="civBlurb" style="margin:6px 0 0;text-align:center"></p>
     <p style="text-align:center;margin-bottom:0"><b>Choose the battlefield</b></p>
     <div class="diff">
@@ -296,10 +324,27 @@
       <button data-tb="0" class="sel">Standard pace</button>
       <button data-tb="1">⚡ Turbo</button>
     </div>
-    <p class="sub" style="margin:6px 0 0;text-align:center">4+ players battle on a larger map. Allies share vision and fight beside you.</p>
+    </div>
     <button class="bigbtn" id="startBtn">⚔ &nbsp;Begin the Conquest</button>
     <button class="bigbtn alt" id="campBtn">📜 &nbsp;Campaign</button>
     <button class="bigbtn alt" id="contBtn" style="display:none">▶ &nbsp;Continue saved game</button>
+    <div class="rule"></div>
+    <details id="howto"><summary>📖 &nbsp;How to play</summary>
+    <p><b>Touch controls</b><br>
+    • <b>Tap</b> a villager or building to select it — commands appear below.<br>
+    • With units selected, <b>tap</b> berries, trees or gold to gather, tap ground to move, tap an enemy to attack.<br>
+    • <b>Drag</b> to pan the map, <b>pinch</b> or use +/− to zoom. Tap the minimap to jump.<br>
+    • <b>Select many:</b> tap the <b>⬚</b> button then drag a box (with a mouse, just drag), or <b>double-tap</b> a unit to grab every unit of that type on screen.</p>
+    <p><b>Mouse controls</b> — just like the classics: <b>left-click</b> selects anything (units, buildings, even trees, berries and gold mines, to see what's left in them); <b>right-click</b> gives orders — gather, build, attack, garrison, move. Right-click also cancels building placement.</p>
+    <p><b>Tips:</b> scout the fog of war with Scout Cavalry, drop resources at Storage Camps near far-off woods and gold, use Spearmen against cavalry and Skirmishers against archers, wall off the fords with Palisades and Gates, smash defenses with Battering Rams, and hold the high ground — units on hills deal +25% damage and take less in return.</p>
+    <p><b>New:</b> tap your Town Hall, Tower or Castle with units selected to <b>garrison</b> them inside (each adds arrow damage — ungarrison from the building's panel). Soldiers have an <b>⚔ Attack-move</b> button: they'll fight their way to wherever you point. Save anytime from the pause menu, and try the <b>📜 Campaign</b> — now five missions.</p>
+    <p><b>Also new:</b> upgrade to <b>Stone Walls</b> in the Castle Age, trade at the <b>Market</b>, and build a <b>Monastery</b> — its Monks heal your troops and can carry the golden <b>relics</b> scattered around the map back home for a steady gold income. On a keyboard, Ctrl+1–9 sets control groups.</p>
+    <p><b>The Conquerors update:</b> all <b>18 civilizations</b>, each with true bonuses, a unique unit, and a <b>unique technology</b> researched at the Castle. Units now upgrade through their lines as you age — Militia become Champions, Scouts become Hussars. Garrison infantry <b>inside Battering Rams</b> to speed and strengthen them, and blow gates open with the <b>Petard</b>. The Aztecs and Mayans field fleet <b>Eagle Warriors</b> instead of cavalry, and the Huns never build a single house. Raise a <b>Blacksmith</b> to forge attack and armor upgrades through the ages, and research <b>Parthian Tactics</b> at the Archery Range to harden your horse archers. Build a <b>Dock</b> on the riverbank for Fishing Ships, Trade Cogs, Transports, and war Galleys — Vikings launch <b>Longboats</b> and Koreans the armored <b>Turtle Ship</b>.</p>
+    <div class="rule"></div>
+    <p><b>Keyboard (when played on a computer)</b><br>
+    <b>H</b> Town Hall · <b>C</b> create villager · <b>A</b> advance age · <b>.</b> idle villager · <b>,</b> idle soldier · <b>arrows</b> scroll · <b>+/−</b> zoom · <b>Space</b> go to selection · <b>Del</b> delete · <b>Esc</b> cancel<br>
+    With villagers selected: <b>E</b> House · <b>F</b> Farm · <b>C</b> Camp · <b>W</b> Wall · <b>O</b> Gate · <b>B</b> Barracks · <b>A</b> Range · <b>L</b> Stable · <b>S</b> Blacksmith · <b>G</b> Siege · <b>T</b> Tower. Train keys are shown on each button.</p>
+    </details>
   </div>
 </div>
 
@@ -7203,6 +7248,12 @@ function zoomAt(nz,cx,cy){
   G.cam.x=wx-(cx-rect.left)/nz;G.cam.y=wy-(cy-rect.top)/nz;clampCam();
 }
 document.getElementById('homeBtn').onclick=()=>{if(G&&!G.over)selTC();};
+// remember whether the manual was left open
+{const ht=document.getElementById('howto');
+ if(ht){
+   if(localStorage.getItem('tq_howto')==='1')ht.open=true;
+   ht.addEventListener('toggle',()=>localStorage.setItem('tq_howto',ht.open?'1':'0'));
+ }}
 /* Always-visible deselect — same effect as Esc, one tap, never scrolls away.
    Cancels placement first (so it doubles as "get me out of build mode"). */
 function clearSel(){
@@ -7682,7 +7733,15 @@ function refreshPanel(){
     if(ents.length===1)hint(mouseSeen
       ?'Right-click resources to gather · right-click ground to move'
       :'Tap resources to gather · tap ground to move');
-    for(const bt of ['house','farm','camp','wall','gate','swall','sgate','market','blacksmith','university','dock','barracks','range','stable','siege','monastery','castle','tower','wonder']){
+    // AoE2-style build tabs: Economy / Military / Defense. Twenty buildings never
+    // fit a phone's button grid, and the original split them the same way.
+    const tabBtn=(id,label,icon)=>{
+      const b=mkBtn('<i>'+icon+'</i><b>'+label+'</b>',buildTab===id?'go':'txt',
+        ()=>{buildTab=id;refreshPanel();});
+      b.style.gridColumn='auto';b.style.height='26px';b.style.fontSize='10px';
+      return b;};
+    tabBtn('eco','Economy','🌾');tabBtn('mil','Military','⚔️');tabBtn('def','Defense','🗼');
+    for(const bt of BUILD_TABS[buildTab]){
       if(bt==='stable'&&civOf(0).noStable)continue; // Aztecs/Mayans field no cavalry
       if(bt==='house'&&civOf(0).noHouse)continue;   // Huns need no Houses
       const d=BLDS[bt];
@@ -7783,6 +7842,13 @@ function keyFor(bldType,ut){
   for(const k in km)if(km[k]===ut)return k.toUpperCase();
   return '';
 }
+/* villager build menu, split the way the original did — one screenful each */
+const BUILD_TABS={
+  eco:['house','farm','camp','market','dock','university','monastery','wonder'],
+  mil:['barracks','range','stable','siege','blacksmith','castle'],
+  def:['wall','gate','swall','sgate','tower'],
+};
+let buildTab='eco';
 let idleVillIdx=0,idleMilIdx=0;
 function cycleIdleVill(){
   const vs=G.units.filter(u=>u.p===0&&u.type==='villager'&&u.state==='idle');
@@ -7918,7 +7984,10 @@ document.querySelectorAll('.diff button[data-m]').forEach(b=>{
     if(i===0)b.classList.add('sel');
     b.onclick=()=>{civSel=i;blurb.textContent=cv.blurb;
       grid.querySelectorAll('button').forEach(x=>x.classList.remove('sel'));
-      b.classList.add('sel');};
+      b.classList.add('sel');
+      document.getElementById('civPickName').textContent=cv.name;
+      document.getElementById('civPick').open=false; // picked — fold it away again
+    };
     grid.appendChild(b);
   });
   blurb.textContent=CIVS[0].blurb;

@@ -1,6 +1,6 @@
 // Tiny Conquerors service worker - cache-first so the game loads offline.
 // Bump VERSION on every deploy; old caches are purged on activate.
-const VERSION = 'tq-v14';
+const VERSION = 'tq-v15';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
