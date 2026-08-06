@@ -52,7 +52,7 @@ A mobile-friendly, browser-based RTS inspired by Age of Empires II: The Conquero
 
 ## Render app deployment — ✅ LIVE
 - **https://tiny-conquerors.onrender.com** — Render static site `tiny-conquerors`, service ID `srv-d9pibf5bedkc73c5qumg`, connected to GitHub repo Danielparamount-rgb/tiny-conquerors, branch `main`, **publish directory `app`**, no build command. Auto-deploys on push to main.
-- Current live version: **sw `tq-v16`** (quality-of-life). Verified after every deploy by fetching sw.js + index.html from the shell (bypasses the cache-first SW).
+- Current live version: **sw `tq-v17`** (closer-engagement). Verified after every deploy by fetching sw.js + index.html from the shell (bypasses the cache-first SW).
 - **Commit-message gotcha**: PowerShell here-strings choke on messages containing double quotes (`git commit -m @'...'@` split mid-message once). Use the Bash tool with `git commit -F - << 'EOF'` for multi-line messages.
 - First verified live 2026-08-05 (tq-v1): SW active, manifest served as `application/manifest+json` (installable), icons OK, zero console errors.
 - **GOTCHA — Render header rule for the manifest**: Render serves `.webmanifest` as `binary/octet-stream`, which can block Add-to-Home-Screen. Fixed with a dashboard Headers rule: path `/manifest.webmanifest`, name `Content-Type`, value `application/manifest+json`. Saving headers triggers a redeploy — during it files 404 inconsistently for ~30s; that's transient, re-check before diagnosing.
@@ -74,6 +74,12 @@ A mobile-friendly, browser-based RTS inspired by Age of Empires II: The Conquero
 - IP boundary told to user (they asked for "exactly like AoE2", "just for friends"): imitate style with ORIGINAL art/sounds only; no ripped Microsoft assets, especially once hosted on Render.
 
 ## Recent fixes (last published state)
+- Label "closer-engagement" (2026-08-05, sw tq-v17, commit b7aabfa): user — units stood too far from what they gather/fight.
+  - **`creepToward(u,tx,ty,want,dt)`** (defined just above targetEnt): after the state machine has ARRIVED, walk the last stretch directly at .55×speed with `walkTile` as the limiter (slides on one axis if blocked). **This is the safe way to close distance — the A* arrival radii (gather 1.8 / farm 1.85 / build size*.5+1.7) are UNCHANGED, so gotcha 1's deadlock protection still holds.** Called from gather (.95), farming (.62), building (size*.5+.55), and melee attack.
+  - Melee engagement: `rng` for units .65→.62, buildings 1.3→1.25, and **only when `rangeOf(u)<=1`** does the attack case creep in (unit .44, building rad+.5). Ranged/siege never creep — verified an archer holds 5.26 with range 5.
+  - **Villager tool stroke** rebuilt in the `weapon==='tool'` branch: piecewise phase (0–.18 settle, .18–.80 lift, .80–1 snap) so the blade bottoms out exactly as `gatherT` wraps and spawns the chips. **If you retune gather timing, keep the strike phase aligned to the wrap or the axe stops connecting.**
+  - Idle units breathe: drawManRig bob falls back to `sin(t*.55+id*1.7)*.22` when stationary.
+  - Deadlock canaries (re-run these after ANY radius change): 14 villagers → one tree = 0 stuck; 15-min Warlord = AI Castle Age, 13 villagers, **0 idle**, 28 buildings, 0 errors, frame 1.0ms.
 - Label "quality-of-life" (2026-08-05, sw tq-v16, commit e7d97c9): the five suggestions from the tq-v15 audit, all shipped.
   - **`#idleBtn`** in the zoomBtns cluster; `updateIdleBtn()` called from `updateOverlays()` (1/sec throttle) toggles `.live` + count badge. Cheap: one filter over G.units per second.
   - **Floating tallies**: new fx kind `'text'` (fields `txt`,`col`; `drawFx` early-returns for it with stroke-then-fill so it reads over any terrain). Pushed in the `return` state when carry is banked, player 0 + visible only. `RES_COL` map added beside RES_META.
