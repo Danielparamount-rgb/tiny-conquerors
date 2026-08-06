@@ -52,7 +52,7 @@ A mobile-friendly, browser-based RTS inspired by Age of Empires II: The Conquero
 
 ## Render app deployment — ✅ LIVE
 - **https://tiny-conquerors.onrender.com** — Render static site `tiny-conquerors`, service ID `srv-d9pibf5bedkc73c5qumg`, connected to GitHub repo Danielparamount-rgb/tiny-conquerors, branch `main`, **publish directory `app`**, no build command. Auto-deploys on push to main.
-- Current live version: **sw `tq-v18`** (death-animation). Verified after every deploy by fetching sw.js + index.html from the shell (bypasses the cache-first SW).
+- Current live version: **sw `tq-v19`** (combat-weight). Verified after every deploy by fetching sw.js + index.html from the shell (bypasses the cache-first SW).
 - **Commit-message gotcha**: PowerShell here-strings choke on messages containing double quotes (`git commit -m @'...'@` split mid-message once). Use the Bash tool with `git commit -F - << 'EOF'` for multi-line messages.
 - First verified live 2026-08-05 (tq-v1): SW active, manifest served as `application/manifest+json` (installable), icons OK, zero console errors.
 - **GOTCHA — Render header rule for the manifest**: Render serves `.webmanifest` as `binary/octet-stream`, which can block Add-to-Home-Screen. Fixed with a dashboard Headers rule: path `/manifest.webmanifest`, name `Content-Type`, value `application/manifest+json`. Saving headers triggers a redeploy — during it files 404 inconsistently for ~30s; that's transient, re-check before diagnosing.
@@ -74,6 +74,11 @@ A mobile-friendly, browser-based RTS inspired by Age of Empires II: The Conquero
 - IP boundary told to user (they asked for "exactly like AoE2", "just for friends"): imitate style with ORIGINAL art/sounds only; no ripped Microsoft assets, especially once hosted on Render.
 
 ## Recent fixes (last published state)
+- Label "combat-weight" (2026-08-05, sw tq-v19, commit d81fdd6): three impact effects.
+  - **Building collapse**: rubble records gained `type` + `tilt`; the rubble draw loop paints the *building sprite* buckling for the first .7s (rotate `tilt*.13*f²`, scale y by `1-.72f²`, anchored at the SOUTH corner exactly like drawBld's 1.13 scale — keep those in sync if you change one). Rubble then fades in over `(age-.55)/.35`. Dust burst widened to 14 outward-rolling puffs.
+  - **Arrows in bodies**: arrow projectiles carry `tid` (unit targets only, no siege/gun kinds); on a non-miss landing a `G.stuck` entry with `{uid,ox,oy}` is pushed. The stuck draw loop re-syncs `x/y` from the live unit each frame and zeroes `t` when the victim dies — that's what prevents orphans (verified 0 after a 12-min 4p game).
+  - **Melee recoil**: in the attack case, non-ranged hits ≥8 dmg shove the victim along the attacker→target vector by `min(.16,.012*dmg)`, gated on `walkTile` so nothing is pushed into terrain. Ships exempt.
+  - Bounds after 12-min 4p Warlord: fx 9, stuck 1/50, rubble 0/40, corpses 17/140, 0 errors.
 - Label "death-animation" (2026-08-05, sw tq-v18, commit 4141d53): units topple instead of popping to a corpse.
   - Corpse records now carry `hdg`, `face`, `fall` (±1) captured at death (in the dead-cleanup block of step()).
   - `drawCorpse` first 0.5s: draws the **living rig** via `drawUnitBody` on a fake unit (same trick portraitFor uses), rotating `fall*1.32*smoothstep`, sinking 2.2px, scaling 1.18 (matching drawUnit) and flattening 30%. **Stepped in 6 hard poses on purpose — period sheets ran ~12fps; do not smooth this out.**
