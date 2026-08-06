@@ -52,7 +52,7 @@ A mobile-friendly, browser-based RTS inspired by Age of Empires II: The Conquero
 
 ## Render app deployment — ✅ LIVE
 - **https://tiny-conquerors.onrender.com** — Render static site `tiny-conquerors`, service ID `srv-d9pibf5bedkc73c5qumg`, connected to GitHub repo Danielparamount-rgb/tiny-conquerors, branch `main`, **publish directory `app`**, no build command. Auto-deploys on push to main.
-- Current live version: **sw `tq-v22`** (8p-performance). Verified after every deploy by fetching sw.js + index.html from the shell (bypasses the cache-first SW).
+- Current live version: **sw `tq-v23`** (deterministic-sim). Verified after every deploy by fetching sw.js + index.html from the shell (bypasses the cache-first SW).
 - **Commit-message gotcha**: PowerShell here-strings choke on messages containing double quotes (`git commit -m @'...'@` split mid-message once). Use the Bash tool with `git commit -F - << 'EOF'` for multi-line messages.
 - First verified live 2026-08-05 (tq-v1): SW active, manifest served as `application/manifest+json` (installable), icons OK, zero console errors.
 - **GOTCHA — Render header rule for the manifest**: Render serves `.webmanifest` as `binary/octet-stream`, which can block Add-to-Home-Screen. Fixed with a dashboard Headers rule: path `/manifest.webmanifest`, name `Content-Type`, value `application/manifest+json`. Saving headers triggers a redeploy — during it files 404 inconsistently for ~30s; that's transient, re-check before diagnosing.
@@ -73,7 +73,22 @@ A mobile-friendly, browser-based RTS inspired by Age of Empires II: The Conquero
 - Deploy checklist for future updates: edit tiny-conquerors.html → run `build-app.ps1` (MANDATORY — app/index.html is a generated copy and goes stale silently) → bump VERSION in app/sw.js ('tq-v2', ...) → `git add -A; git commit; git push` → Render auto-deploys on push to main.
 - IP boundary told to user (they asked for "exactly like AoE2", "just for friends"): imitate style with ORIGINAL art/sounds only; no ripped Microsoft assets, especially once hosted on Render.
 
+## MULTIPLAYER — in progress (user goal: play with friends, the "huge thing")
+Plan agreed 2026-08-05: lockstep — peers exchange COMMANDS, not state, and each runs the identical sim. Staged so every step is useful alone.
+1. ✅ **Determinism** (sw tq-v23, commit 0df413b) — done, see below.
+2. ⬜ **Command layer**: funnel every player action through one `issue(cmd)` chokepoint that appends to a per-tick command queue instead of mutating G directly. Today `handleTap` calls cmdMove/cmdGather/etc. inline — those calls ARE the commands, so wrap them. Then a local game is just "apply my own commands immediately".
+3. ⬜ **Relay server**: tiny Node+ws service on Render (separate service from the static site), rooms by code, forwards `{tick,playerId,cmds}` blobs. No game logic.
+4. ⬜ **Lockstep loop**: run the sim N ticks behind, only advancing when every peer's commands for that tick have arrived; compare `stateHash()` each second and halt with a clear message on mismatch.
+5. ⬜ Lobby/teams/reconnect.
+**Key facts for whoever continues:**
+- `SR()`/`SRi(n)` = the ONLY randomness allowed to affect G. `seedSim(s)` sets it; `gameSeed` holds the seed and is saved. Cosmetic randomness stays on `Math.random()` deliberately (75 of the 84 sites) — peers may differ there.
+- **`uid=1` reset in newGame is load-bearing** — commands reference units by id and `creepToward` reads `u.id%4`. Removing it desyncs peers.
+- `stateHash()` ignores fx/corpses/rubble/camera/selection on purpose. If you make a cosmetic thing affect gameplay, add it to the hash.
+- Determinism test method: set `pendingSeed`, call `newGame()`, step N times, compare `stateHash()`. Verified identical on all 3 maps and 8 players. **Re-run after ANY sim change.**
+- Watch out: `Object.keys(G.res)` ordering, `Array.sort` stability, and `Date.now()` would all break lockstep. None are currently used in the sim.
+
 ## Recent fixes (last published state)
+- Label "deterministic-sim" (2026-08-05, sw tq-v23, commit 0df413b): multiplayer step 1 — see the section above. Also fixed a real desync bug (`uid` never reset between matches).
 - Label "8p-performance" (2026-08-05, sw tq-v22, commit 1641fc1): user reported 8-player games "a little glitchy" after the map-size bump. Profiled, three real costs:
   - **Separation was O(n²)** — the biggest sim cost (188 units ≈ 17k pair tests per step, growing with the square of army size). Now bucketed into `sepGrid` (Map keyed `x|0+','+y|0`), each cell tested against itself + `FWD=[[1,0],[-1,1],[0,1],[1,1]]` (forward-half stencil = every pair exactly once). **Verified by an exhaustive coverage test on a live 689-unit state: 112/112 pairs found, 0 missed, 0 duplicated.** Results differ from the old sweep by ≤4e-3 tiles purely from push ORDER — harmless for a settling force.
   - **Mist throttle**: the 512px `wispC` rebuild (9 composites) now runs every 3rd frame via `wispT`, plus immediately when `fogWasDirty` (set where `fogDirty=false`). Zoomed-out draw **6.5ms → 2.8ms**.
