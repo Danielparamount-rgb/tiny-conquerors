@@ -52,7 +52,7 @@ A mobile-friendly, browser-based RTS inspired by Age of Empires II: The Conquero
 
 ## Render app deployment — ✅ LIVE
 - **https://tiny-conquerors.onrender.com** — Render static site `tiny-conquerors`, service ID `srv-d9pibf5bedkc73c5qumg`, connected to GitHub repo Danielparamount-rgb/tiny-conquerors, branch `main`, **publish directory `app`**, no build command. Auto-deploys on push to main.
-- Current live version: **sw `tq-v21`** (bigger-maps). Verified after every deploy by fetching sw.js + index.html from the shell (bypasses the cache-first SW).
+- Current live version: **sw `tq-v22`** (8p-performance). Verified after every deploy by fetching sw.js + index.html from the shell (bypasses the cache-first SW).
 - **Commit-message gotcha**: PowerShell here-strings choke on messages containing double quotes (`git commit -m @'...'@` split mid-message once). Use the Bash tool with `git commit -F - << 'EOF'` for multi-line messages.
 - First verified live 2026-08-05 (tq-v1): SW active, manifest served as `application/manifest+json` (installable), icons OK, zero console errors.
 - **GOTCHA — Render header rule for the manifest**: Render serves `.webmanifest` as `binary/octet-stream`, which can block Add-to-Home-Screen. Fixed with a dashboard Headers rule: path `/manifest.webmanifest`, name `Content-Type`, value `application/manifest+json`. Saving headers triggers a redeploy — during it files 404 inconsistently for ~30s; that's transient, re-check before diagnosing.
@@ -74,6 +74,11 @@ A mobile-friendly, browser-based RTS inspired by Age of Empires II: The Conquero
 - IP boundary told to user (they asked for "exactly like AoE2", "just for friends"): imitate style with ORIGINAL art/sounds only; no ripped Microsoft assets, especially once hosted on Render.
 
 ## Recent fixes (last published state)
+- Label "8p-performance" (2026-08-05, sw tq-v22, commit 1641fc1): user reported 8-player games "a little glitchy" after the map-size bump. Profiled, three real costs:
+  - **Separation was O(n²)** — the biggest sim cost (188 units ≈ 17k pair tests per step, growing with the square of army size). Now bucketed into `sepGrid` (Map keyed `x|0+','+y|0`), each cell tested against itself + `FWD=[[1,0],[-1,1],[0,1],[1,1]]` (forward-half stencil = every pair exactly once). **Verified by an exhaustive coverage test on a live 689-unit state: 112/112 pairs found, 0 missed, 0 duplicated.** Results differ from the old sweep by ≤4e-3 tiles purely from push ORDER — harmless for a settling force.
+  - **Mist throttle**: the 512px `wispC` rebuild (9 composites) now runs every 3rd frame via `wispT`, plus immediately when `fogWasDirty` (set where `fogDirty=false`). Zoomed-out draw **6.5ms → 2.8ms**.
+  - **Villagers stacked on shared resources** (a v17 creepToward regression): creep pulled every gatherer to the same point while separation's counter-push was blocked by the tree itself, so they compressed to ~0.003 tiles apart and jittered. Fixed with `crowdedAt()` (9-cell lookup against `sepGrid`, rejects a creep that lands within .34 of another unit) plus a per-unit `want+=(u.id%4)*.17` so crowds ring the trunk in bands. **10 villagers on one tree: closest pair 0.003 → 0.207, zero overlaps, all 10 still working.**
+  - **Testing note**: full 8p sims exceed the 30s JS-tool limit — run ≤3 game-minutes per call, or use a targeted scenario (the 10-villagers-one-tree test found the bug that whole-game overlap counts obscured).
 - Label "bigger-maps" (2026-08-05, sw tq-v21, commit c198e1d): user asked for much bigger, more detailed maps with clumpier trees.
   - **Sizes**: `setMapSize(mapSel===1?(NP<=4?96:112):(NP<=2?96:NP<=4?112:128))`. **128 is the hard ceiling** — terrain canvas is `MAP*TILE*TREZT` square, so 144→3744px and 160→4160px, and phones cap canvas dimensions at 4096px. Measured: 128@TREZT1 = 3328px / 42MB. Black Forest stays one size down (it fills every non-clearing tile; 12k trees at 128 made the whole-map view 44.5ms — at 112 it's 10.5ms).
   - **A* budget** now `Math.max(7000,MAP*MAP*.75)` — the old fixed 7000 could not path across a 128 board.
