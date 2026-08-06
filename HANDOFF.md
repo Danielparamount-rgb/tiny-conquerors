@@ -69,7 +69,7 @@ A mobile-friendly, browser-based RTS inspired by Age of Empires II: The Conquero
 
 ## Render app deployment — ✅ LIVE
 - **https://tiny-conquerors.onrender.com** — Render static site `tiny-conquerors`, service ID `srv-d9pibf5bedkc73c5qumg`, connected to GitHub repo Danielparamount-rgb/tiny-conquerors, branch `main`, **publish directory `app`**, no build command. Auto-deploys on push to main.
-- Current live version: **sw `tq-v24`** (wildlife-and-commands). Verified after every deploy by fetching sw.js + index.html from the shell (bypasses the cache-first SW) — check the byte size matches the local `app/index.html` exactly, that's the quickest proof the right build shipped.
+- Current live version: **sw `tq-v25`** (multiplayer-live). There are now TWO Render services: the static site (`app`) and the relay Web Service (`relay`) — see MULTIPLAYER. Verified after every deploy by fetching sw.js + index.html from the shell (bypasses the cache-first SW) — check the byte size matches the local `app/index.html` exactly, that's the quickest proof the right build shipped.
 - **Commit-message gotcha**: PowerShell here-strings choke on messages containing double quotes (`git commit -m @'...'@` split mid-message once). Use the Bash tool with `git commit -F - << 'EOF'` for multi-line messages.
 - First verified live 2026-08-05 (tq-v1): SW active, manifest served as `application/manifest+json` (installable), icons OK, zero console errors.
 - **GOTCHA — Render header rule for the manifest**: Render serves `.webmanifest` as `binary/octet-stream`, which can block Add-to-Home-Screen. Fixed with a dashboard Headers rule: path `/manifest.webmanifest`, name `Content-Type`, value `application/manifest+json`. Saving headers triggers a redeploy — during it files 404 inconsistently for ~30s; that's transient, re-check before diagnosing.
@@ -90,16 +90,39 @@ A mobile-friendly, browser-based RTS inspired by Age of Empires II: The Conquero
 - Deploy checklist for future updates: edit tiny-conquerors.html → run `build-app.ps1` (MANDATORY — app/index.html is a generated copy and goes stale silently) → bump VERSION in app/sw.js ('tq-v2', ...) → `git add -A; git commit; git push` → Render auto-deploys on push to main.
 - IP boundary told to user (they asked for "exactly like AoE2", "just for friends"): imitate style with ORIGINAL art/sounds only; no ripped Microsoft assets, especially once hosted on Render.
 
-## MULTIPLAYER — in progress (user goal: play with friends, the "huge thing")
+## MULTIPLAYER — ✅ WORKING END TO END (2026-08-06, sw tq-v25)
+**It is live. Two people on https://tiny-conquerors.onrender.com can play each other right now**: Play with Friends → Host → read the 4-letter code out → the other person Joins. Verified in production, not just locally — two browser tabs on the live site, through the deployed relay, ran 1800 turns with commands crossing the wire and finished on identical `stateHash()` (`83bfc2fa`).
+
+### The relay service
+- **https://tiny-conquerors-relay.onrender.com** — Render **Web Service** (NOT the static site), id `srv-d9qfhejm8hqs738cfu50`, same GitHub repo, **root directory `relay`**, build `npm install`, start `npm start`, health check `/healthz`, **Free plan**.
+- Source + protocol table in [`relay/README.md`](relay/README.md); the server is `relay/server.js` (~250 lines, one dependency: `ws`).
+- **Free-tier cold start is the one rough edge**: the service sleeps after ~15 min idle and takes ~50s to wake, so the first Host press after a quiet spell fails. The client says exactly that instead of pretending otherwise. Upgrading to Starter ($7/mo) removes it — offered to the user, who chose Free for now.
+- Deliberate design: the relay knows about rooms, seats and opaque blobs and NOTHING about the game. Putting rules in it would mean two implementations to keep in step, which is the thing lockstep exists to avoid.
+- **Seats come from the socket, never the message** — a `cmds` frame is re-stamped with the sender's real seat, so a modified client cannot order another player's army. The game's `CMDS` handlers check ownership again on arrival.
+
+### Client pieces
+- **`localP`** — the local player is no longer slot 0. The sim was always player-indexed; the VIEW was not. Resource bar, panel, fog, minimap, warnings, score list, selection, ownership, win test and mission setups all read `localP` now. `humanSlots` decides which seats get an AI; `netCivs`/`netTeams` let the lobby pick civs and sides. `resetNet()` puts the seat back to solo and is called from every non-network start path.
+  - **`face:p===0?1:-1` in addUnit is deliberately NOT localP** — it is written into the unit record, so keying it to the viewer would have two peers build different units.
+- **Lockstep** (`NET_LAG=5` turns = 250ms): orders are scheduled 5 turns ahead; a turn runs only when every peer's list for it has arrived. Falling behind stalls everyone — that is the point — and after 2.5s the others are told who they're waiting for. Hashes go out every 20 turns.
+- **`drainCmds()` no-ops in netMode** — the queue is shipped, not applied locally, or every order would execute twice on one machine.
+- **Failure handling**: a desync halts both peers within a second with a message that does not blame the player's connection; a peer that closes ends the match by name after 4s. A dropped player currently ends the battle — handing their town to an AI would need a moment every machine agreed on, and one of them is gone. That is the obvious next feature (broadcast a "seat N becomes AI at turn T" command).
+- **The artifact cannot do multiplayer** — its CSP blocks all outbound connections. `netAvailable()`/the socket error message point at the web app.
+
+### Test recipe (reuse this)
+Two Browser-pane tabs on the same build; hidden tabs get no rAF, so pump by hand:
+`window.__pump=setInterval(()=>{let g=0;while(g++<12&&netTurn<N&&netRunTurn());},6)`
+then compare `stateHash()` at the SAME `netTurn` on both (comparing different turns proves nothing — I did that once by accident). Drive the real `frame()` for stall/drop tests: `last=performance.now()-50;frame(performance.now())` in a loop, so the code under test is the shipped code rather than a copy.
+
+### Original staged plan (all five steps now done)
 Plan agreed 2026-08-05: lockstep — peers exchange COMMANDS, not state, and each runs the identical sim. Staged so every step is useful alone.
 1. ✅ **Determinism** (sw tq-v23, commit 0df413b) — done, see below.
 2. ✅ **Command layer** (sw tq-v24, commit d68ffcf) — done. `issue(k,d)` is the single chokepoint; `CMDS` holds one handler per action. Solo play drains at issue time so latency is unchanged. **The AI deliberately does NOT go through it** — under lockstep every peer runs the same deterministic `aiThink()` and reproduces its orders locally; sending them would apply every decision twice. Commands implemented: move, amove, stop, attack, gather, farm, build, gar, garU, ungar, unload, relic, enshrine, place, placeLine, train, age, tech (bs/uni/eco/ut/pt), trade, fishtrap, del.
    - Handlers re-validate ownership, cost, age, tech-tree and placement. Verified rejected-with-no-charge: commanding another player's units, training what a building can't make, building on an occupied tile, trading with no market, researching past an age gate.
    - **`localP`** (0 today) stamps the issuing player — set it per peer when the lobby lands.
    - Two fixes fell out of the move: the wall-line build now uses `bldCostOf` (it used the raw `BLDS.cost`, so **Mayan half-price walls never applied to a line**), and villagers sent to help now go to the first section actually placed rather than whatever unbuilt wall `G.blds.find` turned up first.
-3. ⬜ **Relay server**: tiny Node+ws service on Render (separate service from the static site), rooms by code, forwards `{tick,playerId,cmds}` blobs. No game logic. **The command records are already the wire format** — `{k,p,…}`, ids and numbers only, JSON-serializable as they stand.
-4. ⬜ **Lockstep loop**: run the sim N ticks behind, only advancing when every peer's commands for that tick have arrived; compare `stateHash()` each second and halt with a clear message on mismatch.
-5. ⬜ Lobby/teams/reconnect.
+3. ✅ **Relay server** (sw tq-v25, commit 6bcbd84) — `relay/`, deployed, see above.
+4. ✅ **Lockstep loop** — see above.
+5. ✅ **Lobby** (host/join by code, civ picks, host-set map/AI/skill/teams/pace). Teams and reconnect are the remaining polish: a dropped player ends the match rather than being taken over by an AI.
 **Key facts for whoever continues:**
 - `SR()`/`SRi(n)` = the ONLY randomness allowed to affect G. `seedSim(s)` sets it; `gameSeed` holds the seed and is saved. Cosmetic randomness stays on `Math.random()` deliberately (75 of the 84 sites) — peers may differ there.
 - **`uid=1` reset in newGame is load-bearing** — commands reference units by id and `creepToward` reads `u.id%4`. Removing it desyncs peers.
@@ -108,6 +131,8 @@ Plan agreed 2026-08-05: lockstep — peers exchange COMMANDS, not state, and eac
 - Watch out: `Object.keys(G.res)` ordering, `Array.sort` stability, and `Date.now()` would all break lockstep. None are currently used in the sim.
 
 ## Recent fixes (last published state)
+- Label "multiplayer-live" (2026-08-06, sw **tq-v25**, commit 6bcbd84). Multiplayer steps 3-5 — **the thing the app exists for now works**. Full design, the relay's Render settings, the failure-handling rules and the two-tab test recipe are all in the MULTIPLAYER section above; this entry is just the pointer.
+  - The one preparatory change worth knowing about independently: **the `localP` sweep**. Roughly 200 hardcoded references to player 0 in the view layer became `localP`. Verified behaviour-preserving by building a page from the previous commit and running seven scenarios (three maps, 2/3/4/8 players, three team modes, three civs) head-to-head — every hash identical. That head-to-head-against-the-last-commit trick is worth reusing for any future sweep of this kind.
 - Label "wildlife-and-commands" (2026-08-06, sw **tq-v24**, commits d68ffcf + 19ce974). Three pieces in one pass; user asked for the whole recommended list at once.
   - **Multiplayer step 2 — the command layer.** See the MULTIPLAYER section for the design and the full command list.
   - **Wildlife: sheep, boar, deer.** The design decision that made this cheap: **animals are units owned by a GAIA player (index 8), and a kill drops an ordinary `food` resource.** They then path/take damage/die/draw through code that already existed, villagers butcher a carcass with the code that picks berries, and the AI's `nearestRes(v,'food')` finds carcasses without knowing wildlife exists. The carcass carries `sub:'meat'` (type stays `'food'` so `G.P[p][carryType[0]]` still resolves to `f`) — that flag drives the sprite (`getResSpr('meat')`), the "Carcass"/"butcher" wording, and the hunt bonuses.
@@ -300,8 +325,10 @@ Plan agreed 2026-08-05: lockstep — peers exchange COMMANDS, not state, and eac
 - **Turbo mode: DONE** (label "cd-round-2", `turboSel`/`TB()`).
 - **Sheep / boar / deer: DONE** (label "wildlife-and-commands", 2026-08-06) — all three, plus the carcass economy and the three civ bonuses that had been dead.
 - **Campaign refresh: DONE** (same label) — 8 missions; the last three exercise siege, navy and the Wonder.
-- **Recommended next by priority** (reassessed 2026-08-06, after steps 1-2 of multiplayer, wildlife and the campaign all landed):
-  1. **Multiplayer step 3 — the relay server.** Steps 1 and 2 are done and the commands are already wire-ready JSON. This is now the only thing standing between the user and playing with friends, which is why the app exists. A tiny Node+ws service as a SECOND Render service, rooms by code, no game logic.
-  2. **Multiplayer steps 4-5** — the lockstep loop (run N ticks behind, advance only when every peer's commands are in, compare `stateHash()` each second) and then lobby/teams/reconnect.
-  3. **AI use of the new systems** — it still never builds walls, never loads a transport, never sets a fish trap, and never hunts deer away from its town.
-  4. Cosmetic leftovers offered but not taken: fire on damaged buildings, blood/scorch decals, unit-specific death poses, a richer backdrop beyond the map edge.
+- **Multiplayer: DONE** (label "multiplayer-live", 2026-08-06) — all five steps, live and verified in production.
+- **Recommended next by priority** (reassessed 2026-08-06, with multiplayer working):
+  1. **Play it with a real friend on real phones and see what breaks.** Everything so far was verified by two tabs on one machine — same clock, same network, no packet loss, no phone falling asleep mid-turn. The unknowns are latency spikes, backgrounded browsers on iOS, and whether `NET_LAG=5` (250ms) is enough over a phone network. This is worth doing before building more on top.
+  2. **Dropped players and reconnect.** Today a drop ends the battle. Handing the seat to an AI needs a "seat N becomes AI at turn T" command every peer applies on the same turn — the command layer already makes that expressible. Reconnect additionally needs the relay to keep a replay of commands from turn 0.
+  3. **Multiplayer teams in the lobby** — the row exists and is wired to `netTeams`, but nobody has played a 2v2 through it.
+  4. **AI use of the newer systems** — it still never builds walls, never loads a transport, never sets a fish trap, and never hunts deer away from its town.
+  5. Cosmetic leftovers offered but not taken: fire on damaged buildings, blood/scorch decals, unit-specific death poses, a richer backdrop beyond the map edge.
