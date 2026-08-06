@@ -1647,7 +1647,8 @@ function step(dt){
         col:ci===3?'#b8bdc2':TEAMS[u.p].main});
       G.fx.push({x:u.x,y:u.y-.3,vx:0,vy:-.4,life:.2,max:.2,r:2.2,kind:'spark'});
     }
-    G.corpses.push({x:u.x,y:u.y,p:u.p,type:u.type,t:150,max:150,h:Math.random()<.5?1:0});
+    G.corpses.push({x:u.x,y:u.y,p:u.p,type:u.type,t:150,max:150,h:Math.random()<.5?1:0,
+      hdg:u.hdg,face:u.face,fall:Math.random()<.5?-1:1}); // pose for the topple
     if(G.corpses.length>140)G.corpses.shift();
     G.units.splice(i,1);}
   for(let i=G.blds.length-1;i>=0;i--)if(G.blds[i].hp<=0)removeBld(i);
@@ -6883,8 +6884,26 @@ function drawCorpse(c){
   const big=!!(UNITS[c.type]&&UNITS[c.type].cav)||c.type==='elephant'||c.type==='ram';
   const sp=getCorpseSpr(c.p,big,st,c.type==='ram');
   const cp=isoE(c.x,c.y);
-  if(age<.35){ // death crumple: three HARD poses (sprite-flip feel, no tween)
-    const f=Math.floor(age/.35*3)/3;
+  // DEATH: the living rig topples over 0.5s in 6 hard-stepped poses (period
+  // sprite sheets ran ~12fps — stepping reads truer than a smooth tween),
+  // then hands off to the corpse sprite. Ships/rams keep their wreck art.
+  const DT=.5;
+  if(age<DT&&c.hdg!==undefined&&UNITS[c.type]&&!UNITS[c.type].ship&&c.type!=='ram'){
+    const step=Math.min(5,Math.floor(age/DT*6)),f=step/5;
+    const ease=f*f*(3-2*f);              // settle into the ground, no bounce
+    ctx.save();ctx.translate(cp.x,cp.y);
+    ctx.rotate(c.fall*1.32*ease);        // pivot at the feet, fall to one side
+    ctx.translate(0,ease*2.2);           // sink as it goes down
+    ctx.scale(1.18,1.18*(1-.3*ease));    // same scale drawUnit uses, flattening
+    ctx.lineCap='round';ctx.lineJoin='round';
+    const fake={type:c.type,p:c.p,state:'idle',cd:0,carry:0,gatherT:0,
+      face:c.face||1,hdg:c.hdg,spd:0,vx:0,vy:0,gaitPh:0,id:0,gar:[]};
+    try{drawUnitBody(fake,0,0,TEAMS[c.p]);}catch(e){}
+    ctx.restore();
+    return;
+  }
+  if(age<DT){ // ships, rams and old saves: the previous crumple
+    const f=Math.floor(age/DT*3)/3;
     ctx.save();ctx.translate(cp.x,cp.y);
     if(c.h)ctx.scale(-1,1);
     ctx.rotate((1-f)*-.55);ctx.scale(1,.45+.55*f);
