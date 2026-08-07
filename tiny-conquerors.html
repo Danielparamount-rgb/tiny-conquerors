@@ -47,6 +47,10 @@
   /* text label in a cluster of 34px icon buttons. NB: must out-specify the
      `#zoomBtns button` rule below, which also sets font-size. */
   #zoomBtns button#d3Btn{font-size:13px;font-weight:700;letter-spacing:.03em;}
+  /* Camera reset is 3D-only — and it must be a BUTTON, not just the R key,
+     because the phone has no keyboard and rotation is a touch gesture. */
+  #camBtn{display:none;}
+  body.r3d #camBtn{display:block;}
   body.r3d #view{display:none;}
   body.r3d #view3{display:block;}
   #minimap{position:absolute;top:8px;right:8px;width:132px;height:77px;
@@ -274,6 +278,7 @@
       <button id="idleBtn" aria-label="Idle villager" title="Jump to an idle villager (.)">🧑‍🌾</button>
       <button id="deselBtn" aria-label="Deselect" title="Deselect everything (Esc)">✕</button>
       <button id="d3Btn" aria-label="Toggle 3D view" title="Switch between the 2D and 3D renderers">3D</button>
+      <button id="camBtn" aria-label="Reset camera angle" title="Reset the camera angle (R)">⟲</button>
       <button id="panelBtn" aria-label="Hide panel" title="Hide the command panel for a bigger map">▾</button>
     </div>
     <div id="clock" class="ovt"></div>
@@ -4237,6 +4242,7 @@ function snd(kind,wx,wy){
 
 /* ================= rendering ================= */
 const view=document.getElementById('view');
+const view3=document.getElementById('view3');
 let ctx=view.getContext('2d'); // let: portraitFor temporarily points it at a portrait canvas
 const mini=document.getElementById('minimap'),mctx=mini.getContext('2d');
 const TREZ=2; // supersample factor for sprites
@@ -5236,6 +5242,15 @@ function getResSpr(type,h){
   RES_SPR[key]=sp;return sp;
 }
 function clampCam(){
+  /* The 2D bounds below are an axis-aligned box in ISO screen space, which is
+     only the right shape when the camera points the way it always used to.
+     Under rotation the correct constraint is on the orbit TARGET, in tiles. */
+  if(use3D){
+    const t=R3.target(),m=4;
+    const nx=Math.max(-m,Math.min(MAP+m,t.x)),ny=Math.max(-m,Math.min(MAP+m,t.y));
+    if(nx!==t.x||ny!==t.y)camTo(nx,ny);   // camTo, not centerOn — no recursion
+    return;
+  }
   const z=G.cam.z,m=50;
   const minX=-MAP*IW-m,maxX=MAP*IW+m-vw/z;
   const minY=-m,maxY=MAP*2*IH+m-vh/z;
@@ -8919,21 +8934,50 @@ document.getElementById('boxBtn').onclick=()=>{
   setBoxArm(!boxArm);
   if(boxArm)toast('Drag a box around your units to select them');
 };
-view.addEventListener('pointerdown',e=>{
-  view.setPointerCapture(e.pointerId);
+/* Pan by a SCREEN delta. In 2D that is the old two lines; in 3D the same
+   gesture has to move the orbit target, and how far a pixel moves the world
+   depends on the current yaw/pitch. Verified to reduce to the 2D arithmetic
+   exactly at the home orientation. */
+function panScreen(dx,dy){
+  if(use3D){
+    const t=R3.target(),d=R3.sd2t(dx,dy);
+    camTo(t.x-d.x,t.y-d.y);clampCam();return;
+  }
+  G.cam.x-=dx/G.cam.z;G.cam.y-=dy/G.cam.z;clampCam();
+}
+/* Same two statements as centerOn but WITHOUT clampCam, so clampCam can move
+   the camera without recursing into itself. */
+function camTo(x,y){const p=isoPt(x,y);G.cam.x=p.x-vw/G.cam.z/2;G.cam.y=p.y-vh/G.cam.z/2;}
+function onDown(e){
+  e.currentTarget.setPointerCapture(e.pointerId);
   if(e.pointerType==='mouse')mouseSeen=true;
   const useBox=!G?.placing&&(boxArm||(e.pointerType==='mouse'&&e.button===0));
   ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY,moved:false,
-    box:useBox&&ptrs.size===0,btn:e.button,mouse:e.pointerType==='mouse'});
+    box:useBox&&ptrs.size===0,btn:e.button,mouse:e.pointerType==='mouse',
+    yaw0:R3.yaw,pitch0:R3.pitch});   // additive; never read when !use3D
   if(ptrs.size===2){
     for(const p of ptrs.values())p.box=false;
     selBox=null;
     const[a,b]=[...ptrs.values()];
     pinchBase={d:Math.hypot(a.x-b.x,a.y-b.y),z:G.cam.z,
-      cx:(a.x+b.x)/2,cy:(a.y+b.y)/2};
+      cx:(a.x+b.x)/2,cy:(a.y+b.y)/2,
+      ang:Math.atan2(b.y-a.y,b.x-a.x),my:(a.y+b.y)/2,
+      yaw:R3.yaw,pitch:R3.pitch,rot:false,tilt:false};
   }
-});
-view.addEventListener('pointermove',e=>{
+}
+/* Two-finger twist -> yaw, two-finger vertical -> pitch. Deadzones so a plain
+   pinch-zoom never accidentally spins the world. 3D only. */
+function twoFingerOrbit(a,b){
+  const ang=Math.atan2(b.y-a.y,b.x-a.x);
+  let dA=ang-pinchBase.ang;
+  while(dA>Math.PI)dA-=2*Math.PI; while(dA<-Math.PI)dA+=2*Math.PI;
+  if(!pinchBase.rot&&Math.abs(dA)>0.14)pinchBase.rot=true;
+  if(pinchBase.rot)R3.yaw=pinchBase.yaw+dA;
+  const dMy=(a.y+b.y)/2-pinchBase.my;
+  if(!pinchBase.tilt&&Math.abs(dMy)>18)pinchBase.tilt=true;
+  if(pinchBase.tilt)R3.setPitch(pinchBase.pitch+dMy*.005);
+}
+function onMove(e){
   const p=ptrs.get(e.pointerId);if(!p)return;
   const dx=e.clientX-p.x,dy=e.clientY-p.y;
   p.x=e.clientX;p.y=e.clientY;
@@ -8941,22 +8985,33 @@ view.addEventListener('pointermove',e=>{
   if(!G||G.paused)return;
   if(ptrs.size===2&&pinchBase){
     const[a,b]=[...ptrs.values()];
+    if(use3D)twoFingerOrbit(a,b);
     const d=Math.hypot(a.x-b.x,a.y-b.y);
     const nz=Math.max(.45,Math.min(2.2,pinchBase.z*d/pinchBase.d));
     zoomAt(nz,pinchBase.cx,pinchBase.cy);
   }else if(ptrs.size===1&&p.moved){
-    if(p.box){selBox={x0:p.sx,y0:p.sy,x1:e.clientX,y1:e.clientY};}
-    else{G.cam.x-=dx/G.cam.z;G.cam.y-=dy/G.cam.z;clampCam();}
+    // right/middle DRAG orbits in 3D; a right CLICK still commands, because
+    // endPtr only issues a tap when p.moved is false. Unreachable in 2D.
+    if(use3D&&(p.btn===2||p.btn===1)){
+      R3.yaw=p.yaw0-(e.clientX-p.sx)*.006;
+      R3.setPitch(p.pitch0+(e.clientY-p.sy)*.005);
+    }
+    else if(p.box){selBox={x0:p.sx,y0:p.sy,x1:e.clientX,y1:e.clientY};}
+    else panScreen(dx,dy);
   }
-});
+}
 function applyBox(x0,y0,x1,y1){
-  const r=view.getBoundingClientRect(),z=G.cam.z;
+  const r=(use3D?view3:view).getBoundingClientRect(),z=G.cam.z;
   const bx0=Math.min(x0,x1),bx1=Math.max(x0,x1);
   const by0=Math.min(y0,y1),by1=Math.max(y0,y1);
   const ids=G.units.filter(u=>{
     if(u.p!==localP)return false;
-    const p=isoPt(u.x,u.y);
-    const sx=(p.x-G.cam.x)*z+r.left,sy=(p.y-8-G.cam.y)*z+r.top;
+    let sx,sy;
+    /* Orthographic, so a screen rectangle IS the correct volume test — no
+       frustum, no clipping. h=8 with NO elevation deliberately mirrors 2D's
+       isoPt-not-isoE quirk below, so the two agree exactly at home. */
+    if(use3D){const q=R3.project(u.x,u.y,8);sx=q.x+r.left;sy=q.y+r.top;}
+    else{const p=isoPt(u.x,u.y);sx=(p.x-G.cam.x)*z+r.left;sy=(p.y-8-G.cam.y)*z+r.top;}
     return sx>=bx0&&sx<=bx1&&sy>=by0&&sy<=by1;
   }).map(u=>u.id);
   G.sel=ids;refreshPanel();
@@ -8977,15 +9032,35 @@ function endPtr(e){
   if(boxArm)setBoxArm(false);
   handleTap(p.sx,p.sy,p.mouse,p.btn===2);
 }
-view.addEventListener('pointerup',endPtr);
-view.addEventListener('contextmenu',e=>e.preventDefault());
-view.addEventListener('pointercancel',e=>{ptrs.delete(e.pointerId);if(ptrs.size<2)pinchBase=null;selBox=null;});
-view.addEventListener('wheel',e=>{
+function onCancel(e){ptrs.delete(e.pointerId);if(ptrs.size<2)pinchBase=null;selBox=null;}
+function onWheel(e){
   if(!G)return;e.preventDefault();
   const nz=e.deltaY<0?Math.min(2.2,G.cam.z*1.12):Math.max(.45,G.cam.z/1.12);
   zoomAt(nz,e.clientX,e.clientY);
-},{passive:false});
+}
+/* Bound to BOTH canvases. #view3 is display:none in 2D mode and receives no
+   events at all, so this is provably a no-op for the 2D path — which is the
+   A/B reference for the whole rewrite and must not shift. Deliberately NOT
+   bound to #viewwrap: placeMini() re-parents the minimap and zoom buttons into
+   it below 760px, and wheel/contextmenu would then fire over the minimap. */
+function bindView(el){
+  el.addEventListener('pointerdown',onDown);
+  el.addEventListener('pointermove',onMove);
+  el.addEventListener('pointerup',endPtr);
+  el.addEventListener('contextmenu',e=>e.preventDefault());
+  el.addEventListener('pointercancel',onCancel);
+  el.addEventListener('wheel',onWheel,{passive:false});
+}
+bindView(view);bindView(view3);
 function zoomAt(nz,cx,cy){
+  if(use3D){
+    // keep the world point under the cursor fixed while zooming. sd2t scales
+    // as 1/z, so d MUST be computed before G.cam.z changes.
+    const rect=view3.getBoundingClientRect(),t=R3.target();
+    const d=R3.sd2t(cx-rect.left-vw/2,cy-rect.top-vh/2);
+    const k=1-G.cam.z/nz;
+    G.cam.z=nz;camTo(t.x+d.x*k,t.y+d.y*k);clampCam();return;
+  }
   const rect=view.getBoundingClientRect();
   const wx=G.cam.x+(cx-rect.left)/G.cam.z,wy=G.cam.y+(cy-rect.top)/G.cam.z;
   G.cam.z=nz;
@@ -9068,14 +9143,32 @@ const miniEnd=e=>{miniDrag=false;
 mini.addEventListener('pointerup',miniEnd);
 mini.addEventListener('pointercancel',miniEnd);
 function handleTap(cx,cy,mouse,right){
-  const rect=view.getBoundingClientRect();
-  const wx=G.cam.x+(cx-rect.left)/G.cam.z,wy=G.cam.y+(cy-rect.top)/G.cam.z;
-  const tw=invIso(wx,wy);
-  const tx=Math.floor(tw.x),ty=Math.floor(tw.y);
-  if(tx<0||ty<0||tx>=MAP||ty>=MAP)return;
+  const d3=use3D;                    // capture once — a mid-tap toggle must not split the branch
+  const rect=(d3?view3:view).getBoundingClientRect();
+  const sx=cx-rect.left,sy=cy-rect.top;
+  let wx,wy,tw,tx,ty,onMap;
+  if(d3){
+    const g=R3.pickGround(sx,sy);
+    tw=g||{x:-1,y:-1};
+    tx=Math.floor(tw.x);ty=Math.floor(tw.y);
+    onMap=!!g&&tx>=0&&ty>=0&&tx<MAP&&ty<MAP;
+  }else{
+    wx=G.cam.x+sx/G.cam.z;wy=G.cam.y+sy/G.cam.z;
+    tw=invIso(wx,wy);
+    tx=Math.floor(tw.x);ty=Math.floor(tw.y);
+    if(tx<0||ty<0||tx>=MAP||ty>=MAP)return;
+    onMap=true;
+  }
+  /* NB the off-map early return above stays 2D-only ON PURPOSE. At the pitch
+     floor a 40px castle roof unprojects ~3.7 tiles past its own footprint, so
+     bailing out here would make every border building's roof, every edge
+     canopy and every edge unit unclickable at any yaw that points the map edge
+     away from the camera. The entity tests below are screen-space/volume
+     tests — they never needed a valid ground tile. */
   // placement mode
   if(G.placing){
     if(right){G.placing=null;G.pend=null;G.wallA=null;G.pendLine=null;refreshPanel();return;}
+    if(!onMap)return;
     const sz=BLDS[G.placing].size;
     const px2=Math.min(MAP-sz,Math.max(0,tx)),py2=Math.min(MAP-sz,Math.max(0,ty));
     if(G.placing==='wall'||G.placing==='swall'){
@@ -9086,41 +9179,103 @@ function handleTap(cx,cy,mouse,right){
     G.pend={type:G.placing,tx:px2,ty:py2};refreshPanel();return;}
   // hit tests are in iso SCREEN space so clicking the visible sprite works —
   // canopies/roofs rise above their ground tile; a tile-only test made you click "under" things
-  let hitU=null,hd=(mouse?13:22)/Math.min(1,G.cam.z); // touch keeps a fingertip-sized target at any zoom
-  for(const u of G.units){
-    if(!allied(u.p,localP)&&!tileVis(u.x,u.y))continue;
-    const p=isoE(u.x,u.y);
-    const big=!!UNITS[u.type].cav||u.type==='ram'||!!UNITS[u.type].ship||!!UNITS[u.type].siege;
-    const d=Math.hypot(p.x-wx,(p.y-(big?10:8)-wy)*.8);
-    if(d<hd){hd=d;hitU=u;}}
+  let hitU=null;
+  if(d3){
+    /* SCREEN space, because a unit sprite is a screen-facing billboard — a
+       fingertip is 13/22 CSS px wide however the camera is pointed. This is
+       the SAME rule as 2D, algebraically restated: the 2D test is
+       d_world < k/min(1,z); multiply both sides by z and it is
+       d_screen < k*max(1,z). Not a retune. The .8 anisotropy stays in screen
+       space: it compensates for a taller-than-wide sprite, and under an
+       orthographic camera a billboard's screen aspect is pitch-independent. */
+    let hd=(mouse?13:22)*Math.max(1,G.cam.z);
+    for(const u of G.units){
+      if(!allied(u.p,localP)&&!tileVis(u.x,u.y))continue;
+      const big=!!UNITS[u.type].cav||u.type==='ram'||!!UNITS[u.type].ship||!!UNITS[u.type].siege;
+      // elevF, matching what the 2D renderer draws with via isoE — pick must
+      // follow DRAW, not the mesh, until stage 3 stands units on the mesh.
+      const p=R3.project(u.x,u.y,elevF(u.x,u.y)*10+(big?10:8));
+      const d=Math.hypot(p.x-sx,(p.y-sy)*.8);
+      if(d<hd){hd=d;hitU=u;}}          // nearest wins — hd reassigned, as in 2D
+  }else{
+    let hd=(mouse?13:22)/Math.min(1,G.cam.z); // touch keeps a fingertip-sized target at any zoom
+    for(const u of G.units){
+      if(!allied(u.p,localP)&&!tileVis(u.x,u.y))continue;
+      const p=isoE(u.x,u.y);
+      const big=!!UNITS[u.type].cav||u.type==='ram'||!!UNITS[u.type].ship||!!UNITS[u.type].siege;
+      const d=Math.hypot(p.x-wx,(p.y-(big?10:8)-wy)*.8);
+      if(d<hd){hd=d;hitU=u;}}
+  }
   let hitB=null;
   for(const b of G.blds){
     if(!allied(b.p,localP)&&!b.seen)continue;
     if(tx>=b.tx&&ty>=b.ty&&tx<b.tx+b.size&&ty<b.ty+b.size){hitB=b;break;}}
   if(!hitB&&!hitU){ // roof click: box from the visual top down to the footprint
-    for(const b of G.blds){
-      if(!allied(b.p,localP)&&!b.seen)continue;
-      const pc=isoPt(b.tx+b.size/2,b.ty+b.size/2);
-      pc.y-=elevTile(b.tx+b.size/2,b.ty+b.size/2)*10;
-      const ht=(IHT[b.type]||18)*(b.built?1:.35);
-      if(Math.abs(wx-pc.x)<b.size*IW*.7&&wy>pc.y-ht-IH&&wy<pc.y+b.size*IH*.8){hitB=b;break;}}
+    if(d3){
+      /* A real volume, so a castle turret is clickable from any angle, and the
+         ray parameter gives the true FRONT-MOST building instead of "first one
+         in G.blds order". Half-extent 0.7*size TILES reproduces the 2D box's
+         size*IW*.7 exactly; the height and the elevTile lift are the same
+         numbers drawBld uses. */
+      const R=R3.ray(sx,sy);let bt=Infinity;
+      for(const b of G.blds){
+        if(!allied(b.p,localP)&&!b.seen)continue;
+        const g=elevTile(b.tx+b.size/2,b.ty+b.size/2)*10;
+        const ht=(IHT[b.type]||18)*(b.built?1:.35);
+        /* hx=0.35*size, NOT 0.7*size. The 2D test is a SCREEN box of half-width
+           size*IW*0.7; a square world AABB projects to screen half-width
+           (|dx|+|dz|)*IW = 2*hx*IW, so hx must be half of 0.7 to match. Using
+           0.7 made the volume twice as wide as 2D and the A/B harness caught it
+           immediately: clicking open ground beside a town hall issued `gar`
+           instead of `move`. */
+        const cxT=b.tx+b.size/2,cyT=b.ty+b.size/2,hx=b.size*.35;
+        const t=rayBox(R,cxT-hx,g*R3.HS,cyT-hx,cxT+hx,(g+ht)*R3.HS,cyT+hx);
+        if(t!==null&&t<bt){bt=t;hitB=b;}}
+    }else{
+      for(const b of G.blds){
+        if(!allied(b.p,localP)&&!b.seen)continue;
+        const pc=isoPt(b.tx+b.size/2,b.ty+b.size/2);
+        pc.y-=elevTile(b.tx+b.size/2,b.ty+b.size/2)*10;
+        const ht=(IHT[b.type]||18)*(b.built?1:.35);
+        if(Math.abs(wx-pc.x)<b.size*IW*.7&&wy>pc.y-ht-IH&&wy<pc.y+b.size*IH*.8){hitB=b;break;}}
+    }
   }
   const selUnits=G.sel.map(id=>G.units.find(u=>u.id===id)).filter(u=>u&&u.p===localP);
   const haveSel=selUnits.length>0;
   let resKey=tx+','+ty;
-  let res=G.res[resKey];
+  let res=onMap?G.res[resKey]:undefined;
   if(!res&&!hitU&&!hitB){ // canopy/sprite click: front-most resource whose art contains the point
-    let bs=-1e9;
-    for(const k in G.res){
-      const r=G.res[k];
-      if(!tileKnown(r.x,r.y))continue;
-      const rp=isoE(r.x+.5,r.y+.5);
-      if(Math.abs(rp.x-wx)>13)continue;
-      const top=r.type==='wood'?36:22;
-      if(wy<rp.y-top||wy>rp.y+14)continue;
-      if(rp.y>bs){bs=rp.y;res=r;resKey=k;}
+    if(d3){
+      /* Same tolerance band as 2D, expressed in screen px: the 2D test compares
+         world px and BOTH sides scale by z, so 13 -> 13*z etc. is algebraically
+         identical. Front-most now uses the real depth key, because "bigger
+         screen y is nearer" only holds at the home yaw. */
+      const z=G.cam.z;let bs=-1e9;
+      for(const k in G.res){
+        const r=G.res[k];
+        if(!tileKnown(r.x,r.y))continue;
+        const rp=R3.project(r.x+.5,r.y+.5,elevF(r.x+.5,r.y+.5)*10);
+        if(Math.abs(rp.x-sx)>13*z)continue;
+        const top=r.type==='wood'?36:22;
+        if(sy<rp.y-top*z||sy>rp.y+14*z)continue;
+        if(rp.d>bs){bs=rp.d;res=r;resKey=k;}
+      }
+    }else{
+      let bs=-1e9;
+      for(const k in G.res){
+        const r=G.res[k];
+        if(!tileKnown(r.x,r.y))continue;
+        const rp=isoE(r.x+.5,r.y+.5);
+        if(Math.abs(rp.x-wx)>13)continue;
+        const top=r.type==='wood'?36:22;
+        if(wy<rp.y-top||wy>rp.y+14)continue;
+        if(rp.y>bs){bs=rp.y;res=r;resKey=k;}
+      }
     }
   }
+  // Nothing at all under the finger (sky, or off the board): don't let it fall
+  // through to a move order or clear the selection.
+  if(d3&&!onMap&&!hitU&&!hitB&&!res)return;
   // mouse: left-click only selects; commands go on right-click (attack-move tap is the exception)
   // Every branch below states an INTENT — issue() records it and the handler
   // carries it out; nothing here touches a unit directly any more.
@@ -9134,7 +9289,7 @@ function handleTap(cx,cy,mouse,right){
       flashSel();return;}
     if(hitB&&!allied(hitB.p,localP)){issue('attack',{u:selIds,id:hitB.id,bld:true});flashSel();return;}
     if(res){issue('gather',{u:selIds,key:resKey});flashSel();return;}
-    const relic=G.relics.find(r=>!r.held&&!r.mon&&Math.hypot(r.x+.5-tw.x,r.y+.5-tw.y)<1);
+    const relic=onMap?G.relics.find(r=>!r.held&&!r.mon&&Math.hypot(r.x+.5-tw.x,r.y+.5-tw.y)<1):null;
     const monks=selUnits.filter(s=>UNITS[s.type].monk&&!UNITS[s.type].noRelic); // Missionaries can't carry relics
     if(relic&&monks.length){
       issue('relic',{u:monks.map(m=>m.id),rid:relic.id});
@@ -9165,7 +9320,10 @@ function handleTap(cx,cy,mouse,right){
       if(n){toast(n+(isRam?' climbing into the ram':' boarding the ship')+' — select it to release them');return;}
       toast(isRam?'The ram is full':'The ship is full');return;
     }
-    if(!hitU&&!hitB){
+    // onMap guard: this is the branch that would corrupt GAMEPLAY rather than
+    // just the UI — without it a tap past the board edge issues a move order to
+    // a garbage tile.
+    if(!hitU&&!hitB&&onMap){
       if(G.amode){
         issue('amove',{u:selIds,x:tx,y:ty});
         G.amode=false;toast('Attack-moving — they will fight through anything they meet');
@@ -9184,9 +9342,11 @@ function handleTap(cx,cy,mouse,right){
       const z=G.cam.z;
       const ids=G.units.filter(u=>{
         if(u.p!==localP||u.type!==hitU.type)return false;
-        const p=isoPt(u.x,u.y);
-        const sx=(p.x-G.cam.x)*z,sy=(p.y-G.cam.y)*z;
-        return sx>=0&&sx<=vw&&sy>=0&&sy<=vh;
+        let px,py;
+        // mirrors the 2D line exactly: no rect offset, no body lift, no elevation
+        if(d3){const q=R3.project(u.x,u.y,0);px=q.x;py=q.y;}
+        else{const p=isoPt(u.x,u.y);px=(p.x-G.cam.x)*z;py=(p.y-G.cam.y)*z;}
+        return px>=0&&px<=vw&&py>=0&&py<=vh;
       }).map(u=>u.id);
       G.sel=ids.length?ids:[hitU.id];
       toast(G.sel.length+' '+(hitU.type==='villager'?'villagers':unitName(hitU.type,localP)+'s')+' selected');
@@ -9668,11 +9828,12 @@ window.addEventListener('keydown',e=>{
     else{G.sel=[];G.inspect=null;refreshPanel();}
     return;}
   if(menuOpen)return;
-  const pan=48/G.cam.z;
-  if(e.key==='ArrowLeft'){G.cam.x-=pan;clampCam();e.preventDefault();return;}
-  if(e.key==='ArrowRight'){G.cam.x+=pan;clampCam();e.preventDefault();return;}
-  if(e.key==='ArrowUp'){G.cam.y-=pan;clampCam();e.preventDefault();return;}
-  if(e.key==='ArrowDown'){G.cam.y+=pan;clampCam();e.preventDefault();return;}
+  // 48/z in world units IS a constant 48 screen px (screen = world*z), so these
+  // are exact restatements that also work at any 3D camera angle.
+  if(e.key==='ArrowLeft'){panScreen(48,0);e.preventDefault();return;}
+  if(e.key==='ArrowRight'){panScreen(-48,0);e.preventDefault();return;}
+  if(e.key==='ArrowUp'){panScreen(0,48);e.preventDefault();return;}
+  if(e.key==='ArrowDown'){panScreen(0,-48);e.preventDefault();return;}
   if(k==='+'||k==='='){zoomAt(Math.min(2.2,G.cam.z*1.2),vw/2,vh/2);return;}
   if(k==='-'){zoomAt(Math.max(.45,G.cam.z/1.2),vw/2,vh/2);return;}
   if(e.key===' '){
@@ -9712,6 +9873,10 @@ window.addEventListener('keydown',e=>{
   if(selV.length){
     for(const bt in BUILD_KEYS)if(BUILD_KEYS[bt]===k){startBuildKey(bt);return;}
   }
+  /* Camera reset, LAST so the contextual train/build keys win: bare 'r' is Ram
+     at a siege workshop and Turtle Ship at a dock. Gated on use3D, so 2D is
+     untouched. */
+  if(use3D&&k==='r'){R3.yaw=R3.homeYaw;R3.setPitch(R3.homePitch);toast('Camera reset');return;}
 });
 /* ================= menus ================= */
 document.querySelectorAll('.diff button[data-d]').forEach(b=>{
@@ -10012,6 +10177,19 @@ function m4xform(m,x,y,z){        // full transform incl. w divide
           y:(m[1]*x+m[5]*y+m[9]*z+m[13])/w,
           z:(m[2]*x+m[6]*y+m[10]*z+m[14])/w};
 }
+/* Ray vs axis-aligned box. Returns the ENTRY t (which may legitimately be
+   negative — the ray origin plane passes through the camera target, so about
+   half the visible world is behind it) or null. */
+function rayBox(r,x0,y0,z0,x1,y1,z1){
+  let tn=-1e30,tf=1e30,a,b,s;
+  if(Math.abs(r.dx)<1e-9){if(r.ox<x0||r.ox>x1)return null;}
+  else{a=(x0-r.ox)/r.dx;b=(x1-r.ox)/r.dx;if(a>b){s=a;a=b;b=s;}if(a>tn)tn=a;if(b<tf)tf=b;}
+  if(Math.abs(r.dy)<1e-9){if(r.oy<y0||r.oy>y1)return null;}
+  else{a=(y0-r.oy)/r.dy;b=(y1-r.oy)/r.dy;if(a>b){s=a;a=b;b=s;}if(a>tn)tn=a;if(b<tf)tf=b;}
+  if(Math.abs(r.dz)<1e-9){if(r.oz<z0||r.oz>z1)return null;}
+  else{a=(z0-r.oz)/r.dz;b=(z1-r.oz)/r.dz;if(a>b){s=a;a=b;b=s;}if(a>tn)tn=a;if(b<tf)tf=b;}
+  return tn>tf?null:tn;
+}
 function m4look(ex,ey,ez,cx,cy,cz){
   let fx=cx-ex,fy=cy-ey,fz=cz-ez;
   let rl=1/Math.hypot(fx,fy,fz); fx*=rl; fy*=rl; fz*=rl;
@@ -10083,6 +10261,44 @@ const R3={
     const P=m4ortho(-hw,hw,-hh,hh,-MAP*4,MAP*4);
     return m4mul(P,V);
   },
+  /* ONE source of truth for screen<->world on the CPU. basis/project/sd2t are
+     mvp() in closed form — for an orthographic lookAt the unprojection is
+     affine, so the ray direction is CONSTANT over the screen and the origin is
+     linear in (sx,sy). No matrix inverse, no allocation, per input event.
+     Cached on everything it reads, so a mid-frame G.cam write (drag-pan, arrow
+     keys, minimap drag) can never leave a stale basis behind. */
+  _bk:[NaN,NaN,NaN,NaN,NaN,NaN,NaN], _b:null,
+  basis(){
+    const k=this._bk;
+    if(k[0]===this.yaw&&k[1]===this.pitch&&k[2]===G.cam.x&&k[3]===G.cam.y
+       &&k[4]===G.cam.z&&k[5]===vw&&k[6]===vh)return this._b;
+    k[0]=this.yaw;k[1]=this.pitch;k[2]=G.cam.x;k[3]=G.cam.y;k[4]=G.cam.z;k[5]=vw;k[6]=vh;
+    const cy=Math.cos(this.yaw),sy=Math.sin(this.yaw);
+    const cp=Math.cos(this.pitch),sp=Math.sin(this.pitch);
+    const t=this.target();
+    return this._b={
+      fx:-cp*sy, fy:-sp, fz:-cp*cy,   // view dir (eye->target), unit
+      rx: cy,    ry: 0,  rz:-sy,      // screen RIGHT = normalize(cross(f,(0,1,0)))
+      ux:-sy*sp, uy: cp, uz:-cy*sp,   // screen UP    = cross(right,f)
+      tx:t.x, tz:t.y, sc:this.PPT*G.cam.z, sp, cp, cy, sy};
+  },
+  /* world -> canvas CSS px. `h` is a height in 2D PIXELS, so every existing
+     constant ports unchanged: the -8/-10 body lift, IHT, HILL, elevF(...)*10.
+     `d` is a depth key that grows toward the camera — use it wherever the 2D
+     code relied on "bigger screen y = nearer", which only holds at home yaw. */
+  project(x,y,h){
+    const B=this.basis(),wx=x-B.tx,wy=h*this.HS,wz=y-B.tz;
+    return {x: vw/2 + (wx*B.rx + wy*B.ry + wz*B.rz)*B.sc,
+            y: vh/2 - (wx*B.ux + wy*B.uy + wz*B.uz)*B.sc,
+            d: -(wx*B.fx + wy*B.fy + wz*B.fz)};
+  },
+  /* screen-pixel delta -> tile delta on a horizontal plane; exact inverse of
+     project()'s x/y part. At home it evaluates to the 2D basis exactly:
+     sd2t(1,0) = (1/52, -1/52) and sd2t(0,1) = (1/26, 1/26). */
+  sd2t(dsx,dsy){
+    const B=this.basis(),A=dsx/B.sc,C=dsy/(B.sc*B.sp);
+    return {x:A*B.cy + C*B.sy, y:-A*B.sy + C*B.cy};
+  },
   /* ---- picking ------------------------------------------------------------
      Ground height in WORLD units at a fractional tile position. Must mirror
      buildMesh exactly or picks drift from what is drawn: same corner average,
@@ -10109,13 +10325,16 @@ const R3={
   },
   // screen CSS px -> world ray. Orthographic, so unproject the near and far
   // NDC points and subtract.
+  /* Closed form — same result as inverting mvp(), without the inverse or the
+     allocation. NB the origin lies on the plane through the camera TARGET, so
+     t may legitimately be negative for roughly half the screen. Never reject
+     on the sign of t: doing so silently deletes the near half of the view and
+     still looks plausible. */
   ray(sx,sy){
-    const inv=m4inv(this.mvp()); if(!inv)return null;
-    const nx=sx/vw*2-1, ny=1-sy/vh*2;
-    const a=m4xform(inv,nx,ny,-1), b=m4xform(inv,nx,ny,1);
-    let dx=b.x-a.x,dy=b.y-a.y,dz=b.z-a.z;
-    const L=Math.hypot(dx,dy,dz)||1; dx/=L; dy/=L; dz/=L;
-    return {ox:a.x,oy:a.y,oz:a.z,dx,dy,dz};
+    const B=this.basis();
+    const a=(sx-vw/2)/B.sc, c=(vh/2-sy)/B.sc;
+    return {ox:B.tx+a*B.rx+c*B.ux, oy:a*B.ry+c*B.uy, oz:B.tz+a*B.rz+c*B.uz,
+            dx:B.fx, dy:B.fy, dz:B.fz};
   },
   /* Screen px -> tile coords, by marching the ray against the height field.
      Returns null if it never meets the ground (possible at extreme tilt when
@@ -10349,35 +10568,19 @@ function toggle3D(){
   document.body.classList.toggle('r3d',use3D);
   const b=document.getElementById('d3Btn');
   if(b)b.classList.toggle('sel',use3D);
-  toast(use3D?'3D — drag to rotate, shift-drag to tilt, R to reset (ground only so far)'
+  toast(use3D?'3D — drag to pan, right-drag or two fingers to rotate/tilt, ⟲ to reset'
              :'2D renderer');
 }
 document.getElementById('d3Btn').addEventListener('click',toggle3D);
-/* Camera rotation. Deliberately on the 3D canvas only, so nothing about the 2D
-   input path changes: #view3 is display:none in 2D mode and receives no events.
-   Pan and zoom still come from G.cam via the existing controls. */
-(function(){
-  const c=document.getElementById('view3');
-  let drag=null;
-  c.addEventListener('pointerdown',e=>{
-    if(!use3D)return;
-    drag={x:e.clientX,y:e.clientY,yaw:R3.yaw,pitch:R3.pitch,tilt:e.shiftKey};
-    c.setPointerCapture(e.pointerId);
-  });
-  c.addEventListener('pointermove',e=>{
-    if(!drag)return;
-    if(drag.tilt) R3.setPitch(drag.pitch+(e.clientY-drag.y)*.005);
-    else          R3.yaw=drag.yaw-(e.clientX-drag.x)*.006;
-    e.preventDefault();
-  });
-  const end=e=>{ if(drag){ try{c.releasePointerCapture(e.pointerId);}catch(_){} drag=null; } };
-  c.addEventListener('pointerup',end);
-  c.addEventListener('pointercancel',end);
-  addEventListener('keydown',e=>{
-    if(!use3D||e.ctrlKey||e.metaKey||e.altKey)return;
-    if(e.key==='r'||e.key==='R'){ R3.yaw=R3.homeYaw; R3.pitch=R3.homePitch; toast('Camera reset'); }
-  });
-})();
+/* The standalone rotate handler that used to live here is GONE. It bound a
+   SECOND independent pointerdown to #view3 and would now fight the shared
+   onDown/onMove that give 3D its tap, command, box-select and pan. Its
+   gestures live in onMove (right/middle drag) and twoFingerOrbit; its R key
+   moved into the main keydown handler so it cannot shadow the contextual
+   train/build keys ('r' is Ram at a siege workshop and Turtle Ship at a dock). */
+document.getElementById('camBtn').onclick=()=>{
+  R3.yaw=R3.homeYaw;R3.setPitch(R3.homePitch);toast('Camera reset');
+};
 function frame(now){
   requestAnimationFrame(frame);
   if(!G)return;
