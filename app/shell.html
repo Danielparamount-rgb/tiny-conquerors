@@ -1,0 +1,1029 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tiny Conquerors — Real-time strategy that opens in a tab</title>
+<meta name="description" content="An 18-civilisation real-time strategy game that runs in your browser. Deterministic lockstep multiplayer, reconnect mid-match, eight campaign missions. Free, no download, installs to your phone.">
+<meta name="theme-color" content="#0B0A08">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800&family=Inter:wght@400;450;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: {
+        display: ['Cinzel', 'Georgia', 'serif'],
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+      },
+      colors: {
+        ink:   { 950:'#080706', 900:'#0B0A08', 850:'#11100F', 800:'#131110', 700:'#1A1714', 600:'#221E19', 500:'#2C2721', 400:'#3A342B' },
+        gold:  { 100:'#F6E3B0', 200:'#EED28A', 300:'#E3B341', 400:'#D2A036', 500:'#C4922E', 600:'#9C7124', 700:'#6E4F19' },
+        ember: { 300:'#E08A5C', 400:'#C4633A', 500:'#A24E2B' },
+        slate2:{ 300:'#9DBECD', 400:'#6E93A6', 500:'#4C6B7C' },
+        moss:  { 300:'#A3B579', 400:'#7E9153' },
+        parch: { 100:'#F4EEE2', 200:'#DED3BF', 300:'#B8AB98', 400:'#9C907D', 500:'#8C806E' },
+      },
+      boxShadow: {
+        'lift': '0 1px 0 0 rgba(255,236,200,.06) inset, 0 20px 50px -20px rgba(0,0,0,.9)',
+        'glow': '0 0 0 1px rgba(227,179,65,.28), 0 18px 60px -18px rgba(227,179,65,.35)',
+      },
+      backgroundImage: {
+        'vellum': 'radial-gradient(120% 90% at 50% -10%, rgba(227,179,65,.10), transparent 60%)',
+      },
+    },
+  },
+}
+</script>
+<style>
+  :root { color-scheme: dark; }
+  body { -webkit-font-smoothing: antialiased; }
+  .grain::after{
+    content:''; position:absolute; inset:0; pointer-events:none; opacity:.22; mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");
+  }
+  .rule{ background:linear-gradient(90deg,transparent,rgba(227,179,65,.34) 18%,rgba(227,179,65,.34) 82%,transparent); }
+  .pixel{ image-rendering:pixelated; image-rendering:-moz-crisp-edges; }
+  input[type=range]{ -webkit-appearance:none; appearance:none; background:transparent; }
+  input[type=range]::-webkit-slider-runnable-track{ height:4px; border-radius:99px; background:#2C2721; }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; margin-top:-7px; width:18px; height:18px; border-radius:99px;
+    background:linear-gradient(180deg,#F6E3B0,#C4922E); border:1px solid #6E4F19;
+    box-shadow:0 2px 6px rgba(0,0,0,.7), 0 0 0 4px rgba(227,179,65,.12); cursor:grab;
+  }
+  input[type=range]::-webkit-slider-thumb:active{ cursor:grabbing; }
+  input[type=range]::-moz-range-track{ height:4px; border-radius:99px; background:#2C2721; }
+  input[type=range]::-moz-range-thumb{
+    width:16px; height:16px; border-radius:99px; border:1px solid #6E4F19;
+    background:linear-gradient(180deg,#F6E3B0,#C4922E); box-shadow:0 2px 6px rgba(0,0,0,.7);
+  }
+  [role=tabpanel][hidden]{ display:none; }
+  .civ-card:hover .civ-shine{ opacity:1; transform:translateX(0); }
+  ::selection{ background:rgba(227,179,65,.30); color:#F4EEE2; }
+  @media (prefers-reduced-motion: reduce){ *{ animation-duration:.001ms !important; transition-duration:.001ms !important; } }
+</style>
+</head>
+
+<body class="bg-ink-900 font-sans text-parch-200 antialiased">
+<a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-gold-300 focus:px-4 focus:py-2 focus:font-semibold focus:text-ink-900">Skip to content</a>
+
+<!-- ═══════════════════ NAV ═══════════════════ -->
+<header class="fixed inset-x-0 top-0 z-40 border-b border-ink-500/70 bg-ink-900/80 backdrop-blur-xl">
+  <div class="mx-auto flex h-16 max-w-7xl items-center gap-3 px-5 lg:px-8">
+
+    <a href="#main" class="flex shrink-0 items-center gap-2.5">
+      <!-- Heraldic crest: quartered shield, chevron, tower, cross-hilt sword -->
+      <svg viewBox="0 0 40 46" class="h-9 w-8" aria-hidden="true">
+        <defs>
+          <linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#F6E3B0"/><stop offset=".5" stop-color="#D2A036"/><stop offset="1" stop-color="#8A6620"/>
+          </linearGradient>
+          <linearGradient id="cf" x1="0" y1="0" x2=".7" y2="1">
+            <stop offset="0" stop-color="#2E2A23"/><stop offset="1" stop-color="#15120F"/>
+          </linearGradient>
+        </defs>
+        <path d="M20 1.6 3.4 6.2v17.9c0 9.9 6.7 16.6 16.6 20.3 9.9-3.7 16.6-10.4 16.6-20.3V6.2Z" fill="url(#cf)" stroke="url(#cg)" stroke-width="2.1" stroke-linejoin="round"/>
+        <path d="M20 5.1 6.6 8.8v15.2c0 8.2 5.5 13.9 13.4 17.1V5.1Z" fill="#C4633A" opacity=".30"/>
+        <path d="M8.6 27.4 20 20.2l11.4 7.2-1.6 3.3L20 24.3 10.2 30.7Z" fill="url(#cg)"/>
+        <path d="M20 8.4v9.1M17.1 11.6h5.8" stroke="url(#cg)" stroke-width="2.2" stroke-linecap="round"/>
+        <path d="M14.4 34.1h11.2M16.6 36.9h6.8" stroke="url(#cg)" stroke-width="1.7" stroke-linecap="round" opacity=".8"/>
+      </svg>
+      <span class="font-display text-[17px] font-bold tracking-[.16em] text-parch-100">TINY CONQUERORS</span>
+    </a>
+
+    <nav class="ml-6 hidden items-center gap-1 lg:flex" aria-label="Primary">
+      <a href="#lobby"    class="rounded-lg px-3 py-2 text-[13.5px] font-medium text-parch-300 transition hover:bg-ink-700 hover:text-parch-100">Multiplayer</a>
+      <a href="#maps"     class="rounded-lg px-3 py-2 text-[13.5px] font-medium text-parch-300 transition hover:bg-ink-700 hover:text-parch-100">Battlefields</a>
+      <a href="#civs"     class="rounded-lg px-3 py-2 text-[13.5px] font-medium text-parch-300 transition hover:bg-ink-700 hover:text-parch-100">Civilisations</a>
+      <a href="#campaign" class="rounded-lg px-3 py-2 text-[13.5px] font-medium text-parch-300 transition hover:bg-ink-700 hover:text-parch-100">Campaign</a>
+      <a href="#settings" class="rounded-lg px-3 py-2 text-[13.5px] font-medium text-parch-300 transition hover:bg-ink-700 hover:text-parch-100">Settings</a>
+    </nav>
+
+    <div class="ml-auto flex items-center gap-2.5">
+      <a href="#lobby" class="hidden rounded-lg border border-ink-500 px-3.5 py-2 text-[13.5px] font-medium text-parch-200 transition hover:border-gold-600 hover:text-parch-100 sm:block">Join a match</a>
+      <a href="https://tiny-conquerors.onrender.com" class="rounded-lg bg-gradient-to-b from-gold-200 to-gold-500 px-4 py-2 text-[13.5px] font-semibold text-ink-900 shadow-[0_1px_0_rgba(255,255,255,.35)_inset,0_6px_18px_-6px_rgba(227,179,65,.6)] transition hover:from-gold-100 hover:to-gold-400">
+        Play free
+      </a>
+      <button id="navToggle" class="rounded-lg border border-ink-500 p-2 text-parch-300 lg:hidden" aria-label="Open menu" aria-expanded="false" aria-controls="mobileNav">
+        <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div id="mobileNav" hidden class="border-t border-ink-500 bg-ink-850 px-5 py-3 lg:hidden">
+    <a href="#lobby"    class="block rounded-lg px-3 py-2.5 text-sm text-parch-200 hover:bg-ink-700">Multiplayer</a>
+    <a href="#maps"     class="block rounded-lg px-3 py-2.5 text-sm text-parch-200 hover:bg-ink-700">Battlefields</a>
+    <a href="#civs"     class="block rounded-lg px-3 py-2.5 text-sm text-parch-200 hover:bg-ink-700">Civilisations</a>
+    <a href="#campaign" class="block rounded-lg px-3 py-2.5 text-sm text-parch-200 hover:bg-ink-700">Campaign</a>
+    <a href="#settings" class="block rounded-lg px-3 py-2.5 text-sm text-parch-200 hover:bg-ink-700">Settings</a>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- ═══════════════════ HERO ═══════════════════ -->
+<section class="relative grain overflow-hidden pt-16">
+  <img src="https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=2400&q=80"
+       alt="Eltz Castle rising out of valley fog at sunrise, its towers lit by low golden light"
+       class="absolute inset-0 h-full w-full object-cover object-center opacity-[.38]">
+  <div class="absolute inset-0 bg-gradient-to-b from-ink-900/70 via-ink-900/85 to-ink-900"></div>
+  <div class="absolute inset-0 bg-[radial-gradient(90%_60%_at_50%_0%,rgba(227,179,65,.13),transparent_65%)]"></div>
+
+  <div class="relative mx-auto max-w-7xl px-5 pb-20 pt-16 lg:px-8 lg:pb-28 lg:pt-24">
+    <div class="grid items-center gap-14 lg:grid-cols-[1.05fr_.95fr]">
+
+      <div>
+        <div class="inline-flex items-center gap-2.5 rounded-full border border-gold-700/60 bg-gold-700/10 py-1.5 pl-1.5 pr-4">
+          <span class="rounded-full bg-gold-300 px-2 py-0.5 font-mono text-[10.5px] font-bold tracking-wide text-ink-900">v28</span>
+          <span class="text-[12.5px] font-medium text-gold-200">Reconnect — rejoin a battle you dropped out of</span>
+        </div>
+
+        <h1 class="mt-6 font-display text-[2.7rem] font-extrabold leading-[1.05] tracking-tight text-parch-100 sm:text-6xl lg:text-[4.1rem]">
+          Real-time strategy<br>
+          <span class="bg-gradient-to-r from-gold-100 via-gold-300 to-ember-400 bg-clip-text text-transparent">that opens in a tab.</span>
+        </h1>
+
+        <p class="mt-6 max-w-xl text-[17px] leading-relaxed text-parch-300">
+          Eighteen civilisations, four ages, and a friend on the other end of a four-letter room code.
+          No installer, no launcher, no account — the whole game is one page that works on a phone.
+        </p>
+
+        <div class="mt-9 flex flex-wrap items-center gap-3">
+          <a href="https://tiny-conquerors.onrender.com" class="group inline-flex items-center gap-2.5 rounded-xl bg-gradient-to-b from-gold-200 to-gold-500 px-6 py-3.5 text-[15px] font-semibold text-ink-900 shadow-[0_1px_0_rgba(255,255,255,.4)_inset,0_14px_36px_-12px_rgba(227,179,65,.65)] transition hover:from-gold-100 hover:to-gold-400">
+            <svg viewBox="0 0 24 24" class="h-[18px] w-[18px]" fill="currentColor"><path d="M8.2 5.1a1 1 0 0 1 1.52-.85l9.1 5.6a1.35 1.35 0 0 1 0 2.3l-9.1 5.6a1 1 0 0 1-1.52-.85Z"/></svg>
+            Begin the conquest
+          </a>
+          <a href="#lobby" class="inline-flex items-center gap-2.5 rounded-xl border border-ink-400 bg-ink-800/70 px-6 py-3.5 text-[15px] font-medium text-parch-200 backdrop-blur transition hover:border-gold-600 hover:bg-ink-700">
+            <svg viewBox="0 0 24 24" class="h-[18px] w-[18px]" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3.9a4 4 0 0 1 0 7.2M8 3.9a4 4 0 0 0 0 7.2M2.5 20.4v-1.3a4.2 4.2 0 0 1 4.2-4.2h3.1a4.2 4.2 0 0 1 4.2 4.2v1.3M16.6 15a4.2 4.2 0 0 1 4.9 4.15v1.25"/></svg>
+            Play with friends
+          </a>
+        </div>
+
+        <dl class="mt-11 grid max-w-lg grid-cols-3 gap-px overflow-hidden rounded-xl border border-ink-500 bg-ink-500">
+          <div class="bg-ink-850 px-4 py-4">
+            <dt class="text-[11px] font-medium uppercase tracking-[.13em] text-parch-400">Download size</dt>
+            <dd class="mt-1 font-display text-2xl font-bold text-parch-100">0 MB</dd>
+          </div>
+          <div class="bg-ink-850 px-4 py-4">
+            <dt class="text-[11px] font-medium uppercase tracking-[.13em] text-parch-400">Civilisations</dt>
+            <dd class="mt-1 font-display text-2xl font-bold text-parch-100">18</dd>
+          </div>
+          <div class="bg-ink-850 px-4 py-4">
+            <dt class="text-[11px] font-medium uppercase tracking-[.13em] text-parch-400">Price</dt>
+            <dd class="mt-1 font-display text-2xl font-bold text-gold-300">Free</dd>
+          </div>
+        </dl>
+      </div>
+
+      <!-- Screenshot frame -->
+      <div class="relative">
+        <div class="absolute -inset-6 rounded-[28px] bg-[radial-gradient(60%_60%_at_50%_40%,rgba(227,179,65,.20),transparent_70%)] blur-2xl"></div>
+        <figure class="relative overflow-hidden rounded-2xl border border-ink-400 bg-ink-850 shadow-lift">
+          <div class="flex items-center gap-2 border-b border-ink-500 bg-ink-800 px-4 py-2.5">
+            <span class="h-2.5 w-2.5 rounded-full bg-ember-400/70"></span>
+            <span class="h-2.5 w-2.5 rounded-full bg-gold-500/70"></span>
+            <span class="h-2.5 w-2.5 rounded-full bg-moss-400/70"></span>
+            <span class="ml-2 truncate font-mono text-[11px] text-parch-400">tiny-conquerors.onrender.com</span>
+            <span class="ml-auto flex items-center gap-1.5 rounded-full bg-moss-400/15 px-2 py-0.5 font-mono text-[10px] font-medium text-moss-300">
+              <span class="h-1.5 w-1.5 rounded-full bg-moss-300"></span>LIVE
+            </span>
+          </div>
+          <img src="shots/grain-town.jpg" alt="An in-game town at dawn: a stone town hall with a terracotta roof, thatched houses, villagers gathering berries and gold, and dense woodland at the edges"
+               class="pixel aspect-[16/10] w-full object-cover object-[62%_28%]">
+        </figure>
+
+        <div class="mt-3 flex gap-3">
+          <figure class="flex-1 overflow-hidden rounded-xl border border-ink-500 bg-ink-850">
+            <img src="shots/siege-closeup.jpg" alt="Close-up of siege engines: a trebuchet unpacked for firing beside a mangonel and scorpion" class="pixel aspect-[4/3] w-full object-cover object-[55%_45%]">
+          </figure>
+          <figure class="flex-1 overflow-hidden rounded-xl border border-ink-500 bg-ink-850">
+            <img src="shots/hunt-town.jpg" alt="Villagers hunting a boar near their settlement while sheep graze nearby" class="pixel aspect-[4/3] w-full object-cover object-[58%_40%]">
+          </figure>
+          <figure class="flex-1 overflow-hidden rounded-xl border border-ink-500 bg-ink-850">
+            <img src="shots/artpass-water.jpg" alt="A river crossing with fords, reeds along the banks and fishing shoals in the deep water" class="pixel aspect-[4/3] w-full object-cover object-[52%_50%]">
+          </figure>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ LOGO / TRUST STRIP ═══════════════════ -->
+<section class="border-y border-ink-500 bg-ink-850">
+  <div class="mx-auto grid max-w-7xl grid-cols-2 gap-px bg-ink-500 px-0 lg:grid-cols-4">
+    <div class="flex items-center gap-3.5 bg-ink-850 px-6 py-6">
+      <svg viewBox="0 0 24 24" class="h-6 w-6 shrink-0 text-gold-300" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.6 4 5.6v6.1c0 5 3.4 9.2 8 10.7 4.6-1.5 8-5.7 8-10.7V5.6Z"/><path d="m8.9 12.1 2.2 2.3 4.2-4.6"/></svg>
+      <div><p class="text-[13.5px] font-semibold text-parch-100">Deterministic lockstep</p><p class="text-[12.5px] text-parch-400">Peers trade orders, never state</p></div>
+    </div>
+    <div class="flex items-center gap-3.5 bg-ink-850 px-6 py-6">
+      <svg viewBox="0 0 24 24" class="h-6 w-6 shrink-0 text-gold-300" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 12a8.5 8.5 0 1 1-2.9-6.4"/><path d="M20.8 3.7v4.6h-4.6"/></svg>
+      <div><p class="text-[13.5px] font-semibold text-parch-100">Rejoin mid-match</p><p class="text-[12.5px] text-parch-400">Replays 40,000 turns in 13s</p></div>
+    </div>
+    <div class="flex items-center gap-3.5 bg-ink-850 px-6 py-6">
+      <svg viewBox="0 0 24 24" class="h-6 w-6 shrink-0 text-gold-300" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="6.4" y="2.2" width="11.2" height="19.6" rx="2.4"/><path d="M10.6 18.6h2.8"/></svg>
+      <div><p class="text-[13.5px] font-semibold text-parch-100">Installs to your phone</p><p class="text-[12.5px] text-parch-400">A PWA that plays offline</p></div>
+    </div>
+    <div class="flex items-center gap-3.5 bg-ink-850 px-6 py-6">
+      <svg viewBox="0 0 24 24" class="h-6 w-6 shrink-0 text-gold-300" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20.5V8.2l8-5.1 8 5.1v12.3"/><path d="M9.4 20.5v-6.2h5.2v6.2"/></svg>
+      <div><p class="text-[13.5px] font-semibold text-parch-100">Original art throughout</p><p class="text-[12.5px] text-parch-400">Drawn for this game, not ripped</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ MULTIPLAYER LOBBY ═══════════════════ -->
+<section id="lobby" class="relative scroll-mt-20 py-24 lg:py-32">
+  <div class="mx-auto max-w-7xl px-5 lg:px-8">
+
+    <div class="mx-auto max-w-2xl text-center">
+      <p class="font-mono text-[11.5px] font-medium uppercase tracking-[.22em] text-gold-400">Play with friends</p>
+      <h2 class="mt-3 font-display text-4xl font-bold tracking-tight text-parch-100 lg:text-[2.9rem]">Four letters is the whole invite</h2>
+      <p class="mt-4 text-[16.5px] leading-relaxed text-parch-300">
+        Host a room, read the code down the phone, and they're in. No accounts, no friend lists,
+        nothing to install on either end.
+      </p>
+    </div>
+
+    <div class="mt-14 grid gap-6 lg:grid-cols-[1.35fr_1fr]">
+
+      <!-- Lobby card -->
+      <div class="overflow-hidden rounded-2xl border border-ink-400 bg-ink-850 shadow-lift">
+        <div class="flex flex-wrap items-center gap-4 border-b border-ink-500 bg-gradient-to-r from-ink-800 to-ink-850 px-6 py-5">
+          <div>
+            <p class="text-[11px] font-medium uppercase tracking-[.15em] text-parch-400">Room code</p>
+            <p class="mt-0.5 font-mono text-3xl font-bold tracking-[.28em] text-gold-300">KELD</p>
+          </div>
+          <button class="ml-auto inline-flex items-center gap-2 rounded-lg border border-ink-400 bg-ink-800 px-3.5 py-2 text-[13px] font-medium text-parch-200 transition hover:border-gold-600 hover:text-parch-100" data-copy="KELD">
+            <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11.5" height="11.5" rx="2.2"/><path d="M5.6 15H4.8A1.3 1.3 0 0 1 3.5 13.7V4.8A1.3 1.3 0 0 1 4.8 3.5h8.9A1.3 1.3 0 0 1 15 4.8v.8"/></svg>
+            <span class="copy-label">Copy</span>
+          </button>
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-moss-400/15 px-2.5 py-1 font-mono text-[11px] font-medium text-moss-300">
+            <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-moss-300"></span>Relay awake · 34 ms
+          </span>
+        </div>
+
+        <ul class="divide-y divide-ink-500">
+          <!-- Seat 1 -->
+          <li class="flex items-center gap-4 px-6 py-4">
+            <span class="h-9 w-1.5 shrink-0 rounded-full bg-[#3b7bd4]"></span>
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-[14.5px] font-semibold text-parch-100">Daniel <span class="ml-1.5 rounded bg-gold-700/25 px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wide text-gold-200">Host</span></p>
+              <p class="mt-0.5 text-[12.5px] text-parch-400">Britons · Team 1</p>
+            </div>
+            <span class="hidden font-mono text-[12px] text-parch-400 sm:block">18 ms</span>
+            <span class="rounded-md bg-moss-400/15 px-2.5 py-1 text-[11.5px] font-semibold text-moss-300">Ready</span>
+          </li>
+          <!-- Seat 2 -->
+          <li class="flex items-center gap-4 px-6 py-4">
+            <span class="h-9 w-1.5 shrink-0 rounded-full bg-[#c8433a]"></span>
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-[14.5px] font-semibold text-parch-100">Marcus</p>
+              <p class="mt-0.5 text-[12.5px] text-parch-400">Mongols · Team 2</p>
+            </div>
+            <span class="hidden font-mono text-[12px] text-parch-400 sm:block">41 ms</span>
+            <span class="rounded-md bg-moss-400/15 px-2.5 py-1 text-[11.5px] font-semibold text-moss-300">Ready</span>
+          </li>
+          <!-- Seat 3 -->
+          <li class="flex items-center gap-4 px-6 py-4">
+            <span class="h-9 w-1.5 shrink-0 rounded-full bg-[#3f9a4e]"></span>
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-[14.5px] font-semibold text-parch-100">Priya</p>
+              <p class="mt-0.5 text-[12.5px] text-parch-400">Byzantines · Team 1</p>
+            </div>
+            <span class="hidden font-mono text-[12px] text-parch-400 sm:block">63 ms</span>
+            <span class="rounded-md bg-gold-700/20 px-2.5 py-1 text-[11.5px] font-semibold text-gold-200">Picking civ</span>
+          </li>
+          <!-- Seat 4 -->
+          <li class="flex items-center gap-4 px-6 py-4">
+            <span class="h-9 w-1.5 shrink-0 rounded-full bg-ink-400"></span>
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-[14.5px] font-semibold text-parch-300">Computer — Conqueror</p>
+              <p class="mt-0.5 text-[12.5px] text-parch-400">Teutons · Team 2</p>
+            </div>
+            <span class="hidden font-mono text-[12px] text-parch-500 sm:block">—</span>
+            <button class="rounded-md border border-ink-400 px-2.5 py-1 text-[11.5px] font-medium text-parch-300 transition hover:border-gold-600 hover:text-parch-100">Open seat</button>
+          </li>
+        </ul>
+
+        <div class="flex flex-wrap items-center gap-4 border-t border-ink-500 bg-ink-800 px-6 py-4">
+          <div class="flex items-center gap-2.5 text-[13px] text-parch-300">
+            <svg viewBox="0 0 24 24" class="h-4 w-4 text-parch-400" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="m12 2.8 9.2 9.2-9.2 9.2L2.8 12Z"/></svg>
+            Hallowed Ground · 128 tiles
+          </div>
+          <div class="flex items-center gap-2.5 text-[13px] text-parch-300">
+            <svg viewBox="0 0 24 24" class="h-4 w-4 text-parch-400" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M12 6.6v5.7l3.6 2.1"/><circle cx="12" cy="12" r="9.2"/></svg>
+            Standard pace
+          </div>
+          <button class="ml-auto rounded-lg bg-gradient-to-b from-gold-200 to-gold-500 px-5 py-2.5 text-[14px] font-semibold text-ink-900 shadow-[0_1px_0_rgba(255,255,255,.35)_inset] transition hover:from-gold-100 hover:to-gold-400">
+            Start the battle
+          </button>
+        </div>
+      </div>
+
+      <!-- Side rail -->
+      <div class="space-y-6">
+        <div class="rounded-2xl border border-ink-500 bg-ink-850 p-6">
+          <h3 class="font-display text-lg font-bold text-parch-100">If someone drops</h3>
+          <p class="mt-2.5 text-[14px] leading-relaxed text-parch-300">
+            The match doesn't end. Every machine hands the empty seat to the computer on the same
+            agreed turn, and the town keeps building. When they come back with the same code,
+            they get it straight back — army, buildings, wherever the AI left them.
+          </p>
+          <div class="mt-5 space-y-3">
+            <div class="flex items-center justify-between border-b border-ink-500 pb-3">
+              <span class="text-[13px] text-parch-400">Drop detected in</span>
+              <span class="font-mono text-[13px] font-medium text-parch-100">10.1 s</span>
+            </div>
+            <div class="flex items-center justify-between border-b border-ink-500 pb-3">
+              <span class="text-[13px] text-parch-400">Rejoin replay speed</span>
+              <span class="font-mono text-[13px] font-medium text-parch-100">159–709×</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-[13px] text-parch-400">Command latency</span>
+              <span class="font-mono text-[13px] font-medium text-parch-100">250 ms</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="relative overflow-hidden rounded-2xl border border-ink-500">
+          <img src="https://images.unsplash.com/photo-1595789400119-4405521a2399?auto=format&fit=crop&w=1200&q=80"
+               alt="A lone boat silhouetted on dark water beneath a heavy sky" class="h-44 w-full object-cover opacity-60">
+          <div class="absolute inset-0 bg-gradient-to-t from-ink-900 via-ink-900/60 to-transparent"></div>
+          <div class="absolute inset-x-0 bottom-0 p-5">
+            <p class="font-display text-[15px] font-bold text-parch-100">Free relay, honest about it</p>
+            <p class="mt-1 text-[12.5px] leading-relaxed text-parch-300">The server sleeps after 15 minutes idle. The first host press after a quiet spell waits ~50s while it wakes — the game says so rather than pretending.</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ BATTLEFIELDS ═══════════════════ -->
+<section id="maps" class="relative scroll-mt-20 border-y border-ink-500 bg-ink-850 py-24 lg:py-32">
+  <div class="mx-auto max-w-7xl px-5 lg:px-8">
+    <div class="flex flex-wrap items-end justify-between gap-6">
+      <div class="max-w-2xl">
+        <p class="font-mono text-[11.5px] font-medium uppercase tracking-[.22em] text-gold-400">Battlefields</p>
+        <h2 class="mt-3 font-display text-4xl font-bold tracking-tight text-parch-100 lg:text-[2.9rem]">Three maps that ask different questions</h2>
+        <p class="mt-4 text-[16.5px] leading-relaxed text-parch-300">Every map is generated fresh from the match seed — the same seed gives every player the identical world, which is what makes lockstep possible.</p>
+      </div>
+      <a href="https://tiny-conquerors.onrender.com" class="shrink-0 rounded-lg border border-ink-400 px-4 py-2.5 text-[13.5px] font-medium text-parch-200 transition hover:border-gold-600 hover:text-parch-100">Skirmish now →</a>
+    </div>
+
+    <div class="mt-12 grid gap-6 md:grid-cols-3">
+
+      <article class="group overflow-hidden rounded-2xl border border-ink-400 bg-ink-800 transition hover:border-gold-700">
+        <div class="relative h-52 overflow-hidden">
+          <img src="shots/artpass-water.jpg" alt="A wide river cutting through grassland, crossed by three shallow fords with stepping stones" class="pixel h-full w-full object-cover object-[52%_48%] transition duration-700 group-hover:scale-[1.04]">
+          <div class="absolute inset-0 bg-gradient-to-t from-ink-800 via-transparent to-transparent"></div>
+          <span class="absolute left-4 top-4 rounded-md bg-ink-900/85 px-2.5 py-1 font-mono text-[10.5px] font-semibold uppercase tracking-wider text-slate2-300 backdrop-blur">Water map</span>
+        </div>
+        <div class="p-6">
+          <h3 class="font-display text-xl font-bold text-parch-100">River Crossing</h3>
+          <p class="mt-2.5 text-[14px] leading-relaxed text-parch-300">A four-tile river with three fords and fish in the deep channel. Hold a ford and you hold the game — until someone builds a dock and goes round you.</p>
+          <dl class="mt-5 grid grid-cols-2 gap-x-4 gap-y-2.5 border-t border-ink-500 pt-4 text-[12.5px]">
+            <dt class="text-parch-400">Size</dt><dd class="text-right font-mono text-parch-200">96–128</dd>
+            <dt class="text-parch-400">Chokepoints</dt><dd class="text-right font-mono text-parch-200">3 fords</dd>
+            <dt class="text-parch-400">Navy</dt><dd class="text-right font-mono text-moss-300">Decisive</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="group overflow-hidden rounded-2xl border border-ink-400 bg-ink-800 transition hover:border-gold-700">
+        <div class="relative h-52 overflow-hidden">
+          <img src="https://images.unsplash.com/photo-1641667838410-b257ca266e38?auto=format&fit=crop&w=1200&q=80" alt="A dense, dark stand of conifers with barely any light reaching the forest floor" class="h-full w-full object-cover object-center transition duration-700 group-hover:scale-[1.04]">
+          <div class="absolute inset-0 bg-gradient-to-t from-ink-800 via-ink-800/20 to-transparent"></div>
+          <span class="absolute left-4 top-4 rounded-md bg-ink-900/85 px-2.5 py-1 font-mono text-[10.5px] font-semibold uppercase tracking-wider text-moss-300 backdrop-blur">Closed map</span>
+        </div>
+        <div class="p-6">
+          <h3 class="font-display text-xl font-bold text-parch-100">Black Forest</h3>
+          <p class="mt-2.5 text-[14px] leading-relaxed text-parch-300">Nearly nine thousand trees, a clearing each, and narrow trails to the centre. Wall the trail and build for an hour, or send skirmishers down it early.</p>
+          <dl class="mt-5 grid grid-cols-2 gap-x-4 gap-y-2.5 border-t border-ink-500 pt-4 text-[12.5px]">
+            <dt class="text-parch-400">Size</dt><dd class="text-right font-mono text-parch-200">96–112</dd>
+            <dt class="text-parch-400">Trees</dt><dd class="text-right font-mono text-parch-200">~8,800</dd>
+            <dt class="text-parch-400">Navy</dt><dd class="text-right font-mono text-parch-400">None</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="group overflow-hidden rounded-2xl border border-ink-400 bg-ink-800 transition hover:border-gold-700">
+        <div class="relative h-52 overflow-hidden">
+          <img src="https://images.unsplash.com/photo-1765881775428-828bf6f60c7c?auto=format&fit=crop&w=1200&q=80" alt="Wild horses grazing across a wide, dry steppe under an open sky" class="h-full w-full object-cover object-center transition duration-700 group-hover:scale-[1.04]">
+          <div class="absolute inset-0 bg-gradient-to-t from-ink-800 via-ink-800/20 to-transparent"></div>
+          <span class="absolute left-4 top-4 rounded-md bg-ink-900/85 px-2.5 py-1 font-mono text-[10.5px] font-semibold uppercase tracking-wider text-gold-200 backdrop-blur">Open map</span>
+        </div>
+        <div class="p-6">
+          <h3 class="font-display text-xl font-bold text-parch-100">Hallowed Ground</h3>
+          <p class="mt-2.5 text-[14px] leading-relaxed text-parch-300">Open steppe, scattered ponds, and eight relics on the ground. Everyone starts with a monastery and a monk, and the computer will race you for them.</p>
+          <dl class="mt-5 grid grid-cols-2 gap-x-4 gap-y-2.5 border-t border-ink-500 pt-4 text-[12.5px]">
+            <dt class="text-parch-400">Size</dt><dd class="text-right font-mono text-parch-200">96–128</dd>
+            <dt class="text-parch-400">Relics</dt><dd class="text-right font-mono text-gold-300">8</dd>
+            <dt class="text-parch-400">Navy</dt><dd class="text-right font-mono text-parch-200">Ponds only</dd>
+          </dl>
+        </div>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ CIVILISATIONS ═══════════════════ -->
+<section id="civs" class="scroll-mt-20 py-24 lg:py-32">
+  <div class="mx-auto max-w-7xl px-5 lg:px-8">
+
+    <div class="flex flex-wrap items-end justify-between gap-6">
+      <div class="max-w-2xl">
+        <p class="font-mono text-[11.5px] font-medium uppercase tracking-[.22em] text-gold-400">Civilisations</p>
+        <h2 class="mt-3 font-display text-4xl font-bold tracking-tight text-parch-100 lg:text-[2.9rem]">Eighteen ways to play badly</h2>
+        <p class="mt-4 text-[16.5px] leading-relaxed text-parch-300">Each one carries its own bonuses, a unique unit, a castle-researched unique technology, and a team bonus your allies share.</p>
+      </div>
+      <div class="flex flex-wrap gap-2" role="group" aria-label="Filter civilisations by strength">
+        <button class="civ-filter rounded-lg border border-gold-600 bg-gold-700/20 px-3.5 py-2 text-[13px] font-medium text-gold-200" data-filter="all" aria-pressed="true">All 18</button>
+        <button class="civ-filter rounded-lg border border-ink-400 px-3.5 py-2 text-[13px] font-medium text-parch-300 transition hover:border-gold-600 hover:text-parch-100" data-filter="infantry" aria-pressed="false">Infantry</button>
+        <button class="civ-filter rounded-lg border border-ink-400 px-3.5 py-2 text-[13px] font-medium text-parch-300 transition hover:border-gold-600 hover:text-parch-100" data-filter="cavalry" aria-pressed="false">Cavalry</button>
+        <button class="civ-filter rounded-lg border border-ink-400 px-3.5 py-2 text-[13px] font-medium text-parch-300 transition hover:border-gold-600 hover:text-parch-100" data-filter="archer" aria-pressed="false">Archers</button>
+        <button class="civ-filter rounded-lg border border-ink-400 px-3.5 py-2 text-[13px] font-medium text-parch-300 transition hover:border-gold-600 hover:text-parch-100" data-filter="navy" aria-pressed="false">Navy</button>
+      </div>
+    </div>
+
+    <div id="civGrid" class="mt-12 grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+      <!-- civ cards injected by script -->
+    </div>
+
+    <p class="mt-8 text-center text-[13px] text-parch-400">Stats follow the original 2000 manual's unit attribute tables. Unique units go Elite in the Imperial Age.</p>
+  </div>
+</section>
+
+<!-- ═══════════════════ SETTINGS ═══════════════════ -->
+<section id="settings" class="scroll-mt-20 border-y border-ink-500 bg-ink-850 py-24 lg:py-32">
+  <div class="mx-auto max-w-7xl px-5 lg:px-8">
+
+    <div class="mx-auto max-w-2xl text-center">
+      <p class="font-mono text-[11.5px] font-medium uppercase tracking-[.22em] text-gold-400">Options</p>
+      <h2 class="mt-3 font-display text-4xl font-bold tracking-tight text-parch-100 lg:text-[2.9rem]">Tuned for the phone in your hand</h2>
+      <p class="mt-4 text-[16.5px] leading-relaxed text-parch-300">Everything here changes the running game immediately and is remembered on this device.</p>
+    </div>
+
+    <div class="mx-auto mt-14 max-w-5xl overflow-hidden rounded-2xl border border-ink-400 bg-ink-800 shadow-lift">
+      <div class="grid md:grid-cols-[210px_1fr]">
+
+        <!-- Tab rail -->
+        <div class="flex gap-1 overflow-x-auto border-b border-ink-500 bg-ink-850 p-3 md:flex-col md:overflow-visible md:border-b-0 md:border-r" role="tablist" aria-label="Settings sections">
+          <button role="tab" id="tab-display" aria-controls="panel-display" aria-selected="true"
+            class="settings-tab flex shrink-0 items-center gap-2.5 rounded-lg bg-gold-700/20 px-3.5 py-2.5 text-left text-[13.5px] font-medium text-gold-200 ring-1 ring-inset ring-gold-700/50">
+            <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="2.6" y="4.2" width="18.8" height="12.6" rx="2"/><path d="M8.4 20.4h7.2"/></svg>Display
+          </button>
+          <button role="tab" id="tab-audio" aria-controls="panel-audio" aria-selected="false"
+            class="settings-tab flex shrink-0 items-center gap-2.5 rounded-lg px-3.5 py-2.5 text-left text-[13.5px] font-medium text-parch-300 transition hover:bg-ink-700 hover:text-parch-100">
+            <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M11.4 4.2 6.6 8.3H3.2v7.4h3.4l4.8 4.1Z"/><path d="M15.6 9.2a4 4 0 0 1 0 5.6M18.4 6.4a8 8 0 0 1 0 11.2"/></svg>Audio
+          </button>
+          <button role="tab" id="tab-game" aria-controls="panel-game" aria-selected="false"
+            class="settings-tab flex shrink-0 items-center gap-2.5 rounded-lg px-3.5 py-2.5 text-left text-[13.5px] font-medium text-parch-300 transition hover:bg-ink-700 hover:text-parch-100">
+            <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 2.6 4 5.6v6.1c0 5 3.4 9.2 8 10.7 4.6-1.5 8-5.7 8-10.7V5.6Z"/></svg>Gameplay
+          </button>
+          <button role="tab" id="tab-keys" aria-controls="panel-keys" aria-selected="false"
+            class="settings-tab flex shrink-0 items-center gap-2.5 rounded-lg px-3.5 py-2.5 text-left text-[13.5px] font-medium text-parch-300 transition hover:bg-ink-700 hover:text-parch-100">
+            <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="2.4" y="5.6" width="19.2" height="12.8" rx="2"/><path d="M6.6 9.6h.01M10.4 9.6h.01M14.2 9.6h.01M18 9.6h.01M8.4 14h7.2"/></svg>Controls
+          </button>
+        </div>
+
+        <!-- Panels -->
+        <div class="p-6 lg:p-8">
+
+          <!-- DISPLAY -->
+          <div role="tabpanel" id="panel-display" aria-labelledby="tab-display" class="space-y-7">
+            <div>
+              <div class="flex items-baseline justify-between">
+                <label for="s-size" class="text-[14px] font-semibold text-parch-100">Battlefield size</label>
+                <span class="font-mono text-[12.5px] text-gold-300" data-out="s-size">128 × 128</span>
+              </div>
+              <p class="mt-1 text-[12.5px] text-parch-400">Larger boards give more room to expand. 128 is the ceiling — above it phone browsers refuse the canvas.</p>
+              <input id="s-size" type="range" min="0" max="2" step="1" value="2" class="mt-3 w-full" data-labels="96 × 96|112 × 112|128 × 128">
+            </div>
+
+            <div class="h-px rule"></div>
+
+            <div>
+              <div class="flex items-baseline justify-between">
+                <label for="s-terrain" class="text-[14px] font-semibold text-parch-100">Terrain detail</label>
+                <span class="font-mono text-[12.5px] text-gold-300" data-out="s-terrain">High</span>
+              </div>
+              <p class="mt-1 text-[12.5px] text-parch-400">Controls doodad density — grass tufts, fallen logs, rock clusters and bone decals in the dirt.</p>
+              <input id="s-terrain" type="range" min="0" max="3" step="1" value="2" class="mt-3 w-full" data-labels="Low|Medium|High|Ultra">
+            </div>
+
+            <div class="h-px rule"></div>
+
+            <div class="flex items-start justify-between gap-6">
+              <div>
+                <p class="text-[14px] font-semibold text-parch-100">Silhouettes through buildings</p>
+                <p class="mt-1 max-w-md text-[12.5px] text-parch-400">Friendly units hidden behind a roof or tree canopy redraw as a flat team-coloured outline so you never lose a villager behind a house.</p>
+              </div>
+              <button class="toggle relative h-6 w-11 shrink-0 rounded-full bg-gold-500 transition" role="switch" aria-checked="true" aria-label="Silhouettes through buildings">
+                <span class="absolute left-[22px] top-0.5 h-5 w-5 rounded-full bg-parch-100 shadow transition-all"></span>
+              </button>
+            </div>
+
+            <div class="h-px rule"></div>
+
+            <div class="flex items-start justify-between gap-6">
+              <div>
+                <p class="text-[14px] font-semibold text-parch-100">Drifting mist over unexplored ground</p>
+                <p class="mt-1 max-w-md text-[12.5px] text-parch-400">Costs about 2 ms a frame. Turn it off on an older phone; the fog itself stays either way.</p>
+              </div>
+              <button class="toggle relative h-6 w-11 shrink-0 rounded-full bg-gold-500 transition" role="switch" aria-checked="true" aria-label="Drifting mist">
+                <span class="absolute left-[22px] top-0.5 h-5 w-5 rounded-full bg-parch-100 shadow transition-all"></span>
+              </button>
+            </div>
+          </div>
+
+          <!-- AUDIO -->
+          <div role="tabpanel" id="panel-audio" aria-labelledby="tab-audio" hidden class="space-y-7">
+            <div>
+              <div class="flex items-baseline justify-between">
+                <label for="s-master" class="text-[14px] font-semibold text-parch-100">Master volume</label>
+                <span class="font-mono text-[12.5px] text-gold-300" data-out="s-master">78%</span>
+              </div>
+              <input id="s-master" type="range" min="0" max="100" value="78" class="mt-3 w-full" data-suffix="%">
+            </div>
+            <div>
+              <div class="flex items-baseline justify-between">
+                <label for="s-fx" class="text-[14px] font-semibold text-parch-100">Battle effects</label>
+                <span class="font-mono text-[12.5px] text-gold-300" data-out="s-fx">85%</span>
+              </div>
+              <p class="mt-1 text-[12.5px] text-parch-400">Every sound is synthesised at runtime — no audio files are downloaded.</p>
+              <input id="s-fx" type="range" min="0" max="100" value="85" class="mt-3 w-full" data-suffix="%">
+            </div>
+            <div>
+              <div class="flex items-baseline justify-between">
+                <label for="s-amb" class="text-[14px] font-semibold text-parch-100">Ambient birdsong</label>
+                <span class="font-mono text-[12.5px] text-gold-300" data-out="s-amb">40%</span>
+              </div>
+              <input id="s-amb" type="range" min="0" max="100" value="40" class="mt-3 w-full" data-suffix="%">
+            </div>
+            <div class="h-px rule"></div>
+            <div class="flex items-start justify-between gap-6">
+              <div>
+                <p class="text-[14px] font-semibold text-parch-100">Positional mix</p>
+                <p class="mt-1 max-w-md text-[12.5px] text-parch-400">Pans and attenuates each sound by where it happens on screen. Fighting off the edge of the view goes quiet.</p>
+              </div>
+              <button class="toggle relative h-6 w-11 shrink-0 rounded-full bg-gold-500 transition" role="switch" aria-checked="true" aria-label="Positional mix">
+                <span class="absolute left-[22px] top-0.5 h-5 w-5 rounded-full bg-parch-100 shadow transition-all"></span>
+              </button>
+            </div>
+          </div>
+
+          <!-- GAMEPLAY -->
+          <div role="tabpanel" id="panel-game" aria-labelledby="tab-game" hidden class="space-y-7">
+            <div>
+              <p class="text-[14px] font-semibold text-parch-100">Opponent skill</p>
+              <p class="mt-1 text-[12.5px] text-parch-400">Squire is deliberately gentle — the first attack wave will not arrive for six minutes.</p>
+              <div class="mt-3 grid grid-cols-3 gap-2">
+                <button class="seg rounded-lg border border-ink-400 px-3 py-2.5 text-[13px] font-medium text-parch-300 transition hover:border-gold-600" data-seg="skill">Squire</button>
+                <button class="seg rounded-lg border border-gold-600 bg-gold-700/20 px-3 py-2.5 text-[13px] font-medium text-gold-200" data-seg="skill" aria-pressed="true">Warlord</button>
+                <button class="seg rounded-lg border border-ink-400 px-3 py-2.5 text-[13px] font-medium text-parch-300 transition hover:border-gold-600" data-seg="skill">Conqueror</button>
+              </div>
+            </div>
+            <div class="h-px rule"></div>
+            <div>
+              <p class="text-[14px] font-semibold text-parch-100">Game pace</p>
+              <p class="mt-1 text-[12.5px] text-parch-400">Turbo multiplies gathering, building and training by two and a half. A full match fits in a lunch break.</p>
+              <div class="mt-3 grid grid-cols-2 gap-2">
+                <button class="seg rounded-lg border border-gold-600 bg-gold-700/20 px-3 py-2.5 text-[13px] font-medium text-gold-200" data-seg="pace" aria-pressed="true">Standard</button>
+                <button class="seg rounded-lg border border-ink-400 px-3 py-2.5 text-[13px] font-medium text-parch-300 transition hover:border-gold-600" data-seg="pace">Turbo</button>
+              </div>
+            </div>
+            <div class="h-px rule"></div>
+            <div class="flex items-start justify-between gap-6">
+              <div>
+                <p class="text-[14px] font-semibold text-parch-100">Idle villager alert</p>
+                <p class="mt-1 max-w-md text-[12.5px] text-parch-400">Badges the count on the map button and cycles through them when tapped.</p>
+              </div>
+              <button class="toggle relative h-6 w-11 shrink-0 rounded-full bg-gold-500 transition" role="switch" aria-checked="true" aria-label="Idle villager alert">
+                <span class="absolute left-[22px] top-0.5 h-5 w-5 rounded-full bg-parch-100 shadow transition-all"></span>
+              </button>
+            </div>
+            <div class="flex items-start justify-between gap-6">
+              <div>
+                <p class="text-[14px] font-semibold text-parch-100">Warn when a town is attacked</p>
+                <p class="mt-1 max-w-md text-[12.5px] text-parch-400">Pings the minimap and names the attacking civilisation in the event log.</p>
+              </div>
+              <button class="toggle relative h-6 w-11 shrink-0 rounded-full bg-ink-400 transition" role="switch" aria-checked="false" aria-label="Attack warnings">
+                <span class="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-parch-300 shadow transition-all"></span>
+              </button>
+            </div>
+          </div>
+
+          <!-- CONTROLS -->
+          <div role="tabpanel" id="panel-keys" aria-labelledby="tab-keys" hidden>
+            <p class="text-[13px] text-parch-400">Desktop shortcuts. On a phone every one of these is a button in the command panel.</p>
+            <dl class="mt-5 divide-y divide-ink-500 border-y border-ink-500">
+              <div class="flex items-center justify-between py-3"><dt class="text-[13.5px] text-parch-200">Select all military</dt><dd class="flex gap-1.5"><kbd class="rounded border border-ink-400 bg-ink-850 px-2 py-1 font-mono text-[11px] text-parch-200">Ctrl</kbd><kbd class="rounded border border-ink-400 bg-ink-850 px-2 py-1 font-mono text-[11px] text-parch-200">A</kbd></dd></div>
+              <div class="flex items-center justify-between py-3"><dt class="text-[13.5px] text-parch-200">Cycle idle villagers</dt><dd><kbd class="rounded border border-ink-400 bg-ink-850 px-2 py-1 font-mono text-[11px] text-parch-200">.</kbd></dd></div>
+              <div class="flex items-center justify-between py-3"><dt class="text-[13.5px] text-parch-200">Attack-move</dt><dd><kbd class="rounded border border-ink-400 bg-ink-850 px-2 py-1 font-mono text-[11px] text-parch-200">A</kbd></dd></div>
+              <div class="flex items-center justify-between py-3"><dt class="text-[13.5px] text-parch-200">Build blacksmith</dt><dd><kbd class="rounded border border-ink-400 bg-ink-850 px-2 py-1 font-mono text-[11px] text-parch-200">S</kbd></dd></div>
+              <div class="flex items-center justify-between py-3"><dt class="text-[13.5px] text-parch-200">Build dock</dt><dd><kbd class="rounded border border-ink-400 bg-ink-850 px-2 py-1 font-mono text-[11px] text-parch-200">D</kbd></dd></div>
+              <div class="flex items-center justify-between py-3"><dt class="text-[13.5px] text-parch-200">Train unique unit at castle</dt><dd><kbd class="rounded border border-ink-400 bg-ink-850 px-2 py-1 font-mono text-[11px] text-parch-200">U</kbd></dd></div>
+              <div class="flex items-center justify-between py-3"><dt class="text-[13.5px] text-parch-200">Assign control group</dt><dd class="flex gap-1.5"><kbd class="rounded border border-ink-400 bg-ink-850 px-2 py-1 font-mono text-[11px] text-parch-200">Ctrl</kbd><kbd class="rounded border border-ink-400 bg-ink-850 px-2 py-1 font-mono text-[11px] text-parch-200">1–9</kbd></dd></div>
+              <div class="flex items-center justify-between py-3"><dt class="text-[13.5px] text-parch-200">Clear selection</dt><dd><kbd class="rounded border border-ink-400 bg-ink-850 px-2 py-1 font-mono text-[11px] text-parch-200">Esc</kbd></dd></div>
+            </dl>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ CAMPAIGN ═══════════════════ -->
+<section id="campaign" class="scroll-mt-20 py-24 lg:py-32">
+  <div class="mx-auto max-w-7xl px-5 lg:px-8">
+
+    <div class="max-w-2xl">
+      <p class="font-mono text-[11.5px] font-medium uppercase tracking-[.22em] text-gold-400">Campaign</p>
+      <h2 class="mt-3 font-display text-4xl font-bold tracking-tight text-parch-100 lg:text-[2.9rem]">Eight missions, played in order</h2>
+      <p class="mt-4 text-[16.5px] leading-relaxed text-parch-300">Each one locks until the last is won, and each teaches a system you'll need in a real match.</p>
+    </div>
+
+    <div class="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+
+      <article class="group flex flex-col overflow-hidden rounded-xl border border-ink-400 bg-ink-850 transition hover:border-gold-700">
+        <div class="relative h-36 overflow-hidden">
+          <img src="shots/closer.jpg" alt="Militia clashing at close quarters outside a settlement" class="pixel h-full w-full object-cover object-[60%_40%] transition duration-700 group-hover:scale-105">
+          <div class="absolute inset-0 bg-gradient-to-t from-ink-850 to-transparent"></div>
+          <span class="absolute left-3 top-3 rounded bg-ink-900/85 px-2 py-0.5 font-mono text-[10px] font-bold text-gold-300 backdrop-blur">I</span>
+        </div>
+        <div class="flex flex-1 flex-col p-5">
+          <h3 class="font-display text-[16px] font-bold text-parch-100">First Blood</h3>
+          <p class="mt-2 flex-1 text-[13px] leading-relaxed text-parch-300">Four militia and a grudge. Raze the settlement across the valley before it grows past you.</p>
+          <span class="mt-4 inline-flex w-fit items-center gap-1.5 rounded-md bg-moss-400/15 px-2 py-1 text-[11px] font-semibold text-moss-300">Completed</span>
+        </div>
+      </article>
+
+      <article class="group flex flex-col overflow-hidden rounded-xl border border-ink-400 bg-ink-850 transition hover:border-gold-700">
+        <div class="relative h-36 overflow-hidden">
+          <img src="shots/artpass-water.jpg" alt="Defended fords across a river with troops holding the near bank" class="pixel h-full w-full object-cover object-[45%_55%] transition duration-700 group-hover:scale-105">
+          <div class="absolute inset-0 bg-gradient-to-t from-ink-850 to-transparent"></div>
+          <span class="absolute left-3 top-3 rounded bg-ink-900/85 px-2 py-0.5 font-mono text-[10px] font-bold text-gold-300 backdrop-blur">II</span>
+        </div>
+        <div class="flex flex-1 flex-col p-5">
+          <h3 class="font-display text-[16px] font-bold text-parch-100">Hold the Fords</h3>
+          <p class="mt-2 flex-1 text-[13px] leading-relaxed text-parch-300">You start in the Feudal Age and you do not have to win. Survive ten minutes.</p>
+          <span class="mt-4 inline-flex w-fit items-center gap-1.5 rounded-md bg-moss-400/15 px-2 py-1 text-[11px] font-semibold text-moss-300">Completed</span>
+        </div>
+      </article>
+
+      <article class="group flex flex-col overflow-hidden rounded-xl border border-ink-400 bg-ink-850 transition hover:border-gold-700">
+        <div class="relative h-36 overflow-hidden">
+          <img src="https://images.unsplash.com/photo-1673083636122-107bf34f8db7?auto=format&fit=crop&w=800&q=80" alt="A fog-filled forest with trees receding into white haze" class="h-full w-full object-cover object-center transition duration-700 group-hover:scale-105">
+          <div class="absolute inset-0 bg-gradient-to-t from-ink-850 via-ink-850/40 to-transparent"></div>
+          <span class="absolute left-3 top-3 rounded bg-ink-900/85 px-2 py-0.5 font-mono text-[10px] font-bold text-gold-300 backdrop-blur">III</span>
+        </div>
+        <div class="flex flex-1 flex-col p-5">
+          <h3 class="font-display text-[16px] font-bold text-parch-100">Black Forest Gambit</h3>
+          <p class="mt-2 flex-1 text-[13px] leading-relaxed text-parch-300">Your enemy opens in the Castle Age with an army already built. You open with villagers.</p>
+          <span class="mt-4 inline-flex w-fit items-center gap-1.5 rounded-md bg-gold-700/25 px-2 py-1 text-[11px] font-semibold text-gold-200">In progress</span>
+        </div>
+      </article>
+
+      <article class="group flex flex-col overflow-hidden rounded-xl border border-ink-400 bg-ink-850 transition hover:border-gold-700">
+        <div class="relative h-36 overflow-hidden">
+          <img src="shots/ghosts.jpg" alt="Monks escorting relics past a monastery while units move behind buildings" class="pixel h-full w-full object-cover object-[55%_45%] transition duration-700 group-hover:scale-105">
+          <div class="absolute inset-0 bg-gradient-to-t from-ink-850 to-transparent"></div>
+          <span class="absolute left-3 top-3 rounded bg-ink-900/85 px-2 py-0.5 font-mono text-[10px] font-bold text-gold-300 backdrop-blur">IV</span>
+        </div>
+        <div class="flex flex-1 flex-col p-5">
+          <h3 class="font-display text-[16px] font-bold text-parch-100">The Relic War</h3>
+          <p class="mt-2 flex-1 text-[13px] leading-relaxed text-parch-300">Three relics into your monastery and the war is over. Your monks are slow and unarmed.</p>
+          <span class="mt-4 inline-flex w-fit items-center gap-1.5 rounded-md bg-ink-700 px-2 py-1 text-[11px] font-semibold text-parch-400">Locked</span>
+        </div>
+      </article>
+
+      <article class="group flex flex-col overflow-hidden rounded-xl border border-ink-400 bg-ink-850 transition hover:border-gold-700">
+        <div class="relative h-36 overflow-hidden">
+          <img src="shots/artpass-town.jpg" alt="A settlement caught between two advancing forces" class="pixel h-full w-full object-cover object-[58%_38%] transition duration-700 group-hover:scale-105">
+          <div class="absolute inset-0 bg-gradient-to-t from-ink-850 to-transparent"></div>
+          <span class="absolute left-3 top-3 rounded bg-ink-900/85 px-2 py-0.5 font-mono text-[10px] font-bold text-gold-300 backdrop-blur">V</span>
+        </div>
+        <div class="flex flex-1 flex-col p-5">
+          <h3 class="font-display text-[16px] font-bold text-parch-100">Two Fronts</h3>
+          <p class="mt-2 flex-1 text-[13px] leading-relaxed text-parch-300">Two allied warlords, one of you, and attacks arriving from opposite edges of the map.</p>
+          <span class="mt-4 inline-flex w-fit items-center gap-1.5 rounded-md bg-ink-700 px-2 py-1 text-[11px] font-semibold text-parch-400">Locked</span>
+        </div>
+      </article>
+
+      <article class="group flex flex-col overflow-hidden rounded-xl border border-ink-400 bg-ink-850 transition hover:border-gold-700">
+        <div class="relative h-36 overflow-hidden">
+          <img src="shots/collapse.jpg" alt="A battering ram bringing down a stone wall in a cloud of dust" class="pixel h-full w-full object-cover object-[55%_45%] transition duration-700 group-hover:scale-105">
+          <div class="absolute inset-0 bg-gradient-to-t from-ink-850 to-transparent"></div>
+          <span class="absolute left-3 top-3 rounded bg-ink-900/85 px-2 py-0.5 font-mono text-[10px] font-bold text-gold-300 backdrop-blur">VI</span>
+        </div>
+        <div class="flex flex-1 flex-col p-5">
+          <h3 class="font-display text-[16px] font-bold text-parch-100">The Iron Harvest</h3>
+          <p class="mt-2 flex-1 text-[13px] leading-relaxed text-parch-300">A stone-walled Castle-Age town and a siege workshop. Arrows will not do it this time.</p>
+          <span class="mt-4 inline-flex w-fit items-center gap-1.5 rounded-md bg-ink-700 px-2 py-1 text-[11px] font-semibold text-parch-400">Locked</span>
+        </div>
+      </article>
+
+      <article class="group flex flex-col overflow-hidden rounded-xl border border-ink-400 bg-ink-850 transition hover:border-gold-700">
+        <div class="relative h-36 overflow-hidden">
+          <img src="https://images.unsplash.com/photo-1595789400119-4405521a2399?auto=format&fit=crop&w=800&q=80" alt="A boat crossing dark open water under a low sky" class="h-full w-full object-cover object-center transition duration-700 group-hover:scale-105">
+          <div class="absolute inset-0 bg-gradient-to-t from-ink-850 via-ink-850/40 to-transparent"></div>
+          <span class="absolute left-3 top-3 rounded bg-ink-900/85 px-2 py-0.5 font-mono text-[10px] font-bold text-gold-300 backdrop-blur">VII</span>
+        </div>
+        <div class="flex flex-1 flex-col p-5">
+          <h3 class="font-display text-[16px] font-bold text-parch-100">Lords of the Narrow Sea</h3>
+          <p class="mt-2 flex-1 text-[13px] leading-relaxed text-parch-300">The fords are drowned. Every soldier you send must go by transport, and the shore is thirty tiles out.</p>
+          <span class="mt-4 inline-flex w-fit items-center gap-1.5 rounded-md bg-ink-700 px-2 py-1 text-[11px] font-semibold text-parch-400">Locked</span>
+        </div>
+      </article>
+
+      <article class="group flex flex-col overflow-hidden rounded-xl border border-ink-400 bg-ink-850 transition hover:border-gold-700">
+        <div class="relative h-36 overflow-hidden">
+          <img src="shots/age-imp.jpg" alt="An Imperial Age town with slate roofs, gilded ridge caps and a wonder under construction" class="pixel h-full w-full object-cover object-[58%_38%] transition duration-700 group-hover:scale-105">
+          <div class="absolute inset-0 bg-gradient-to-t from-ink-850 to-transparent"></div>
+          <span class="absolute left-3 top-3 rounded bg-ink-900/85 px-2 py-0.5 font-mono text-[10px] font-bold text-gold-300 backdrop-blur">VIII</span>
+        </div>
+        <div class="flex flex-1 flex-col p-5">
+          <h3 class="font-display text-[16px] font-bold text-parch-100">The Wonder of the Age</h3>
+          <p class="mt-2 flex-1 text-[13px] leading-relaxed text-parch-300">Raise a wonder and keep it standing for five minutes. Two allied warlords would rather you didn't.</p>
+          <span class="mt-4 inline-flex w-fit items-center gap-1.5 rounded-md bg-ink-700 px-2 py-1 text-[11px] font-semibold text-parch-400">Locked</span>
+        </div>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ DEPTH / FEATURES ═══════════════════ -->
+<section class="border-y border-ink-500 bg-ink-850 py-24 lg:py-32">
+  <div class="mx-auto max-w-7xl px-5 lg:px-8">
+    <div class="grid gap-14 lg:grid-cols-[.9fr_1.1fr] lg:items-center">
+
+      <div>
+        <p class="font-mono text-[11.5px] font-medium uppercase tracking-[.22em] text-gold-400">Under the hood</p>
+        <h2 class="mt-3 font-display text-4xl font-bold tracking-tight text-parch-100 lg:text-[2.9rem]">A full game, not a demo</h2>
+        <p class="mt-4 text-[16.5px] leading-relaxed text-parch-300">
+          Forty-seven unit types across four ages, siege engines and gunpowder behind Chemistry, a navy,
+          monks who convert, farms that run out and replant themselves, and an economy of nineteen
+          technologies that all stack.
+        </p>
+
+        <dl class="mt-9 grid grid-cols-2 gap-x-6 gap-y-7 sm:grid-cols-3">
+          <div><dt class="font-display text-3xl font-bold text-gold-300">47</dt><dd class="mt-1 text-[13px] text-parch-400">Unit types</dd></div>
+          <div><dt class="font-display text-3xl font-bold text-gold-300">18</dt><dd class="mt-1 text-[13px] text-parch-400">Unique techs</dd></div>
+          <div><dt class="font-display text-3xl font-bold text-gold-300">24</dt><dd class="mt-1 text-[13px] text-parch-400">Economy techs</dd></div>
+          <div><dt class="font-display text-3xl font-bold text-gold-300">8</dt><dd class="mt-1 text-[13px] text-parch-400">Players per match</dd></div>
+          <div><dt class="font-display text-3xl font-bold text-gold-300">4</dt><dd class="mt-1 text-[13px] text-parch-400">Ages</dd></div>
+          <div><dt class="font-display text-3xl font-bold text-gold-300">3</dt><dd class="mt-1 text-[13px] text-parch-400">Victory conditions</dd></div>
+        </dl>
+      </div>
+
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div class="rounded-xl border border-ink-400 bg-ink-800 p-5">
+          <svg viewBox="0 0 24 24" class="h-6 w-6 text-ember-300" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 20.5 9 16m-2.6-3.2 4.8-4.8 4 4-4.8 4.8a2.8 2.8 0 0 1-4-4Z"/><path d="m15.2 12 4.3-4.3-3.2-3.2L12 8.8"/></svg>
+          <h3 class="mt-3.5 text-[14.5px] font-semibold text-parch-100">Siege and gunpowder</h3>
+          <p class="mt-1.5 text-[13px] leading-relaxed text-parch-300">Scorpions punch through a line of men. Trebuchets take three seconds to unpack. Bombard cannons wait behind Chemistry.</p>
+        </div>
+        <div class="rounded-xl border border-ink-400 bg-ink-800 p-5">
+          <svg viewBox="0 0 24 24" class="h-6 w-6 text-slate2-300" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 18.4c1.7 1.4 3 1.4 4.7 0s3-1.4 4.7 0 3 1.4 4.7 0 3-1.4 4.7 0"/><path d="m4.8 14.6 1.4-6.9 11.6 0 1.4 6.9M12 7.7V3.4"/></svg>
+          <h3 class="mt-3.5 text-[14.5px] font-semibold text-parch-100">A real navy</h3>
+          <p class="mt-1.5 text-[13px] leading-relaxed text-parch-300">Eight ship types, transports that drown their passengers if there's no shore, and trade cogs that run themselves.</p>
+        </div>
+        <div class="rounded-xl border border-ink-400 bg-ink-800 p-5">
+          <svg viewBox="0 0 24 24" class="h-6 w-6 text-moss-300" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7.6 20.6c-2.4-1-3.4-3.6-2.4-6 .7-1.6 2.4-2.6 2-4.6C6.8 8 8.4 5.6 11 4.4c-.6 2.4.4 3.6 2 4.8 2 1.6 3.4 3.2 3.4 5.6a6 6 0 0 1-3.6 5.6"/><path d="M10 20.8c-1.2-.8-1.6-2.2-1-3.4.5-1 1.6-1.5 1.5-2.8 1.4.8 2.2 2 2.2 3.4a3.4 3.4 0 0 1-1.6 2.8"/></svg>
+          <h3 class="mt-3.5 text-[14.5px] font-semibold text-parch-100">Wildlife worth hunting</h3>
+          <p class="mt-1.5 text-[13px] leading-relaxed text-parch-300">Sheep follow whoever finds them. Deer bolt when shot. Boar charge the villager who hit them, and often win.</p>
+        </div>
+        <div class="rounded-xl border border-ink-400 bg-ink-800 p-5">
+          <svg viewBox="0 0 24 24" class="h-6 w-6 text-gold-300" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.8 3.4 7.4v9.2L12 21.2l8.6-4.6V7.4Z"/><path d="M12 21.2v-9.4l8.6-4.4M12 11.8 3.4 7.4"/></svg>
+          <h3 class="mt-3.5 text-[14.5px] font-semibold text-parch-100">Three ways to win</h3>
+          <p class="mt-1.5 text-[13px] leading-relaxed text-parch-300">Raze every enemy town hall, hold a wonder for five minutes, or gather every relic on the map into your monasteries.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ CTA ═══════════════════ -->
+<section class="relative grain overflow-hidden">
+  <img src="https://images.unsplash.com/photo-1633434592891-97a8fc53a4a9?auto=format&fit=crop&w=2000&q=80"
+       alt="Edinburgh Castle standing on its volcanic crag above the old town at dusk"
+       class="absolute inset-0 h-full w-full object-cover object-center opacity-30">
+  <div class="absolute inset-0 bg-gradient-to-b from-ink-900 via-ink-900/88 to-ink-900"></div>
+
+  <div class="relative mx-auto max-w-3xl px-5 py-28 text-center lg:px-8 lg:py-36">
+    <h2 class="font-display text-4xl font-extrabold leading-tight tracking-tight text-parch-100 lg:text-5xl">
+      Someone is waiting on a<br class="hidden sm:block"> four-letter code
+    </h2>
+    <p class="mx-auto mt-5 max-w-xl text-[17px] leading-relaxed text-parch-300">
+      Open it on a laptop, install it on a phone, and hand the code to whoever is in the room.
+      There is nothing to buy and nothing to sign up for.
+    </p>
+    <div class="mt-10 flex flex-wrap justify-center gap-3">
+      <a href="https://tiny-conquerors.onrender.com" class="inline-flex items-center gap-2.5 rounded-xl bg-gradient-to-b from-gold-200 to-gold-500 px-7 py-3.5 text-[15px] font-semibold text-ink-900 shadow-[0_1px_0_rgba(255,255,255,.4)_inset,0_14px_36px_-12px_rgba(227,179,65,.65)] transition hover:from-gold-100 hover:to-gold-400">
+        Play Tiny Conquerors
+      </a>
+      <a href="https://github.com/Danielparamount-rgb/tiny-conquerors" class="inline-flex items-center gap-2.5 rounded-xl border border-ink-400 bg-ink-800/70 px-7 py-3.5 text-[15px] font-medium text-parch-200 backdrop-blur transition hover:border-gold-600 hover:bg-ink-700">
+        <svg viewBox="0 0 24 24" class="h-[18px] w-[18px]" fill="currentColor"><path d="M12 1.8a10.2 10.2 0 0 0-3.2 19.9c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.4 1.1 3 .8.1-.7.4-1.1.6-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.4 9.4 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7 1 .7 2v2.9c0 .3.2.6.7.5A10.2 10.2 0 0 0 12 1.8Z"/></svg>
+        Read the source
+      </a>
+    </div>
+    <p class="mt-8 font-mono text-[11.5px] text-parch-500">Works in Chrome, Safari, Firefox and Edge · No account · No telemetry</p>
+  </div>
+</section>
+
+</main>
+
+<!-- ═══════════════════ FOOTER ═══════════════════ -->
+<footer class="border-t border-ink-500 bg-ink-950">
+  <div class="mx-auto max-w-7xl px-5 py-14 lg:px-8">
+    <div class="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+      <div class="lg:col-span-1">
+        <div class="flex items-center gap-2.5">
+          <svg viewBox="0 0 40 46" class="h-7 w-6" aria-hidden="true">
+            <path d="M20 1.6 3.4 6.2v17.9c0 9.9 6.7 16.6 16.6 20.3 9.9-3.7 16.6-10.4 16.6-20.3V6.2Z" fill="#15120F" stroke="#C4922E" stroke-width="2.1" stroke-linejoin="round"/>
+            <path d="M8.6 27.4 20 20.2l11.4 7.2-1.6 3.3L20 24.3 10.2 30.7Z" fill="#C4922E"/>
+            <path d="M20 8.4v9.1M17.1 11.6h5.8" stroke="#C4922E" stroke-width="2.2" stroke-linecap="round"/>
+          </svg>
+          <span class="font-display text-[14px] font-bold tracking-[.16em] text-parch-200">TINY CONQUERORS</span>
+        </div>
+        <p class="mt-4 max-w-xs text-[13px] leading-relaxed text-parch-400">
+          A browser real-time strategy game built for friends who own different computers and no longer live in the same city.
+        </p>
+      </div>
+
+      <div>
+        <h3 class="text-[12px] font-semibold uppercase tracking-[.14em] text-parch-300">Play</h3>
+        <ul class="mt-4 space-y-2.5 text-[13.5px]">
+          <li><a href="https://tiny-conquerors.onrender.com" class="text-parch-400 transition hover:text-gold-300">Skirmish</a></li>
+          <li><a href="#lobby" class="text-parch-400 transition hover:text-gold-300">Host a match</a></li>
+          <li><a href="#campaign" class="text-parch-400 transition hover:text-gold-300">Campaign</a></li>
+          <li><a href="#maps" class="text-parch-400 transition hover:text-gold-300">Battlefields</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <h3 class="text-[12px] font-semibold uppercase tracking-[.14em] text-parch-300">Reference</h3>
+        <ul class="mt-4 space-y-2.5 text-[13.5px]">
+          <li><a href="#civs" class="text-parch-400 transition hover:text-gold-300">Civilisation bonuses</a></li>
+          <li><a href="#settings" class="text-parch-400 transition hover:text-gold-300">Controls</a></li>
+          <li><a href="#" class="text-parch-400 transition hover:text-gold-300">Unit attributes</a></li>
+          <li><a href="#" class="text-parch-400 transition hover:text-gold-300">Technology tree</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <h3 class="text-[12px] font-semibold uppercase tracking-[.14em] text-parch-300">Project</h3>
+        <ul class="mt-4 space-y-2.5 text-[13.5px]">
+          <li><a href="https://github.com/Danielparamount-rgb/tiny-conquerors" class="text-parch-400 transition hover:text-gold-300">Source on GitHub</a></li>
+          <li><a href="#" class="text-parch-400 transition hover:text-gold-300">Release notes</a></li>
+          <li><a href="#" class="text-parch-400 transition hover:text-gold-300">Relay status</a></li>
+          <li><a href="#" class="text-parch-400 transition hover:text-gold-300">Report a bug</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="mt-12 flex flex-col gap-4 border-t border-ink-500 pt-7 sm:flex-row sm:items-center sm:justify-between">
+      <p class="text-[12.5px] text-parch-500">© 2026 Tiny Conquerors. All art, sound and code original.</p>
+      <p class="max-w-lg text-[12.5px] leading-relaxed text-parch-500">
+        Inspired by the real-time strategy games of the late 1990s. Not affiliated with, endorsed by, or containing any assets from any commercial game.
+      </p>
+    </div>
+  </div>
+</footer>
+
+<script>
+/* ── Civilisation data ─────────────────────────────────────── */
+const CIVS = [
+  { name:'Britons',    tags:['archer'],           unit:'Longbowman',   tech:'Yeomanry',       bonus:'Archer range +1 in the Castle Age, +2 in Imperial.',            team:'Archery Ranges work 20% faster.' },
+  { name:'Byzantines', tags:['infantry','navy'],  unit:'Cataphract',   tech:'Logistica',      bonus:'Spearmen, skirmishers and camels cost 25% less.',              team:'Monks heal 50% faster.' },
+  { name:'Celts',      tags:['infantry'],         unit:'Woad Raider',  tech:'Furor Celtica',  bonus:'Infantry move 15% faster; your sheep cannot be stolen.',        team:'Siege Workshops work 20% faster.' },
+  { name:'Chinese',    tags:['archer'],           unit:'Chu Ko Nu',    tech:'Rocketry',       bonus:'Start with three extra villagers but less food and wood.',      team:'Farms carry 45 more food.' },
+  { name:'Franks',     tags:['cavalry'],          unit:'Throwing Axe', tech:'Chivalry',       bonus:'Knights have 20% more hit points; farm upgrades are free.',     team:'Knights see two tiles further.' },
+  { name:'Goths',      tags:['infantry'],         unit:'Huskarl',      tech:'Anarchy',        bonus:'Infantry get cheaper each age; +5 damage against boar.',        team:'Barracks work 20% faster.' },
+  { name:'Huns',       tags:['cavalry'],          unit:'Tarkan',       tech:'Atheism',        bonus:'You never need houses. Start at full population.',              team:'Stables work 20% faster.' },
+  { name:'Japanese',   tags:['infantry','navy'],  unit:'Samurai',      tech:'Kataparuto',     bonus:'Fishing ships have double hit points and carry more.',          team:'Galleys see two tiles further.' },
+  { name:'Koreans',    tags:['navy','archer'],    unit:'War Wagon',    tech:'Shinkichon',     bonus:'Villagers see three tiles further; towers upgrade free.',       team:'Mangonels get +1 range.' },
+  { name:'Mayans',     tags:['archer','infantry'],unit:'Plumed Archer',tech:'El Dorado',      bonus:'Walls cost half; resources last 15% longer.',                   team:'Walls and gates cost 50% less.' },
+  { name:'Mongols',    tags:['cavalry','archer'], unit:'Mangudai',     tech:'Drill',          bonus:'Hunters gather 50% faster; cavalry archers fire faster.',       team:'Scouts see two tiles further.' },
+  { name:'Persians',   tags:['cavalry'],          unit:'War Elephant', tech:'Mahouts',        bonus:'Town Centres and docks have 15% more hit points.',              team:'Knights do +2 damage to archers.' },
+  { name:'Saracens',   tags:['cavalry','navy'],   unit:'Mameluke',     tech:'Zealotry',       bonus:'Market trades at a 5% fee instead of 30%.',                     team:'Archers do +3 damage to buildings.' },
+  { name:'Spanish',    tags:['cavalry'],          unit:'Conquistador', tech:'Supremacy',      bonus:'Gunpowder units fire 15% faster; builders work faster.',        team:'Trade carts return 25% more gold.' },
+  { name:'Teutons',    tags:['infantry'],         unit:'Teutonic Kt.', tech:'Crenellations',  bonus:'Monks heal at double range; towers garrison twice as many.',    team:'Units resist conversion.' },
+  { name:'Turks',      tags:['cavalry'],          unit:'Janissary',    tech:'Artillery',      bonus:'Gunpowder units have 25% more hit points; gold lasts longer.',  team:'Gunpowder units train 20% faster.' },
+  { name:'Vikings',    tags:['navy','infantry'],  unit:'Berserk',      tech:'Chieftains',     bonus:'Warships cost 20% less; Berserks regenerate hit points.',       team:'Docks cost 15% less.' },
+  { name:'Aztecs',     tags:['infantry'],         unit:'Jaguar Warr.', tech:'Garland Wars',   bonus:'Start with Loom researched; villagers carry more.',             team:'Relics generate 33% more gold.' },
+];
+
+const civGrid = document.getElementById('civGrid');
+civGrid.innerHTML = CIVS.map((c, i) => `
+  <article class="civ-card group relative overflow-hidden rounded-xl border border-ink-400 bg-ink-850 p-5 transition hover:border-gold-700 hover:bg-ink-800" data-tags="${c.tags.join(' ')}">
+    <div class="civ-shine pointer-events-none absolute inset-0 -translate-x-6 bg-gradient-to-r from-transparent via-gold-300/[.045] to-transparent opacity-0 transition duration-500"></div>
+    <div class="relative flex items-start justify-between gap-3">
+      <div>
+        <h3 class="font-display text-[17px] font-bold text-parch-100">${c.name}</h3>
+        <p class="mt-0.5 font-mono text-[11px] uppercase tracking-wider text-gold-400">${c.unit}</p>
+      </div>
+      <span class="shrink-0 rounded-md border border-ink-400 bg-ink-800 px-2 py-1 font-mono text-[10px] text-parch-400">${String(i+1).padStart(2,'0')}</span>
+    </div>
+    <p class="relative mt-3.5 text-[13px] leading-relaxed text-parch-300">${c.bonus}</p>
+    <div class="relative mt-4 space-y-2 border-t border-ink-500 pt-3.5">
+      <div class="flex gap-2.5 text-[12px]">
+        <span class="shrink-0 font-medium text-parch-500">Team</span>
+        <span class="text-parch-300">${c.team}</span>
+      </div>
+      <div class="flex gap-2.5 text-[12px]">
+        <span class="shrink-0 font-medium text-parch-500">Tech</span>
+        <span class="text-slate2-300">${c.tech}</span>
+      </div>
+    </div>
+  </article>`).join('');
+
+/* ── Civ filter ─────────────────────────────────────────────── */
+const filters = document.querySelectorAll('.civ-filter');
+filters.forEach(btn => btn.addEventListener('click', () => {
+  filters.forEach(b => {
+    const on = b === btn;
+    b.setAttribute('aria-pressed', on);
+    b.className = on
+      ? 'civ-filter rounded-lg border border-gold-600 bg-gold-700/20 px-3.5 py-2 text-[13px] font-medium text-gold-200'
+      : 'civ-filter rounded-lg border border-ink-400 px-3.5 py-2 text-[13px] font-medium text-parch-300 transition hover:border-gold-600 hover:text-parch-100';
+  });
+  const f = btn.dataset.filter;
+  civGrid.querySelectorAll('.civ-card').forEach(card => {
+    card.hidden = !(f === 'all' || card.dataset.tags.split(' ').includes(f));
+  });
+}));
+
+/* ── Settings tabs ──────────────────────────────────────────── */
+const tabs = document.querySelectorAll('.settings-tab');
+tabs.forEach(tab => tab.addEventListener('click', () => {
+  tabs.forEach(t => {
+    const on = t === tab;
+    t.setAttribute('aria-selected', on);
+    t.className = on
+      ? 'settings-tab flex shrink-0 items-center gap-2.5 rounded-lg bg-gold-700/20 px-3.5 py-2.5 text-left text-[13.5px] font-medium text-gold-200 ring-1 ring-inset ring-gold-700/50'
+      : 'settings-tab flex shrink-0 items-center gap-2.5 rounded-lg px-3.5 py-2.5 text-left text-[13.5px] font-medium text-parch-300 transition hover:bg-ink-700 hover:text-parch-100';
+    document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+  });
+}));
+
+/* ── Sliders ────────────────────────────────────────────────── */
+document.querySelectorAll('input[type=range]').forEach(r => {
+  const out = document.querySelector(`[data-out="${r.id}"]`);
+  const labels = r.dataset.labels ? r.dataset.labels.split('|') : null;
+  const sync = () => { if (out) out.textContent = labels ? labels[+r.value] : r.value + (r.dataset.suffix || ''); };
+  r.addEventListener('input', sync); sync();
+});
+
+/* ── Toggles ────────────────────────────────────────────────── */
+document.querySelectorAll('.toggle').forEach(t => t.addEventListener('click', () => {
+  const on = t.getAttribute('aria-checked') !== 'true';
+  t.setAttribute('aria-checked', on);
+  t.classList.toggle('bg-gold-500', on);
+  t.classList.toggle('bg-ink-400', !on);
+  const knob = t.firstElementChild;
+  knob.classList.toggle('left-[22px]', on);
+  knob.classList.toggle('left-0.5', !on);
+  knob.classList.toggle('bg-parch-100', on);
+  knob.classList.toggle('bg-parch-300', !on);
+}));
+
+/* ── Segmented controls ─────────────────────────────────────── */
+document.querySelectorAll('.seg').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll(`.seg[data-seg="${b.dataset.seg}"]`).forEach(s => {
+    const on = s === b;
+    s.setAttribute('aria-pressed', on);
+    s.className = on
+      ? 'seg rounded-lg border border-gold-600 bg-gold-700/20 px-3 py-2.5 text-[13px] font-medium text-gold-200'
+      : 'seg rounded-lg border border-ink-400 px-3 py-2.5 text-[13px] font-medium text-parch-300 transition hover:border-gold-600';
+  });
+}));
+
+/* ── Copy room code ─────────────────────────────────────────── */
+document.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(b.dataset.copy); } catch {}
+  const label = b.querySelector('.copy-label');
+  label.textContent = 'Copied';
+  setTimeout(() => label.textContent = 'Copy', 1600);
+}));
+
+/* ── Mobile nav ─────────────────────────────────────────────── */
+const navToggle = document.getElementById('navToggle');
+const mobileNav = document.getElementById('mobileNav');
+navToggle.addEventListener('click', () => {
+  const open = mobileNav.hidden;
+  mobileNav.hidden = !open;
+  navToggle.setAttribute('aria-expanded', open);
+});
+mobileNav.addEventListener('click', e => { if (e.target.tagName === 'A') { mobileNav.hidden = true; navToggle.setAttribute('aria-expanded', false); } });
+</script>
+</body>
+</html>

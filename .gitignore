@@ -2,4 +2,6 @@
 test.html
 test-old.html
 *.jpg
+# ...except the screenshots the shell page ships with (app/ is the deployed bundle)
+!app/shots/*.jpg
 relay/node_modules/
