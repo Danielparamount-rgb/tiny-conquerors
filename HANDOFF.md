@@ -69,7 +69,7 @@ A mobile-friendly, browser-based RTS inspired by Age of Empires II: The Conquero
 
 ## Render app deployment — ✅ LIVE
 - **https://tiny-conquerors.onrender.com** — Render static site `tiny-conquerors`, service ID `srv-d9pibf5bedkc73c5qumg`, connected to GitHub repo Danielparamount-rgb/tiny-conquerors, branch `main`, **publish directory `app`**, no build command. Auto-deploys on push to main.
-- Current live version: **sw `tq-v26`** (dropped-player-ai). There are now TWO Render services: the static site (`app`) and the relay Web Service (`relay`) — see MULTIPLAYER. Verified after every deploy by fetching sw.js + index.html from the shell (bypasses the cache-first SW) — check the byte size matches the local `app/index.html` exactly, that's the quickest proof the right build shipped.
+- Current live version: **sw `tq-v28`** (reconnect). Two Render services: the static site (`app`) and the relay Web Service (`relay`) — see MULTIPLAYER. There are now TWO Render services: the static site (`app`) and the relay Web Service (`relay`) — see MULTIPLAYER. Verified after every deploy by fetching sw.js + index.html from the shell (bypasses the cache-first SW) — check the byte size matches the local `app/index.html` exactly, that's the quickest proof the right build shipped.
 - **Commit-message gotcha**: PowerShell here-strings choke on messages containing double quotes (`git commit -m @'...'@` split mid-message once). Use the Bash tool with `git commit -F - << 'EOF'` for multi-line messages.
 - First verified live 2026-08-05 (tq-v1): SW active, manifest served as `application/manifest+json` (installable), icons OK, zero console errors.
 - **GOTCHA — Render header rule for the manifest**: Render serves `.webmanifest` as `binary/octet-stream`, which can block Add-to-Home-Screen. Fixed with a dashboard Headers rule: path `/manifest.webmanifest`, name `Content-Type`, value `application/manifest+json`. Saving headers triggers a redeploy — during it files 404 inconsistently for ~30s; that's transient, re-check before diagnosing.
@@ -90,7 +90,7 @@ A mobile-friendly, browser-based RTS inspired by Age of Empires II: The Conquero
 - Deploy checklist for future updates: edit tiny-conquerors.html → run `build-app.ps1` (MANDATORY — app/index.html is a generated copy and goes stale silently) → bump VERSION in app/sw.js ('tq-v2', ...) → `git add -A; git commit; git push` → Render auto-deploys on push to main.
 - IP boundary told to user (they asked for "exactly like AoE2", "just for friends"): imitate style with ORIGINAL art/sounds only; no ripped Microsoft assets, especially once hosted on Render.
 
-## MULTIPLAYER — ✅ WORKING END TO END (2026-08-06, sw tq-v26)
+## MULTIPLAYER — ✅ WORKING END TO END (2026-08-06, sw tq-v28)
 **It is live. Two people on https://tiny-conquerors.onrender.com can play each other right now**: Play with Friends → Host → read the 4-letter code out → the other person Joins. Verified in production, not just locally — two browser tabs on the live site, through the deployed relay, ran 1800 turns with commands crossing the wire and finished on identical `stateHash()` (`83bfc2fa`).
 
 ### The relay service
@@ -113,7 +113,15 @@ A mobile-friendly, browser-based RTS inspired by Age of Empires II: The Conquero
   - `netSeatToAI` seeds the AI from values identical on every peer (`G.t+90`, `.1*seat`); `nextAtk` is in `stateHash`, so it has to match exactly.
   - **When the LAST opponent goes, `netGoOffline()` drops to a plain offline game** rather than depending on a relay nobody is on the other end of. **Gotcha found in testing:** that transition beats the takeover turn, so `netRunTurn` never comes round to honour it and the abandoned seat sat there as a dead town. `netGoOffline` now applies every pending handover on its way out — there is nobody left to disagree with. It also flushes the player's own in-flight commands so the last 250ms of orders aren't binned.
   - Verified three-peer on a local relay (both survivors flipped on turn 3016 and were still on identical hashes 1400 turns later, AI-grown town matching on both) and again two-peer against the deployed relay from the live site.
-  - **Still missing: reconnect.** Rejoining would need the relay to keep a replay of commands from turn 0 and a way to hand the seat back from the AI.
+- **Reconnect: DONE** (sw tq-v28). Enter the same room code and you get your seat back — towns, army, wherever the computer left them.
+  - **By REPLAY, not by shipping state.** The relay journals every non-empty command list plus every seat handover; the returning peer rebuilds the match from turn 0. Measured 159-709x real time (4,806 turns in 1.0s; 40,005 in 13.2s), so even a long absence costs seconds.
+  - **Shipping a saved game does NOT work, and it fails deceptively.** A snapshot reloads to an *identical* hash and then diverges the moment it is stepped, because `saveGame` strips unit paths and `loadGame` re-seeds the RNG from the original seed. Verified: hash matches at load, then the branches part on the very next 100 turns. So the older handoff line "save/load round-trips to the same hash" is true but means less than it looks — **it does not mean a loaded game continues identically.**
+  - **The journal/live-stream seam is the fiddly part.** Peers send turns in strictly increasing order, so the journal is complete through the highest turn EVERY present seat has sent for — the relay computes that as `cut` and the replay covers `0..cut` INCLUSIVE. Above the cut a seat that had run ahead already sent turns the rejoiner will never be shown (and empty ones were never journalled), so the relay also hands over per-seat `sentUpTo` marks and those gaps are filled with empty. Get either wrong and the rejoin stalls forever waiting for a message nobody will send — both were real bugs found in testing.
+  - **`netSendFrom`** is the first turn this machine answers for; null while an AI holds the seat, so a spectating rejoiner sends nothing (sending would race the peers — some using its list, some the empty one the seat's absence implies). It is set when the `human` message ARRIVES, not when the turn is reached, or the others hit the changeover turn with nothing from us.
+  - Handovers resolve BEFORE a turn works out whose orders it needs, since they change the answer.
+  - Verified on the live site: dropped, AI held the seat, rejoined and replayed in 1.0s, seat back at the agreed turn, both peers on identical hashes afterwards.
+- **PRODUCTION-ONLY GOTCHA — a closed socket raises no event through Render's proxy.** Locally `ws.on('close')` fires instantly; on the deployed relay the server sees *nothing*, and the room still reported two players seconds after one had closed. The only thing that reveals the corpse is a missed heartbeat, so drop detection is entirely down to the ping interval. With the original 30s ping that was up to a minute of everyone stalled. Now 5s pings, 3 misses allowed → **~10-20s, measured 10.1s on production**. Anything else built on this relay must not assume `close` arrives, and a test that only runs against localhost will never show it.
+- **If the relay restarts, in-flight matches end.** Rooms are in memory; Render's free tier restarts on deploy and spins down when idle. Nothing recovers a match from that — the room code is simply gone.
 - **The artifact cannot do multiplayer** — its CSP blocks all outbound connections. `netAvailable()`/the socket error message point at the web app.
 
 ### Test recipe (reuse this)
@@ -130,7 +138,7 @@ Plan agreed 2026-08-05: lockstep — peers exchange COMMANDS, not state, and eac
    - Two fixes fell out of the move: the wall-line build now uses `bldCostOf` (it used the raw `BLDS.cost`, so **Mayan half-price walls never applied to a line**), and villagers sent to help now go to the first section actually placed rather than whatever unbuilt wall `G.blds.find` turned up first.
 3. ✅ **Relay server** (sw tq-v25, commit 6bcbd84) — `relay/`, deployed, see above.
 4. ✅ **Lockstep loop** — see above.
-5. ✅ **Lobby** (host/join by code, civ picks, host-set map/AI/skill/teams/pace) and ✅ **drop handling** (the computer takes an abandoned seat on a relay-appointed turn). Reconnect is the remaining piece.
+5. ✅ **Lobby** (host/join by code, civ picks, host-set map/AI/skill/teams/pace), ✅ **drop handling** (the computer takes an abandoned seat on a relay-appointed turn) and ✅ **reconnect** (rejoin with the same code; the match is replayed from the relay's journal). All five steps done.
 **Key facts for whoever continues:**
 - `SR()`/`SRi(n)` = the ONLY randomness allowed to affect G. `seedSim(s)` sets it; `gameSeed` holds the seed and is saved. Cosmetic randomness stays on `Math.random()` deliberately (75 of the 84 sites) — peers may differ there.
 - **`uid=1` reset in newGame is load-bearing** — commands reference units by id and `creepToward` reads `u.id%4`. Removing it desyncs peers.
@@ -139,6 +147,7 @@ Plan agreed 2026-08-05: lockstep — peers exchange COMMANDS, not state, and eac
 - Watch out: `Object.keys(G.res)` ordering, `Array.sort` stability, and `Date.now()` would all break lockstep. None are currently used in the sim.
 
 ## Recent fixes (last published state)
+- Label "reconnect" (2026-08-06, sw **tq-v28**, commits ce3fa5f + a052077). Rejoin a battle in progress, and a much faster drop detection that reconnect depends on. Design, the two seam bugs, and the proxy gotcha are all in the MULTIPLAYER section above.
 - Label "dropped-player-ai" (2026-08-06, sw **tq-v26**, commit 510d152). A dropped player's seat now passes to the computer instead of ending the battle; design and the gotcha it turned up are in the MULTIPLAYER section above.
 - Label "multiplayer-live" (2026-08-06, sw **tq-v25**, commit 6bcbd84). Multiplayer steps 3-5 — **the thing the app exists for now works**. Full design, the relay's Render settings, the failure-handling rules and the two-tab test recipe are all in the MULTIPLAYER section above; this entry is just the pointer.
   - The one preparatory change worth knowing about independently: **the `localP` sweep**. Roughly 200 hardcoded references to player 0 in the view layer became `localP`. Verified behaviour-preserving by building a page from the previous commit and running seven scenarios (three maps, 2/3/4/8 players, three team modes, three civs) head-to-head — every hash identical. That head-to-head-against-the-last-commit trick is worth reusing for any future sweep of this kind.
@@ -337,7 +346,6 @@ Plan agreed 2026-08-05: lockstep — peers exchange COMMANDS, not state, and eac
 - **Multiplayer: DONE** (label "multiplayer-live", 2026-08-06) — all five steps, live and verified in production.
 - **Recommended next by priority** (reassessed 2026-08-06, with multiplayer working):
   1. **Play it with a real friend on real phones and see what breaks.** Everything so far was verified by two tabs on one machine — same clock, same network, no packet loss, no phone falling asleep mid-turn. The unknowns are latency spikes, backgrounded browsers on iOS, and whether `NET_LAG=5` (250ms) is enough over a phone network. This is worth doing before building more on top.
-  2. **Reconnect.** Drops are handled (the AI takes the seat); rejoining is not. It needs the relay to keep a replay of commands from turn 0 so a returning peer can fast-forward, plus a way to hand the seat back from the AI on an agreed turn.
-  3. **Multiplayer teams in the lobby** — the row exists and is wired to `netTeams`, but nobody has played a 2v2 through it.
-  4. **AI use of the newer systems** — it still never builds walls, never loads a transport, never sets a fish trap, and never hunts deer away from its town.
-  5. Cosmetic leftovers offered but not taken: fire on damaged buildings, blood/scorch decals, unit-specific death poses, a richer backdrop beyond the map edge.
+  2. **Multiplayer teams** — the lobby row exists and is wired to `netTeams`, but nobody has played a 2v2 through it.
+  3. **AI use of the newer systems** — it still never builds walls, never loads a transport, never sets a fish trap, and never hunts deer away from its town.
+  4. Cosmetic leftovers offered but not taken: fire on damaged buildings, blood/scorch decals, unit-specific death poses, a richer backdrop beyond the map edge.
