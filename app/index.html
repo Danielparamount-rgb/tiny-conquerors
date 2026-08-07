@@ -51,6 +51,18 @@
   /* ---------- canvas ---------- */
   #viewwrap{flex:1 1 auto;position:relative;overflow:hidden;background:#12160b;}
   #view{position:absolute;inset:0;width:100%;height:100%;touch-action:none;}
+  /* 3D renderer (rewrite in progress) — sits exactly over #view; only one of the
+     two is visible at a time so they can be compared frame for frame. */
+  #view3{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:none;}
+  /* text label in a cluster of 34px icon buttons. NB: must out-specify the
+     `#zoomBtns button` rule below, which also sets font-size. */
+  #zoomBtns button#d3Btn{font-size:13px;font-weight:700;letter-spacing:.03em;}
+  /* Camera reset is 3D-only — and it must be a BUTTON, not just the R key,
+     because the phone has no keyboard and rotation is a touch gesture. */
+  #camBtn{display:none;}
+  body.r3d #camBtn{display:block;}
+  body.r3d #view{display:none;}
+  body.r3d #view3{display:block;}
   #minimap{position:absolute;top:8px;right:8px;width:132px;height:77px;
     background:transparent;
     filter:drop-shadow(0 3px 8px rgba(0,0,0,.55));}
@@ -266,6 +278,7 @@
 
   <div id="viewwrap">
     <canvas id="view"></canvas>
+    <canvas id="view3"></canvas>
     <canvas id="minimap" width="200" height="116"></canvas>
     <div id="zoomBtns">
       <button id="zin" aria-label="Zoom in">+</button>
@@ -274,6 +287,8 @@
       <button id="homeBtn" aria-label="Go to Town Hall" title="Jump to your Town Hall">⌂</button>
       <button id="idleBtn" aria-label="Idle villager" title="Jump to an idle villager (.)">🧑‍🌾</button>
       <button id="deselBtn" aria-label="Deselect" title="Deselect everything (Esc)">✕</button>
+      <button id="d3Btn" aria-label="Toggle 3D view" title="Switch between the 2D and 3D renderers">3D</button>
+      <button id="camBtn" aria-label="Reset camera angle" title="Reset the camera angle (R)">⟲</button>
       <button id="panelBtn" aria-label="Hide panel" title="Hide the command panel for a bigger map">▾</button>
     </div>
     <div id="clock" class="ovt"></div>
@@ -1120,8 +1135,20 @@ function newGame(){
   updateFog();
   refreshTerrain();
 }
+/* Render-side version counters. NONE of these are read by step(), stateHash()
+   or saveGame — they are not simulation state. They exist so the 3D renderer
+   can tell what changed without rescanning the world every frame.
+     terrainVer — the terrain canvas was repainted (R3 uses it as ground texture)
+     elevVer    — G.elev was regenerated, so the ground mesh must be rebuilt
+     fogVer     — the fog canvas was repainted
+   Declared HERE rather than beside refreshTerrain because genMap/setMapSize
+   below bump them, and `let` in the temporal dead zone would throw. */
+let terrainVer=0,elevVer=0,fogVer=0;
+// resVer: ANY change of G.res membership. resGen: new game / load / map resize
+// (a full rebuild rather than an incremental one). Render-side only.
+let resVer=0,resGen=0;
 function genMap(){
-  miniResDirty=true;
+  miniResDirty=true;elevVer++;resVer++;resGen++;
   if(mapSel===1)genMapForest();
   else if(mapSel===2)genMapHallowed();
   else genMapRiver();
@@ -1194,7 +1221,7 @@ function dropCarcass(u){
   }
   G.res[k]={type:'food',sub:'meat',x,y,amt:meat};
   G.map[y][x]=1;                        // a carcass occupies its tile like any other pile
-  miniResDirty=true;
+  miniResDirty=true;resVer++;
   // whoever was hunting it walks straight over to butcher the kill
   for(const o of G.units){
     if(o.hp<=0||o.type!=='villager')continue;
@@ -2017,7 +2044,7 @@ const CMDS={
     if(!spot)return;
     pay(c.p,cost);
     G.res[spot.k]={type:'fish',x:spot.x,y:spot.y,amt:250};
-    miniResDirty=true;
+    miniResDirty=true;resVer++;
     for(const sh of G.units)                 // an idle fishing boat steams straight to it
       if(sh.p===c.p&&UNITS[sh.type].fisher&&sh.hp>0&&sh.state==='idle'){cmdGather(sh,spot.k);break;}
     if(c.p===localP){snd('place');updateTop();feed('Fish Trap set');}},
@@ -3215,7 +3242,7 @@ function updateUnit(u,dt){
           col:r.type==='wood'?'#caa66b':r.type==='food'?'#c0392b':r.type==='fish'?'#bcd8e4':'#ffd75e'});
         if(r.amt<=0){
           if(r.type!=='fish')G.map[r.y][r.x]=0; // spent fisheries stay open water
-          delete G.res[u.resKey];miniResDirty=true;
+          delete G.res[u.resKey];miniResDirty=true;resVer++;
           if(r.type==='wood')stampCleared(r.x,r.y);}
         const cap=carryCap(u)+(meat&&cv.huntCarry?cv.huntCarry:0); // Goths shoulder more meat
         if(u.carry>=cap||!G.res[u.resKey]){
@@ -3901,7 +3928,7 @@ function loadGame(){
     if(UNITS[u.type].garCap&&!u.gar)u.gar=[];};
   for(const u of G.units){seedMot(u);if(u.gar)for(const gu of u.gar)seedMot(gu);}
   for(const b of G.blds)if(b.gar)for(const gu of b.gar)seedMot(gu);
-  miniResDirty=true;fogDirty=true;
+  miniResDirty=true;fogDirty=true;resVer++;resGen++;
   updateFog();refreshTerrain();clampCam();
   updateTop();refreshPanel();
   return true;
@@ -4228,6 +4255,7 @@ function snd(kind,wx,wy){
 
 /* ================= rendering ================= */
 const view=document.getElementById('view');
+const view3=document.getElementById('view3');
 let ctx=view.getContext('2d'); // let: portraitFor temporarily points it at a portrait canvas
 const mini=document.getElementById('minimap'),mctx=mini.getContext('2d');
 const TREZ=2; // supersample factor for sprites
@@ -4238,7 +4266,7 @@ const tctx=terrain.getContext('2d');
 function setMapSize(n){
   if(MAP===n)return;
   MAP=n;
-  TREZT=n>64?1:2;
+  TREZT=n>64?1:2;elevVer++;
   terrain.width=MAP*TILE*TREZT;terrain.height=MAP*TILE*TREZT;
   fogC.width=MAP;fogC.height=MAP;
   maskC.width=MAP;maskC.height=MAP;
@@ -4314,6 +4342,7 @@ function renderFogCanvas(){
   maskMCtx.clearRect(0,0,128,128);maskMCtx.drawImage(maskC,0,0,128,128);
   maskSCtx.clearRect(0,0,512,512);maskSCtx.drawImage(maskM,0,0,512,512);
   fogDirty=false;fogWasDirty=true; // mist must re-clip to the new mask at once
+  fogVer++;                        // tells R3 to re-upload fogS as a texture
 }
 const TEAMS=[ // high-chroma AoE2 player colors — the loudest signal on screen
   {main:'#2a56d4',dark:'#16308f',trim:'#7da2f2'},  // blue (you)
@@ -4522,8 +4551,10 @@ function stampCleared(x,y){
   tctx.strokeStyle='#8a6a3a';tctx.lineWidth=.7;
   tctx.beginPath();tctx.ellipse(sx,sy-2,1.4,.8,0,0,7);tctx.stroke();
 }
+// (render-side version counters are declared above genMap — see there)
 function refreshTerrain(){
   if(!G)return;
+  terrainVer++;
   tctx.setTransform(TREZT,0,0,TREZT,0,0);
   // AoE2-style ground: tightly-spaced warm olive tones so no tile checkerboard
   // shows — the texture comes from the fine grain pass below, not tile contrast
@@ -5224,6 +5255,15 @@ function getResSpr(type,h){
   RES_SPR[key]=sp;return sp;
 }
 function clampCam(){
+  /* The 2D bounds below are an axis-aligned box in ISO screen space, which is
+     only the right shape when the camera points the way it always used to.
+     Under rotation the correct constraint is on the orbit TARGET, in tiles. */
+  if(use3D){
+    const t=R3.target(),m=4;
+    const nx=Math.max(-m,Math.min(MAP+m,t.x)),ny=Math.max(-m,Math.min(MAP+m,t.y));
+    if(nx!==t.x||ny!==t.y)camTo(nx,ny);   // camTo, not centerOn — no recursion
+    return;
+  }
   const z=G.cam.z,m=50;
   const minX=-MAP*IW-m,maxX=MAP*IW+m-vw/z;
   const minY=-m,maxY=MAP*2*IH+m-vh/z;
@@ -8907,21 +8947,50 @@ document.getElementById('boxBtn').onclick=()=>{
   setBoxArm(!boxArm);
   if(boxArm)toast('Drag a box around your units to select them');
 };
-view.addEventListener('pointerdown',e=>{
-  view.setPointerCapture(e.pointerId);
+/* Pan by a SCREEN delta. In 2D that is the old two lines; in 3D the same
+   gesture has to move the orbit target, and how far a pixel moves the world
+   depends on the current yaw/pitch. Verified to reduce to the 2D arithmetic
+   exactly at the home orientation. */
+function panScreen(dx,dy){
+  if(use3D){
+    const t=R3.target(),d=R3.sd2t(dx,dy);
+    camTo(t.x-d.x,t.y-d.y);clampCam();return;
+  }
+  G.cam.x-=dx/G.cam.z;G.cam.y-=dy/G.cam.z;clampCam();
+}
+/* Same two statements as centerOn but WITHOUT clampCam, so clampCam can move
+   the camera without recursing into itself. */
+function camTo(x,y){const p=isoPt(x,y);G.cam.x=p.x-vw/G.cam.z/2;G.cam.y=p.y-vh/G.cam.z/2;}
+function onDown(e){
+  e.currentTarget.setPointerCapture(e.pointerId);
   if(e.pointerType==='mouse')mouseSeen=true;
   const useBox=!G?.placing&&(boxArm||(e.pointerType==='mouse'&&e.button===0));
   ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY,moved:false,
-    box:useBox&&ptrs.size===0,btn:e.button,mouse:e.pointerType==='mouse'});
+    box:useBox&&ptrs.size===0,btn:e.button,mouse:e.pointerType==='mouse',
+    yaw0:R3.yaw,pitch0:R3.pitch});   // additive; never read when !use3D
   if(ptrs.size===2){
     for(const p of ptrs.values())p.box=false;
     selBox=null;
     const[a,b]=[...ptrs.values()];
     pinchBase={d:Math.hypot(a.x-b.x,a.y-b.y),z:G.cam.z,
-      cx:(a.x+b.x)/2,cy:(a.y+b.y)/2};
+      cx:(a.x+b.x)/2,cy:(a.y+b.y)/2,
+      ang:Math.atan2(b.y-a.y,b.x-a.x),my:(a.y+b.y)/2,
+      yaw:R3.yaw,pitch:R3.pitch,rot:false,tilt:false};
   }
-});
-view.addEventListener('pointermove',e=>{
+}
+/* Two-finger twist -> yaw, two-finger vertical -> pitch. Deadzones so a plain
+   pinch-zoom never accidentally spins the world. 3D only. */
+function twoFingerOrbit(a,b){
+  const ang=Math.atan2(b.y-a.y,b.x-a.x);
+  let dA=ang-pinchBase.ang;
+  while(dA>Math.PI)dA-=2*Math.PI; while(dA<-Math.PI)dA+=2*Math.PI;
+  if(!pinchBase.rot&&Math.abs(dA)>0.14)pinchBase.rot=true;
+  if(pinchBase.rot)R3.yaw=pinchBase.yaw+dA;
+  const dMy=(a.y+b.y)/2-pinchBase.my;
+  if(!pinchBase.tilt&&Math.abs(dMy)>18)pinchBase.tilt=true;
+  if(pinchBase.tilt)R3.setPitch(pinchBase.pitch+dMy*.005);
+}
+function onMove(e){
   const p=ptrs.get(e.pointerId);if(!p)return;
   const dx=e.clientX-p.x,dy=e.clientY-p.y;
   p.x=e.clientX;p.y=e.clientY;
@@ -8929,22 +8998,33 @@ view.addEventListener('pointermove',e=>{
   if(!G||G.paused)return;
   if(ptrs.size===2&&pinchBase){
     const[a,b]=[...ptrs.values()];
+    if(use3D)twoFingerOrbit(a,b);
     const d=Math.hypot(a.x-b.x,a.y-b.y);
     const nz=Math.max(.45,Math.min(2.2,pinchBase.z*d/pinchBase.d));
     zoomAt(nz,pinchBase.cx,pinchBase.cy);
   }else if(ptrs.size===1&&p.moved){
-    if(p.box){selBox={x0:p.sx,y0:p.sy,x1:e.clientX,y1:e.clientY};}
-    else{G.cam.x-=dx/G.cam.z;G.cam.y-=dy/G.cam.z;clampCam();}
+    // right/middle DRAG orbits in 3D; a right CLICK still commands, because
+    // endPtr only issues a tap when p.moved is false. Unreachable in 2D.
+    if(use3D&&(p.btn===2||p.btn===1)){
+      R3.yaw=p.yaw0-(e.clientX-p.sx)*.006;
+      R3.setPitch(p.pitch0+(e.clientY-p.sy)*.005);
+    }
+    else if(p.box){selBox={x0:p.sx,y0:p.sy,x1:e.clientX,y1:e.clientY};}
+    else panScreen(dx,dy);
   }
-});
+}
 function applyBox(x0,y0,x1,y1){
-  const r=view.getBoundingClientRect(),z=G.cam.z;
+  const r=(use3D?view3:view).getBoundingClientRect(),z=G.cam.z;
   const bx0=Math.min(x0,x1),bx1=Math.max(x0,x1);
   const by0=Math.min(y0,y1),by1=Math.max(y0,y1);
   const ids=G.units.filter(u=>{
     if(u.p!==localP)return false;
-    const p=isoPt(u.x,u.y);
-    const sx=(p.x-G.cam.x)*z+r.left,sy=(p.y-8-G.cam.y)*z+r.top;
+    let sx,sy;
+    /* Orthographic, so a screen rectangle IS the correct volume test — no
+       frustum, no clipping. h=8 with NO elevation deliberately mirrors 2D's
+       isoPt-not-isoE quirk below, so the two agree exactly at home. */
+    if(use3D){const q=R3.project(u.x,u.y,8);sx=q.x+r.left;sy=q.y+r.top;}
+    else{const p=isoPt(u.x,u.y);sx=(p.x-G.cam.x)*z+r.left;sy=(p.y-8-G.cam.y)*z+r.top;}
     return sx>=bx0&&sx<=bx1&&sy>=by0&&sy<=by1;
   }).map(u=>u.id);
   G.sel=ids;refreshPanel();
@@ -8965,15 +9045,35 @@ function endPtr(e){
   if(boxArm)setBoxArm(false);
   handleTap(p.sx,p.sy,p.mouse,p.btn===2);
 }
-view.addEventListener('pointerup',endPtr);
-view.addEventListener('contextmenu',e=>e.preventDefault());
-view.addEventListener('pointercancel',e=>{ptrs.delete(e.pointerId);if(ptrs.size<2)pinchBase=null;selBox=null;});
-view.addEventListener('wheel',e=>{
+function onCancel(e){ptrs.delete(e.pointerId);if(ptrs.size<2)pinchBase=null;selBox=null;}
+function onWheel(e){
   if(!G)return;e.preventDefault();
   const nz=e.deltaY<0?Math.min(2.2,G.cam.z*1.12):Math.max(.45,G.cam.z/1.12);
   zoomAt(nz,e.clientX,e.clientY);
-},{passive:false});
+}
+/* Bound to BOTH canvases. #view3 is display:none in 2D mode and receives no
+   events at all, so this is provably a no-op for the 2D path — which is the
+   A/B reference for the whole rewrite and must not shift. Deliberately NOT
+   bound to #viewwrap: placeMini() re-parents the minimap and zoom buttons into
+   it below 760px, and wheel/contextmenu would then fire over the minimap. */
+function bindView(el){
+  el.addEventListener('pointerdown',onDown);
+  el.addEventListener('pointermove',onMove);
+  el.addEventListener('pointerup',endPtr);
+  el.addEventListener('contextmenu',e=>e.preventDefault());
+  el.addEventListener('pointercancel',onCancel);
+  el.addEventListener('wheel',onWheel,{passive:false});
+}
+bindView(view);bindView(view3);
 function zoomAt(nz,cx,cy){
+  if(use3D){
+    // keep the world point under the cursor fixed while zooming. sd2t scales
+    // as 1/z, so d MUST be computed before G.cam.z changes.
+    const rect=view3.getBoundingClientRect(),t=R3.target();
+    const d=R3.sd2t(cx-rect.left-vw/2,cy-rect.top-vh/2);
+    const k=1-G.cam.z/nz;
+    G.cam.z=nz;camTo(t.x+d.x*k,t.y+d.y*k);clampCam();return;
+  }
   const rect=view.getBoundingClientRect();
   const wx=G.cam.x+(cx-rect.left)/G.cam.z,wy=G.cam.y+(cy-rect.top)/G.cam.z;
   G.cam.z=nz;
@@ -9056,14 +9156,32 @@ const miniEnd=e=>{miniDrag=false;
 mini.addEventListener('pointerup',miniEnd);
 mini.addEventListener('pointercancel',miniEnd);
 function handleTap(cx,cy,mouse,right){
-  const rect=view.getBoundingClientRect();
-  const wx=G.cam.x+(cx-rect.left)/G.cam.z,wy=G.cam.y+(cy-rect.top)/G.cam.z;
-  const tw=invIso(wx,wy);
-  const tx=Math.floor(tw.x),ty=Math.floor(tw.y);
-  if(tx<0||ty<0||tx>=MAP||ty>=MAP)return;
+  const d3=use3D;                    // capture once — a mid-tap toggle must not split the branch
+  const rect=(d3?view3:view).getBoundingClientRect();
+  const sx=cx-rect.left,sy=cy-rect.top;
+  let wx,wy,tw,tx,ty,onMap;
+  if(d3){
+    const g=R3.pickGround(sx,sy);
+    tw=g||{x:-1,y:-1};
+    tx=Math.floor(tw.x);ty=Math.floor(tw.y);
+    onMap=!!g&&tx>=0&&ty>=0&&tx<MAP&&ty<MAP;
+  }else{
+    wx=G.cam.x+sx/G.cam.z;wy=G.cam.y+sy/G.cam.z;
+    tw=invIso(wx,wy);
+    tx=Math.floor(tw.x);ty=Math.floor(tw.y);
+    if(tx<0||ty<0||tx>=MAP||ty>=MAP)return;
+    onMap=true;
+  }
+  /* NB the off-map early return above stays 2D-only ON PURPOSE. At the pitch
+     floor a 40px castle roof unprojects ~3.7 tiles past its own footprint, so
+     bailing out here would make every border building's roof, every edge
+     canopy and every edge unit unclickable at any yaw that points the map edge
+     away from the camera. The entity tests below are screen-space/volume
+     tests — they never needed a valid ground tile. */
   // placement mode
   if(G.placing){
     if(right){G.placing=null;G.pend=null;G.wallA=null;G.pendLine=null;refreshPanel();return;}
+    if(!onMap)return;
     const sz=BLDS[G.placing].size;
     const px2=Math.min(MAP-sz,Math.max(0,tx)),py2=Math.min(MAP-sz,Math.max(0,ty));
     if(G.placing==='wall'||G.placing==='swall'){
@@ -9074,41 +9192,103 @@ function handleTap(cx,cy,mouse,right){
     G.pend={type:G.placing,tx:px2,ty:py2};refreshPanel();return;}
   // hit tests are in iso SCREEN space so clicking the visible sprite works —
   // canopies/roofs rise above their ground tile; a tile-only test made you click "under" things
-  let hitU=null,hd=(mouse?13:22)/Math.min(1,G.cam.z); // touch keeps a fingertip-sized target at any zoom
-  for(const u of G.units){
-    if(!allied(u.p,localP)&&!tileVis(u.x,u.y))continue;
-    const p=isoE(u.x,u.y);
-    const big=!!UNITS[u.type].cav||u.type==='ram'||!!UNITS[u.type].ship||!!UNITS[u.type].siege;
-    const d=Math.hypot(p.x-wx,(p.y-(big?10:8)-wy)*.8);
-    if(d<hd){hd=d;hitU=u;}}
+  let hitU=null;
+  if(d3){
+    /* SCREEN space, because a unit sprite is a screen-facing billboard — a
+       fingertip is 13/22 CSS px wide however the camera is pointed. This is
+       the SAME rule as 2D, algebraically restated: the 2D test is
+       d_world < k/min(1,z); multiply both sides by z and it is
+       d_screen < k*max(1,z). Not a retune. The .8 anisotropy stays in screen
+       space: it compensates for a taller-than-wide sprite, and under an
+       orthographic camera a billboard's screen aspect is pitch-independent. */
+    let hd=(mouse?13:22)*Math.max(1,G.cam.z);
+    for(const u of G.units){
+      if(!allied(u.p,localP)&&!tileVis(u.x,u.y))continue;
+      const big=!!UNITS[u.type].cav||u.type==='ram'||!!UNITS[u.type].ship||!!UNITS[u.type].siege;
+      // elevF, matching what the 2D renderer draws with via isoE — pick must
+      // follow DRAW, not the mesh, until stage 3 stands units on the mesh.
+      const p=R3.project(u.x,u.y,elevF(u.x,u.y)*10+(big?10:8));
+      const d=Math.hypot(p.x-sx,(p.y-sy)*.8);
+      if(d<hd){hd=d;hitU=u;}}          // nearest wins — hd reassigned, as in 2D
+  }else{
+    let hd=(mouse?13:22)/Math.min(1,G.cam.z); // touch keeps a fingertip-sized target at any zoom
+    for(const u of G.units){
+      if(!allied(u.p,localP)&&!tileVis(u.x,u.y))continue;
+      const p=isoE(u.x,u.y);
+      const big=!!UNITS[u.type].cav||u.type==='ram'||!!UNITS[u.type].ship||!!UNITS[u.type].siege;
+      const d=Math.hypot(p.x-wx,(p.y-(big?10:8)-wy)*.8);
+      if(d<hd){hd=d;hitU=u;}}
+  }
   let hitB=null;
   for(const b of G.blds){
     if(!allied(b.p,localP)&&!b.seen)continue;
     if(tx>=b.tx&&ty>=b.ty&&tx<b.tx+b.size&&ty<b.ty+b.size){hitB=b;break;}}
   if(!hitB&&!hitU){ // roof click: box from the visual top down to the footprint
-    for(const b of G.blds){
-      if(!allied(b.p,localP)&&!b.seen)continue;
-      const pc=isoPt(b.tx+b.size/2,b.ty+b.size/2);
-      pc.y-=elevTile(b.tx+b.size/2,b.ty+b.size/2)*10;
-      const ht=(IHT[b.type]||18)*(b.built?1:.35);
-      if(Math.abs(wx-pc.x)<b.size*IW*.7&&wy>pc.y-ht-IH&&wy<pc.y+b.size*IH*.8){hitB=b;break;}}
+    if(d3){
+      /* A real volume, so a castle turret is clickable from any angle, and the
+         ray parameter gives the true FRONT-MOST building instead of "first one
+         in G.blds order". Half-extent 0.7*size TILES reproduces the 2D box's
+         size*IW*.7 exactly; the height and the elevTile lift are the same
+         numbers drawBld uses. */
+      const R=R3.ray(sx,sy);let bt=Infinity;
+      for(const b of G.blds){
+        if(!allied(b.p,localP)&&!b.seen)continue;
+        const g=elevTile(b.tx+b.size/2,b.ty+b.size/2)*10;
+        const ht=(IHT[b.type]||18)*(b.built?1:.35);
+        /* hx=0.35*size, NOT 0.7*size. The 2D test is a SCREEN box of half-width
+           size*IW*0.7; a square world AABB projects to screen half-width
+           (|dx|+|dz|)*IW = 2*hx*IW, so hx must be half of 0.7 to match. Using
+           0.7 made the volume twice as wide as 2D and the A/B harness caught it
+           immediately: clicking open ground beside a town hall issued `gar`
+           instead of `move`. */
+        const cxT=b.tx+b.size/2,cyT=b.ty+b.size/2,hx=b.size*.35;
+        const t=rayBox(R,cxT-hx,g*R3.HS,cyT-hx,cxT+hx,(g+ht)*R3.HS,cyT+hx);
+        if(t!==null&&t<bt){bt=t;hitB=b;}}
+    }else{
+      for(const b of G.blds){
+        if(!allied(b.p,localP)&&!b.seen)continue;
+        const pc=isoPt(b.tx+b.size/2,b.ty+b.size/2);
+        pc.y-=elevTile(b.tx+b.size/2,b.ty+b.size/2)*10;
+        const ht=(IHT[b.type]||18)*(b.built?1:.35);
+        if(Math.abs(wx-pc.x)<b.size*IW*.7&&wy>pc.y-ht-IH&&wy<pc.y+b.size*IH*.8){hitB=b;break;}}
+    }
   }
   const selUnits=G.sel.map(id=>G.units.find(u=>u.id===id)).filter(u=>u&&u.p===localP);
   const haveSel=selUnits.length>0;
   let resKey=tx+','+ty;
-  let res=G.res[resKey];
+  let res=onMap?G.res[resKey]:undefined;
   if(!res&&!hitU&&!hitB){ // canopy/sprite click: front-most resource whose art contains the point
-    let bs=-1e9;
-    for(const k in G.res){
-      const r=G.res[k];
-      if(!tileKnown(r.x,r.y))continue;
-      const rp=isoE(r.x+.5,r.y+.5);
-      if(Math.abs(rp.x-wx)>13)continue;
-      const top=r.type==='wood'?36:22;
-      if(wy<rp.y-top||wy>rp.y+14)continue;
-      if(rp.y>bs){bs=rp.y;res=r;resKey=k;}
+    if(d3){
+      /* Same tolerance band as 2D, expressed in screen px: the 2D test compares
+         world px and BOTH sides scale by z, so 13 -> 13*z etc. is algebraically
+         identical. Front-most now uses the real depth key, because "bigger
+         screen y is nearer" only holds at the home yaw. */
+      const z=G.cam.z;let bs=-1e9;
+      for(const k in G.res){
+        const r=G.res[k];
+        if(!tileKnown(r.x,r.y))continue;
+        const rp=R3.project(r.x+.5,r.y+.5,elevF(r.x+.5,r.y+.5)*10);
+        if(Math.abs(rp.x-sx)>13*z)continue;
+        const top=r.type==='wood'?36:22;
+        if(sy<rp.y-top*z||sy>rp.y+14*z)continue;
+        if(rp.d>bs){bs=rp.d;res=r;resKey=k;}
+      }
+    }else{
+      let bs=-1e9;
+      for(const k in G.res){
+        const r=G.res[k];
+        if(!tileKnown(r.x,r.y))continue;
+        const rp=isoE(r.x+.5,r.y+.5);
+        if(Math.abs(rp.x-wx)>13)continue;
+        const top=r.type==='wood'?36:22;
+        if(wy<rp.y-top||wy>rp.y+14)continue;
+        if(rp.y>bs){bs=rp.y;res=r;resKey=k;}
+      }
     }
   }
+  // Nothing at all under the finger (sky, or off the board): don't let it fall
+  // through to a move order or clear the selection.
+  if(d3&&!onMap&&!hitU&&!hitB&&!res)return;
   // mouse: left-click only selects; commands go on right-click (attack-move tap is the exception)
   // Every branch below states an INTENT — issue() records it and the handler
   // carries it out; nothing here touches a unit directly any more.
@@ -9122,7 +9302,7 @@ function handleTap(cx,cy,mouse,right){
       flashSel();return;}
     if(hitB&&!allied(hitB.p,localP)){issue('attack',{u:selIds,id:hitB.id,bld:true});flashSel();return;}
     if(res){issue('gather',{u:selIds,key:resKey});flashSel();return;}
-    const relic=G.relics.find(r=>!r.held&&!r.mon&&Math.hypot(r.x+.5-tw.x,r.y+.5-tw.y)<1);
+    const relic=onMap?G.relics.find(r=>!r.held&&!r.mon&&Math.hypot(r.x+.5-tw.x,r.y+.5-tw.y)<1):null;
     const monks=selUnits.filter(s=>UNITS[s.type].monk&&!UNITS[s.type].noRelic); // Missionaries can't carry relics
     if(relic&&monks.length){
       issue('relic',{u:monks.map(m=>m.id),rid:relic.id});
@@ -9153,7 +9333,10 @@ function handleTap(cx,cy,mouse,right){
       if(n){toast(n+(isRam?' climbing into the ram':' boarding the ship')+' — select it to release them');return;}
       toast(isRam?'The ram is full':'The ship is full');return;
     }
-    if(!hitU&&!hitB){
+    // onMap guard: this is the branch that would corrupt GAMEPLAY rather than
+    // just the UI — without it a tap past the board edge issues a move order to
+    // a garbage tile.
+    if(!hitU&&!hitB&&onMap){
       if(G.amode){
         issue('amove',{u:selIds,x:tx,y:ty});
         G.amode=false;toast('Attack-moving — they will fight through anything they meet');
@@ -9172,9 +9355,11 @@ function handleTap(cx,cy,mouse,right){
       const z=G.cam.z;
       const ids=G.units.filter(u=>{
         if(u.p!==localP||u.type!==hitU.type)return false;
-        const p=isoPt(u.x,u.y);
-        const sx=(p.x-G.cam.x)*z,sy=(p.y-G.cam.y)*z;
-        return sx>=0&&sx<=vw&&sy>=0&&sy<=vh;
+        let px,py;
+        // mirrors the 2D line exactly: no rect offset, no body lift, no elevation
+        if(d3){const q=R3.project(u.x,u.y,0);px=q.x;py=q.y;}
+        else{const p=isoPt(u.x,u.y);px=(p.x-G.cam.x)*z;py=(p.y-G.cam.y)*z;}
+        return px>=0&&px<=vw&&py>=0&&py<=vh;
       }).map(u=>u.id);
       G.sel=ids.length?ids:[hitU.id];
       toast(G.sel.length+' '+(hitU.type==='villager'?'villagers':unitName(hitU.type,localP)+'s')+' selected');
@@ -9656,11 +9841,12 @@ window.addEventListener('keydown',e=>{
     else{G.sel=[];G.inspect=null;refreshPanel();}
     return;}
   if(menuOpen)return;
-  const pan=48/G.cam.z;
-  if(e.key==='ArrowLeft'){G.cam.x-=pan;clampCam();e.preventDefault();return;}
-  if(e.key==='ArrowRight'){G.cam.x+=pan;clampCam();e.preventDefault();return;}
-  if(e.key==='ArrowUp'){G.cam.y-=pan;clampCam();e.preventDefault();return;}
-  if(e.key==='ArrowDown'){G.cam.y+=pan;clampCam();e.preventDefault();return;}
+  // 48/z in world units IS a constant 48 screen px (screen = world*z), so these
+  // are exact restatements that also work at any 3D camera angle.
+  if(e.key==='ArrowLeft'){panScreen(48,0);e.preventDefault();return;}
+  if(e.key==='ArrowRight'){panScreen(-48,0);e.preventDefault();return;}
+  if(e.key==='ArrowUp'){panScreen(0,48);e.preventDefault();return;}
+  if(e.key==='ArrowDown'){panScreen(0,-48);e.preventDefault();return;}
   if(k==='+'||k==='='){zoomAt(Math.min(2.2,G.cam.z*1.2),vw/2,vh/2);return;}
   if(k==='-'){zoomAt(Math.max(.45,G.cam.z/1.2),vw/2,vh/2);return;}
   if(e.key===' '){
@@ -9700,6 +9886,10 @@ window.addEventListener('keydown',e=>{
   if(selV.length){
     for(const bt in BUILD_KEYS)if(BUILD_KEYS[bt]===k){startBuildKey(bt);return;}
   }
+  /* Camera reset, LAST so the contextual train/build keys win: bare 'r' is Ram
+     at a siege workshop and Turtle Ship at a dock. Gated on use3D, so 2D is
+     untouched. */
+  if(use3D&&k==='r'){R3.yaw=R3.homeYaw;R3.setPitch(R3.homePitch);toast('Camera reset');return;}
 });
 /* ================= menus ================= */
 document.querySelectorAll('.diff button[data-d]').forEach(b=>{
@@ -9938,6 +10128,1195 @@ function begin(){
   }
   last=performance.now();
 }
+/* ═══════════════════ 3D RENDERER (rewrite, stage 1) ═══════════════════
+   Raw WebGL — no library, because the artifact CSP blocks external scripts and
+   the game has to stay one self-contained file.
+
+   The camera is the important idea here. Rather than inventing a 3D camera and
+   trying to make it look like the old view, the vertex shader reproduces the 2D
+   projection EXACTLY:
+
+       screenX = ((wx - wz) * IW - cam.x) * zoom
+       screenY = ((wx + wz) * IH - height - cam.y) * zoom
+
+   which is what isoPt() + the ctx transform in draw() already do. So both
+   renderers frame the world identically and can be compared frame for frame,
+   and every existing screen-space thing (tap hit-testing, the minimap, camera
+   clamping) keeps working untouched while the rewrite proceeds.
+
+   Stage 1 renders the ground only: a real height-mapped mesh, textured with the
+   existing terrain canvas — so all the shoreline/water work carries straight
+   over, and hills become actual geometry instead of the painted rim lines the
+   2D view fakes them with. Units and buildings are later stages. */
+/* ---- minimal mat4 (column-major, GL order) ---------------------------- */
+function m4mul(a,b){
+  const o=new Float32Array(16);
+  for(let c=0;c<4;c++)for(let r=0;r<4;r++){
+    let s=0; for(let k=0;k<4;k++) s+=a[k*4+r]*b[c*4+k];
+    o[c*4+r]=s;
+  }
+  return o;
+}
+function m4ortho(l,r,b,t,n,f){
+  const o=new Float32Array(16);
+  o[0]=2/(r-l); o[5]=2/(t-b); o[10]=-2/(f-n); o[15]=1;
+  o[12]=-(r+l)/(r-l); o[13]=-(t+b)/(t-b); o[14]=-(f+n)/(f-n);
+  return o;
+}
+function m4inv(m){
+  const o=new Float32Array(16);
+  const a00=m[0],a01=m[1],a02=m[2],a03=m[3],  a10=m[4],a11=m[5],a12=m[6],a13=m[7],
+        a20=m[8],a21=m[9],a22=m[10],a23=m[11],a30=m[12],a31=m[13],a32=m[14],a33=m[15];
+  const b00=a00*a11-a01*a10, b01=a00*a12-a02*a10, b02=a00*a13-a03*a10,
+        b03=a01*a12-a02*a11, b04=a01*a13-a03*a11, b05=a02*a13-a03*a12,
+        b06=a20*a31-a21*a30, b07=a20*a32-a22*a30, b08=a20*a33-a23*a30,
+        b09=a21*a32-a22*a31, b10=a21*a33-a23*a31, b11=a22*a33-a23*a32;
+  let d=b00*b11-b01*b10+b02*b09+b03*b08-b04*b07+b05*b06;
+  if(!d)return null;
+  d=1/d;
+  o[0]=(a11*b11-a12*b10+a13*b09)*d;  o[1]=(a02*b10-a01*b11-a03*b09)*d;
+  o[2]=(a31*b05-a32*b04+a33*b03)*d;  o[3]=(a22*b04-a21*b05-a23*b03)*d;
+  o[4]=(a12*b08-a10*b11-a13*b07)*d;  o[5]=(a00*b11-a02*b08+a03*b07)*d;
+  o[6]=(a32*b02-a30*b05-a33*b01)*d;  o[7]=(a20*b05-a22*b02+a23*b01)*d;
+  o[8]=(a10*b10-a11*b08+a13*b06)*d;  o[9]=(a01*b08-a00*b10-a03*b06)*d;
+  o[10]=(a30*b04-a31*b02+a33*b00)*d; o[11]=(a21*b02-a20*b04-a23*b00)*d;
+  o[12]=(a11*b07-a10*b09-a12*b06)*d; o[13]=(a00*b09-a01*b07+a02*b06)*d;
+  o[14]=(a31*b01-a30*b03-a32*b00)*d; o[15]=(a20*b03-a21*b01+a22*b00)*d;
+  return o;
+}
+function m4xform(m,x,y,z){        // full transform incl. w divide
+  const w=m[3]*x+m[7]*y+m[11]*z+m[15]||1;
+  return {x:(m[0]*x+m[4]*y+m[8]*z+m[12])/w,
+          y:(m[1]*x+m[5]*y+m[9]*z+m[13])/w,
+          z:(m[2]*x+m[6]*y+m[10]*z+m[14])/w};
+}
+/* Ray vs axis-aligned box. Returns the ENTRY t (which may legitimately be
+   negative — the ray origin plane passes through the camera target, so about
+   half the visible world is behind it) or null. */
+function rayBox(r,x0,y0,z0,x1,y1,z1){
+  let tn=-1e30,tf=1e30,a,b,s;
+  if(Math.abs(r.dx)<1e-9){if(r.ox<x0||r.ox>x1)return null;}
+  else{a=(x0-r.ox)/r.dx;b=(x1-r.ox)/r.dx;if(a>b){s=a;a=b;b=s;}if(a>tn)tn=a;if(b<tf)tf=b;}
+  if(Math.abs(r.dy)<1e-9){if(r.oy<y0||r.oy>y1)return null;}
+  else{a=(y0-r.oy)/r.dy;b=(y1-r.oy)/r.dy;if(a>b){s=a;a=b;b=s;}if(a>tn)tn=a;if(b<tf)tf=b;}
+  if(Math.abs(r.dz)<1e-9){if(r.oz<z0||r.oz>z1)return null;}
+  else{a=(z0-r.oz)/r.dz;b=(z1-r.oz)/r.dz;if(a>b){s=a;a=b;b=s;}if(a>tn)tn=a;if(b<tf)tf=b;}
+  return tn>tf?null:tn;
+}
+function m4look(ex,ey,ez,cx,cy,cz){
+  let fx=cx-ex,fy=cy-ey,fz=cz-ez;
+  let rl=1/Math.hypot(fx,fy,fz); fx*=rl; fy*=rl; fz*=rl;
+  // right = normalize(cross(f, worldUp)), worldUp=(0,1,0)  ->  (-f.z, 0, f.x)
+  // NB: this was written (f.z,0,-f.x) at first, i.e. LEFT. The ground axes
+  // looked right only because homeYaw had been set 180° round to compensate,
+  // which cannot compensate world Y — so hills projected downward.
+  let sx=-fz,sy=0,sz=fx;
+  rl=1/Math.hypot(sx,sy,sz); sx*=rl; sy*=rl; sz*=rl;
+  // up = cross(right, f)
+  const ux=sy*fz-sz*fy, uy=sz*fx-sx*fz, uz=sx*fy-sy*fx;
+  const o=new Float32Array(16);
+  o[0]=sx; o[4]=sy; o[8]=sz;   o[12]=-(sx*ex+sy*ey+sz*ez);
+  o[1]=ux; o[5]=uy; o[9]=uz;   o[13]=-(ux*ex+uy*ey+uz*ez);
+  o[2]=-fx;o[6]=-fy;o[10]=-fz; o[14]=  fx*ex+fy*ey+fz*ez;
+  o[15]=1;
+  return o;
+}
+const R3={
+  gl:null, prog:null, tex:null, texVer:-1, mesh:null, meshKey:'', failed:false,
+  /* Real 3D camera. Daniel chose a rotating/tilting camera, so the Stage-1
+     trick of hard-coding the 2D isometric projection into the shader is gone —
+     this is a genuine orthographic view matrix and the world can be spun.
+     HOME is the classic isometric orientation: yaw 45°, pitch atan(1/√2)
+     = 35.264°, which is what produces the 2:1 diamond grid the game has always
+     used. Pan and zoom still come from G.cam, so the existing controls, the
+     minimap jump and camera clamping keep driving the 3D view unchanged;
+     rotation is the only genuinely new axis. */
+  /* HOME orientation, derived from the 2D grid rather than guessed — all three
+     of these were wrong on the first attempt and the errors were only visible
+     by measuring a projected tile step against isoPt:
+     - pitch 30° = asin(IH/IW) = asin(0.5). NOT atan(1/√2)=35.264°. That is the
+       TRUE isometric angle (equal foreshortening on all three axes); this game
+       draws a 2:1 DIMETRIC grid (IW 26 / IH 13), which is 30°. Using 35.264°
+       stretched everything vertically by 2/√3 = 1.1547.
+     - HS converts a 2D "height in pixels" into world tiles such that at the home
+       pitch a 10px hill projects to exactly 10px, matching the 2D renderer.
+       It is a CONSTANT, not a function of the live pitch: height is a real world
+       quantity, so its on-screen size is supposed to change as you tilt. */
+  yaw:Math.PI/4, pitch:Math.PI/6, PPT:26*Math.SQRT2,
+  homeYaw:Math.PI/4, homePitch:Math.PI/6,
+  get HS(){ return 1/(Math.cos(Math.PI/6)*this.PPT); },
+  /* Pitch limits, both of which guard real failures rather than taste.
+     FLOOR 0.35 rad (20°): below atan(HILL*HS)=0.3043 a descending ray can be
+       shallower than the terrain slope, so (ray.y - groundH) stops being
+       monotonic and the bisection in pickGround can bracket the WRONG
+       crossing — clicks land on the far side of a hill. Measured monotone at
+       0.35/0.30/0.22 and NOT monotone at 0.12. 0.35 also keeps 1/sin(pitch)
+       at 2.9, so a 1px finger error stays ~0.1 tiles.
+     CEILING 1.45 rad (83°): at exactly π/2 the view direction is parallel to
+       world up, cross(f,(0,1,0)) is the ZERO vector, and m4look normalises it
+       to NaN — the entire view matrix becomes NaN and the screen goes blank.
+     Clamped in setPitch so no path (drag, keybind, a future saved camera)
+     can reach a degenerate angle. */
+  PITCH_MIN:0.35, PITCH_MAX:1.45,
+  setPitch(v){ this.pitch=Math.max(this.PITCH_MIN,Math.min(this.PITCH_MAX,v)); },
+  // world target (tile coords) that the 2D camera is currently centred on
+  target(){
+    const sx=G.cam.x+vw/G.cam.z/2, sy=G.cam.y+vh/G.cam.z/2;
+    return {x:(sx/IW+sy/IH)/2, y:(sy/IH-sx/IW)/2};
+  },
+  mvp(){
+    const t=this.target();
+    const cp=Math.cos(this.pitch), sp=Math.sin(this.pitch);
+    const D=MAP*2;                                   // far enough to clear the map
+    const ex=t.x+cp*Math.sin(this.yaw)*D, ey=sp*D, ez=t.y+cp*Math.cos(this.yaw)*D;
+    const V=m4look(ex,ey,ez,t.x,0,t.y);
+    const hw=vw/G.cam.z/(2*this.PPT), hh=vh/G.cam.z/(2*this.PPT);
+    const P=m4ortho(-hw,hw,-hh,hh,-MAP*4,MAP*4);
+    return m4mul(P,V);
+  },
+  /* ONE source of truth for screen<->world on the CPU. basis/project/sd2t are
+     mvp() in closed form — for an orthographic lookAt the unprojection is
+     affine, so the ray direction is CONSTANT over the screen and the origin is
+     linear in (sx,sy). No matrix inverse, no allocation, per input event.
+     Cached on everything it reads, so a mid-frame G.cam write (drag-pan, arrow
+     keys, minimap drag) can never leave a stale basis behind. */
+  _bk:[NaN,NaN,NaN,NaN,NaN,NaN,NaN], _b:null,
+  basis(){
+    const k=this._bk;
+    if(k[0]===this.yaw&&k[1]===this.pitch&&k[2]===G.cam.x&&k[3]===G.cam.y
+       &&k[4]===G.cam.z&&k[5]===vw&&k[6]===vh)return this._b;
+    k[0]=this.yaw;k[1]=this.pitch;k[2]=G.cam.x;k[3]=G.cam.y;k[4]=G.cam.z;k[5]=vw;k[6]=vh;
+    const cy=Math.cos(this.yaw),sy=Math.sin(this.yaw);
+    const cp=Math.cos(this.pitch),sp=Math.sin(this.pitch);
+    const t=this.target();
+    return this._b={
+      fx:-cp*sy, fy:-sp, fz:-cp*cy,   // view dir (eye->target), unit
+      rx: cy,    ry: 0,  rz:-sy,      // screen RIGHT = normalize(cross(f,(0,1,0)))
+      ux:-sy*sp, uy: cp, uz:-cy*sp,   // screen UP    = cross(right,f)
+      tx:t.x, tz:t.y, sc:this.PPT*G.cam.z, sp, cp, cy, sy};
+  },
+  /* world -> canvas CSS px. `h` is a height in 2D PIXELS, so every existing
+     constant ports unchanged: the -8/-10 body lift, IHT, HILL, elevF(...)*10.
+     `d` is a depth key that grows toward the camera — use it wherever the 2D
+     code relied on "bigger screen y = nearer", which only holds at home yaw. */
+  project(x,y,h){
+    const B=this.basis(),wx=x-B.tx,wy=h*this.HS,wz=y-B.tz;
+    return {x: vw/2 + (wx*B.rx + wy*B.ry + wz*B.rz)*B.sc,
+            y: vh/2 - (wx*B.ux + wy*B.uy + wz*B.uz)*B.sc,
+            d: -(wx*B.fx + wy*B.fy + wz*B.fz)};
+  },
+  /* screen-pixel delta -> tile delta on a horizontal plane; exact inverse of
+     project()'s x/y part. At home it evaluates to the 2D basis exactly:
+     sd2t(1,0) = (1/52, -1/52) and sd2t(0,1) = (1/26, 1/26). */
+  sd2t(dsx,dsy){
+    const B=this.basis(),A=dsx/B.sc,C=dsy/(B.sc*B.sp);
+    return {x:A*B.cy + C*B.sy, y:-A*B.sy + C*B.cy};
+  },
+  /* ---- picking ------------------------------------------------------------
+     Ground height in WORLD units at a fractional tile position. Must mirror
+     buildMesh exactly or picks drift from what is drawn: same corner average,
+     same HILL, bilinear across the quad. Heights are authored in 2D pixels, so
+     divide by IW to get tiles. */
+  cornerH(cx,cy){
+    const N=MAP,ev=(x,y)=>(x<0||y<0||x>=N||y>=N||!G.elev)?0:(G.elev[y*N+x]?1:0);
+    return (ev(cx-1,cy-1)+ev(cx,cy-1)+ev(cx-1,cy)+ev(cx,cy))/4*this.HILL;
+  },
+  groundH(fx,fz){
+    const x0=Math.floor(fx),z0=Math.floor(fz),tx=fx-x0,tz=fz-z0;
+    const h00=this.cornerH(x0,z0),h10=this.cornerH(x0+1,z0),
+          h01=this.cornerH(x0,z0+1),h11=this.cornerH(x0+1,z0+1);
+    /* Interpolate on the MATCHING TRIANGLE, not bilinearly. buildMesh emits
+       (a,c,b),(b,c,d), so the split diagonal runs along tx+tz=1. Bilinear
+       disagrees with the drawn surface by up to 1.25px on saddle quads
+       (verified exhaustively over all 512 3x3 elevation patterns) — about
+       0.11 tiles of pick slip at the pitch floor, i.e. picks drifting off
+       what is actually on screen. Continuous across the diagonal: both
+       branches give h10 at (1,0) and h01 at (0,1). */
+    const h=(tx+tz<=1) ? h00+(h10-h00)*tx+(h01-h00)*tz
+                       : h11+(h01-h11)*(1-tx)+(h10-h11)*(1-tz);
+    return h*this.HS;
+  },
+  // screen CSS px -> world ray. Orthographic, so unproject the near and far
+  // NDC points and subtract.
+  /* Closed form — same result as inverting mvp(), without the inverse or the
+     allocation. NB the origin lies on the plane through the camera TARGET, so
+     t may legitimately be negative for roughly half the screen. Never reject
+     on the sign of t: doing so silently deletes the near half of the view and
+     still looks plausible. */
+  ray(sx,sy){
+    const B=this.basis();
+    const a=(sx-vw/2)/B.sc, c=(vh/2-sy)/B.sc;
+    return {ox:B.tx+a*B.rx+c*B.ux, oy:a*B.ry+c*B.uy, oz:B.tz+a*B.rz+c*B.uz,
+            dx:B.fx, dy:B.fy, dz:B.fz};
+  },
+  /* Screen px -> tile coords, by marching the ray against the height field.
+     Returns null if it never meets the ground (possible at extreme tilt when
+     the ray leaves the map before descending). Coarse march then bisect: the
+     terrain is one elevation step tall, so a 0.5-tile stride cannot skip a
+     feature, and 24 bisections put the answer well inside a pixel. */
+  /* G.elev is binary (the only writes are =1), so the whole height field lives
+     in a slab [0, HILL*HS] = 0.314 tiles thick and the ray always descends.
+     Search exactly [t0,t1]: t0 enters the slab top, t1 crosses y=0. That span
+     is HILL*HS/sin(pitch) — under 1 world unit even at the pitch floor, so
+     2-3 half-tile steps. The earlier version marched up to MAP*3 = 384 steps
+     and could still dead-end; below the slab there is only the y=0 plane,
+     which a descending ray meets EXACTLY ONCE, so this returns a point for
+     every screen pixel. Callers decide whether that point is on the board. */
+  pickGround(sx,sy){
+    const r=this.ray(sx,sy); if(!r||r.dy>=-1e-6)return null;
+    const t0=(this.HILL*this.HS-r.oy)/r.dy, t1=-r.oy/r.dy;
+    if(!isFinite(t0)||!isFinite(t1))return null;
+    const at=u=>({x:r.ox+r.dx*u, y:r.oy+r.dy*u, z:r.oz+r.dz*u});
+    const below=p=>p.y<=this.groundH(p.x,p.z);
+    let prev=t0,p=at(t0);
+    if(below(p))return {x:p.x,y:p.z,t:t0};        // started already inside a hill
+    for(let t=t0+.5,last=false;!last;t+=.5){
+      if(t>=t1){t=t1;last=true;}
+      p=at(t);
+      if(below(p)){
+        let lo=prev,hi=t;
+        for(let i=0;i<24;i++){const m=(lo+hi)/2; if(below(at(m)))hi=m; else lo=m;}
+        const q=at(hi); return {x:q.x,y:q.z,t:hi};
+      }
+      prev=t;
+    }
+    const q=at(t1); return {x:q.x,y:q.z,t:t1};     // flat ground
+  },
+  // Hill height in 2D pixels. MUST stay 10: the 2D renderer lifts everything on
+  // a hill by elevTile(...)*10 (buildings L6386/L6445, rubble L8664, hit-test
+  // L9096). Stage 1 shipped 9, which floated every 3D hill 1px off the 2D one.
+  HILL:10,
+  init(){
+    if(this.failed)return false;
+    if(this.gl)return true;
+    const c=document.getElementById('view3');
+    const opt={antialias:true,alpha:false,depth:true};
+    /* Prefer WebGL2: it gives mipmaps on NON-power-of-two textures, which the
+       terrain canvas is (e.g. 2912²), plus 32-bit indices and instancing in
+       core. WebGL1 remains a full fallback. */
+    let gl=c.getContext('webgl2',opt); this.gl2=!!gl;
+    if(!gl){gl=c.getContext('webgl',opt);}
+    if(!gl){this.failed=true;toast('This device has no WebGL — staying on the 2D view');return false;}
+    this.canvas=c; this.gl=gl;
+    /* TRAP: under WebGL2 getExtension('ANGLE_instanced_arrays') returns NULL,
+       because instancing is core there. Every instanced path in this file
+       (trees, buildings, units) checks this.iext and would silently disable
+       itself. Shim it so the ~20 ANGLE call sites keep working unchanged. */
+    if(this.gl2){
+      this.iext={
+        vertexAttribDivisorANGLE:(i,d)=>gl.vertexAttribDivisor(i,d),
+        drawElementsInstancedANGLE:(m,n,t,o,c2)=>gl.drawElementsInstanced(m,n,t,o,c2),
+      };
+    }else this.iext=gl.getExtension('ANGLE_instanced_arrays');
+    // anisotropy matters far more than usual here: tilting the camera views the
+    // ground at a grazing angle, which is exactly what isotropic filtering ruins
+    this.aniso=gl.getExtension('EXT_texture_filter_anisotropic')
+             ||gl.getExtension('WEBKIT_EXT_texture_filter_anisotropic');
+    this.anisoMax=this.aniso?gl.getParameter(this.aniso.MAX_TEXTURE_MAX_ANISOTROPY_EXT):1;
+    const vs=`
+      attribute vec3 aPos;      // tile x, height in PIXELS, tile y
+      attribute vec2 aUV;
+      attribute float aShade;
+      uniform mat4 uMVP; uniform float uHScale;
+      varying vec2 vUV; varying float vShade;
+      void main(){
+        // height arrives in 2D pixels; the world is in tiles, so rescale it
+        vec3 p=vec3(aPos.x, aPos.y*uHScale, aPos.z);
+        gl_Position=uMVP*vec4(p,1.0);
+        vUV=aUV; vShade=aShade;
+      }`;
+    const fs=`
+      precision mediump float;
+      uniform sampler2D uTex;
+      varying vec2 vUV; varying float vShade;
+      void main(){
+        vec4 t=texture2D(uTex,vUV);
+        gl_FragColor=vec4(t.rgb*vShade,1.0);
+      }`;
+    const mk=(type,src)=>{const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);
+      if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){console.error(gl.getShaderInfoLog(s));return null;}return s;};
+    const v=mk(gl.VERTEX_SHADER,vs),f=mk(gl.FRAGMENT_SHADER,fs);
+    if(!v||!f){this.failed=true;return false;}
+    const p=gl.createProgram();gl.attachShader(p,v);gl.attachShader(p,f);gl.linkProgram(p);
+    if(!gl.getProgramParameter(p,gl.LINK_STATUS)){console.error(gl.getProgramInfoLog(p));this.failed=true;return false;}
+    this.prog=p;
+    this.loc={aPos:gl.getAttribLocation(p,'aPos'),aUV:gl.getAttribLocation(p,'aUV'),
+      aShade:gl.getAttribLocation(p,'aShade'),
+      uMVP:gl.getUniformLocation(p,'uMVP'),uHScale:gl.getUniformLocation(p,'uHScale'),
+      uTex:gl.getUniformLocation(p,'uTex')};
+    this.tex=gl.createTexture();
+    this.vbo=gl.createBuffer(); this.ibo=gl.createBuffer();
+    gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL);
+    return true;
+  },
+  // Ground mesh: one quad per tile, corner heights averaged from the elevation
+  // grid so hills are continuous instead of stepping at every cell.
+  buildMesh(){
+    const gl=this.gl,N=MAP,H=this.HILL;
+    // ONE height rule, shared with the picker. Two copies of a formula that
+    // must agree exactly is a silent-drift generator — and the drift would be
+    // between where things are drawn and where clicks land.
+    const cornerH=(cx,cy)=>this.cornerH(cx,cy);
+    const verts=new Float32Array((N+1)*(N+1)*6);
+    let o=0;
+    for(let y=0;y<=N;y++)for(let x=0;x<=N;x++){
+      const h=cornerH(x,y);
+      // cheap lambert-ish term from the local slope, warm light from the NW
+      const slope=(cornerH(x+1,y)+cornerH(x,y+1)-cornerH(x-1,y)-cornerH(x,y-1))/(4*H||1);
+      verts[o++]=x; verts[o++]=h; verts[o++]=y;
+      verts[o++]=x/N; verts[o++]=y/N;
+      verts[o++]=Math.max(.78,Math.min(1.18,1-slope*.34));
+    }
+    const idx=[];
+    for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+      const a=y*(N+1)+x,b=a+1,c=a+N+1,d=c+1;
+      idx.push(a,c,b, b,c,d);
+    }
+    const I=(N+1)*(N+1)>65535?new Uint32Array(idx):new Uint16Array(idx);
+    this.idxType=I.BYTES_PER_ELEMENT===4?gl.UNSIGNED_INT:gl.UNSIGNED_SHORT;
+    // same WebGL2 trap as the instancing extension: OES_element_index_uint
+    // returns null under WebGL2 because 32-bit indices are core there
+    if(this.idxType===gl.UNSIGNED_INT&&!this.gl2&&!gl.getExtension('OES_element_index_uint')){
+      this.failed=true;toast('This device cannot render a map this large in 3D');return;
+    }
+    gl.bindBuffer(gl.ARRAY_BUFFER,this.vbo);gl.bufferData(gl.ARRAY_BUFFER,verts,gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.ibo);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,I,gl.STATIC_DRAW);
+    this.idxCount=idx.length;
+    this.meshKey=N+':'+elevVer;      // must match the check in draw()
+  },
+  /* ---- trees as REAL GEOMETRY ---------------------------------------------
+     Billboards were the right answer while the camera was locked (a billboard
+     IS the exact projection of a solid under a fixed orthographic view). The
+     camera rotates now, so they are not: baked NW light would swing with the
+     view and cards would shear. So: two low-poly species meshes, drawn
+     INSTANCED — one instance per tree, ~16 bytes each, which is why 8,800
+     trees on Black Forest cost ~140KB instead of the ~10MB a merged
+     per-tree mesh would.
+     Colours are lifted from getResSpr's own palettes so the species read the
+     same as the 2D art. Lighting is a real lambert term from the NW, which is
+     the whole point: it now responds to the camera instead of being painted on. */
+  TREE_PINE:{dark:['#13290c','#1c3d14','#265219','#336b23','#478a32'],
+             light:['#173312','#22491a','#2e6021','#3d7c2c','#54993c'],trunk:'#4a3018'},
+  TREE_LEAF:{dark:['#122a0c','#1d4213','#28581a','#357024','#458830','#589b3e'],
+             light:['#17330f','#255018','#316a20','#40852b','#529f38','#66b447'],trunk:'#54381e'},
+  buildTreeMeshes(){
+    const V=[],I=[];                       // pos3, nrm3, col3  -> 9 floats/vert
+    const hex=c=>[parseInt(c.slice(1,3),16)/255,parseInt(c.slice(3,5),16)/255,parseInt(c.slice(5,7),16)/255];
+    const push=(p,n,c)=>{V.push(p[0],p[1],p[2],n[0],n[1],n[2],c[0],c[1],c[2]);return V.length/9-1;};
+    const tri=(a,b,c)=>{I.push(a,b,c);};
+    const nrm=(a,b,c)=>{const ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2],
+      vx=c[0]-a[0],vy=c[1]-a[1],vz=c[2]-a[2];
+      let nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;
+      const L=Math.hypot(nx,ny,nz)||1;return [nx/L,ny/L,nz/L];};
+    // n-gon cone: apex at y1, base ring radius r at y0
+    const cone=(y0,y1,r,seg,col)=>{
+      const c=hex(col);
+      for(let i=0;i<seg;i++){
+        const a0=i/seg*6.283,a1=(i+1)/seg*6.283;
+        const p0=[Math.cos(a0)*r,y0,Math.sin(a0)*r],p1=[Math.cos(a1)*r,y0,Math.sin(a1)*r],ap=[0,y1,0];
+        const n=nrm(p0,p1,ap);
+        tri(push(p0,n,c),push(p1,n,c),push(ap,n,c));
+      }
+      // underside so it is solid when seen from below at a low pitch
+      const c2=hex(col),dn=[0,-1,0];
+      for(let i=0;i<seg;i++){
+        const a0=i/seg*6.283,a1=(i+1)/seg*6.283;
+        tri(push([Math.cos(a1)*r,y0,Math.sin(a1)*r],dn,c2),
+            push([Math.cos(a0)*r,y0,Math.sin(a0)*r],dn,c2),
+            push([0,y0,0],dn,c2));
+      }
+    };
+    const prism=(y0,y1,r,seg,col)=>{
+      const c=hex(col);
+      for(let i=0;i<seg;i++){
+        const a0=i/seg*6.283,a1=(i+1)/seg*6.283;
+        const b0=[Math.cos(a0)*r,y0,Math.sin(a0)*r],b1=[Math.cos(a1)*r,y0,Math.sin(a1)*r];
+        const t0=[b0[0],y1,b0[2]],t1=[b1[0],y1,b1[2]];
+        const n=nrm(b0,b1,t1);
+        const i0=push(b0,n,c),i1=push(b1,n,c),i2=push(t1,n,c),i3=push(t0,n,c);
+        tri(i0,i1,i2);tri(i0,i2,i3);
+      }
+    };
+    // rough sphere-ish blob (octahedron subdivided once) — cheap, reads round
+    const blob=(cx,cy,cz,r,col,jit)=>{
+      const c=hex(col);
+      const P=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+      const F=[[0,2,4],[2,1,4],[1,3,4],[3,0,4],[2,0,5],[1,2,5],[3,1,5],[0,3,5]];
+      const at=v=>{
+        const s=1+(jit?((Math.abs(v[0]*3+v[1]*5+v[2]*7)%3)-1)*0.12:0);
+        return [cx+v[0]*r*s, cy+v[1]*r*s*0.82, cz+v[2]*r*s];
+      };
+      for(const f of F){
+        const a=at(P[f[0]]),b=at(P[f[1]]),d=at(P[f[2]]);
+        const n=nrm(a,b,d);
+        tri(push(a,n,c),push(b,n,c),push(d,n,c));
+      }
+    };
+    // ---- species 0: pine. radius 1, total height ~1.15 ----
+    const P=this.TREE_PINE, L=this.TREE_LEAF;
+    const off=[],cnt=[];
+    off.push(0);
+    prism(0,.30,.11,5,P.trunk);
+    cone(.20,.62,1.00,7,P.light[1]);
+    cone(.40,.82,.76,7,P.light[2]);
+    cone(.60,1.00,.52,7,P.light[3]);
+    cone(.78,1.18,.28,7,P.light[4]);
+    cnt.push(I.length);
+    // ---- species 1: broadleaf ----
+    off.push(I.length);
+    prism(0,.52,.13,5,L.trunk);
+    blob(0,.86,0,.86,L.light[2],true);
+    blob(-.30,1.02,-.16,.54,L.light[3],true);
+    blob(.26,.96,.22,.50,L.light[4],true);
+    blob(-.06,1.20,.02,.38,L.light[5],true);
+    cnt.push(I.length-off[1]);
+    const gl=this.gl;
+    this.tvbo=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,this.tvbo);
+    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(V),gl.STATIC_DRAW);
+    this.tibo=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.tibo);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(I),gl.STATIC_DRAW);
+    this.treeOff=off;this.treeCnt=cnt;this.treeVerts=V.length/9;
+    this.treeH=[1.18,1.35];              // mesh height per species, for scaling
+  },
+  initTrees(){
+    const gl=this.gl;
+    this.iext=this.iext||gl.getExtension('ANGLE_instanced_arrays');
+    if(!this.iext){this.noTrees=true;return false;}   // pre-2013 device; ground only
+    const vs=`
+      attribute vec3 aPos; attribute vec3 aNrm; attribute vec3 aCol;
+      attribute vec4 aI0;      // tileX, baseY, tileZ, scaleXZ
+      attribute vec2 aI1;      // scaleY, shade
+      uniform mat4 uMVP; uniform vec3 uLight;
+      varying vec3 vC;
+      void main(){
+        vec3 p=vec3(aPos.x*aI0.w+aI0.x, aPos.y*aI1.x+aI0.y, aPos.z*aI0.w+aI0.z);
+        gl_Position=uMVP*vec4(p,1.0);
+        float lam=max(0.0,dot(normalize(aNrm),uLight));
+        vC=aCol*aI1.y*(0.60+0.52*lam);
+      }`;
+    const fs=`precision mediump float; varying vec3 vC;
+      void main(){ gl_FragColor=vec4(vC,1.0); }`;
+    const mk=(t,s)=>{const sh=gl.createShader(t);gl.shaderSource(sh,s);gl.compileShader(sh);
+      if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS)){console.error(gl.getShaderInfoLog(sh));return null;}return sh;};
+    const v=mk(gl.VERTEX_SHADER,vs),f=mk(gl.FRAGMENT_SHADER,fs);
+    if(!v||!f){this.noTrees=true;return false;}
+    const p=gl.createProgram();gl.attachShader(p,v);gl.attachShader(p,f);
+    ['aPos','aNrm','aCol','aI0','aI1'].forEach((n,i)=>gl.bindAttribLocation(p,i,n));
+    gl.linkProgram(p);
+    if(!gl.getProgramParameter(p,gl.LINK_STATUS)){console.error(gl.getProgramInfoLog(p));this.noTrees=true;return false;}
+    this.treeProg=p;
+    this.treeLoc={uMVP:gl.getUniformLocation(p,'uMVP'),uLight:gl.getUniformLocation(p,'uLight')};
+    this.buildTreeMeshes();
+    this.ivbo=[gl.createBuffer(),gl.createBuffer()];
+    this.iCount=[0,0];this.treeKey='';
+    return true;
+  },
+  /* One instance per tree, split by species so each is one drawElementsInstanced.
+     Variant keying matches getResSpr exactly (hash2(x*13,y*17)%8, pine when
+     h%3===0, rr=10+(h%4)*1.7, dark when h>=5) so the 3D forest has the same
+     species mix and size spread as the 2D art. */
+  buildTrees(){
+    const gl=this.gl,A=[[],[]];
+    for(const k in G.res){
+      const r=G.res[k];
+      if(r.type!=='wood')continue;
+      const h=hash2(r.x*13,r.y*17)%8;
+      const sp=(h%3===0)?0:1;
+      const rr=10+(h%4)*1.7;
+      const hp=(sp?30:34)+(h%4)*2.5;                 // sprite-space height in px
+      A[sp].push(r.x+.5, this.groundH(r.x+.5,r.y+.5), r.y+.5, rr/IW,
+                 hp*this.HS/this.treeH[sp], h>=5?0.80:1.0);
+    }
+    for(let s=0;s<2;s++){
+      gl.bindBuffer(gl.ARRAY_BUFFER,this.ivbo[s]);
+      gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(A[s]),gl.STATIC_DRAW);
+      this.iCount[s]=A[s].length/6;
+    }
+    this.treeKey=MAP+':'+elevVer+':'+resGen+':'+resVer;
+  },
+  drawTrees(mvp){
+    if(this.noTrees)return;
+    if(!this.treeProg&&!this.initTrees())return;
+    const gl=this.gl,ex=this.iext;
+    if(this.treeKey!==MAP+':'+elevVer+':'+resGen+':'+resVer)this.buildTrees();
+    if(!this.iCount[0]&&!this.iCount[1])return;
+    gl.useProgram(this.treeProg);
+    gl.uniformMatrix4fv(this.treeLoc.uMVP,false,mvp);
+    gl.uniform3f(this.treeLoc.uLight,-0.46,0.80,-0.38);   // key light from the NW
+    gl.bindBuffer(gl.ARRAY_BUFFER,this.tvbo);
+    for(let i=0;i<3;i++){gl.enableVertexAttribArray(i);
+      gl.vertexAttribPointer(i,3,gl.FLOAT,false,36,i*12);ex.vertexAttribDivisorANGLE(i,0);}
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.tibo);
+    for(let s=0;s<2;s++){
+      if(!this.iCount[s])continue;
+      gl.bindBuffer(gl.ARRAY_BUFFER,this.ivbo[s]);
+      gl.enableVertexAttribArray(3);gl.vertexAttribPointer(3,4,gl.FLOAT,false,24,0);
+      ex.vertexAttribDivisorANGLE(3,1);
+      gl.enableVertexAttribArray(4);gl.vertexAttribPointer(4,2,gl.FLOAT,false,24,16);
+      ex.vertexAttribDivisorANGLE(4,1);
+      ex.drawElementsInstancedANGLE(gl.TRIANGLES,this.treeCnt[s],gl.UNSIGNED_SHORT,
+        this.treeOff[s]*2,this.iCount[s]);
+    }
+    // divisors are GLOBAL per attribute index — leaving these at 1 would make the
+    // ground pass read one vertex for the whole terrain next frame.
+    ex.vertexAttribDivisorANGLE(3,0);ex.vertexAttribDivisorANGLE(4,0);
+    gl.disableVertexAttribArray(3);gl.disableVertexAttribArray(4);
+  },
+  /* ---- buildings as real geometry -----------------------------------------
+     A massing table rather than 20 hand-modelled meshes: every building is a
+     box plus a roof, driven by the data that already exists (b.size for the
+     footprint, IHT for the height, the concept-art palettes for the colours).
+     That gets all 20 types standing with the right proportions and the right
+     roof silhouette immediately; individual types can be sculpted later.
+     Buildings are FEW (tens, not thousands) and change rarely, so this is one
+     merged mesh rebuilt on change — no instancing needed. It rides the tree
+     shader by drawing as a single identity instance. */
+  BMASS:{
+    // wh = the fraction of total height that is WALL. Raised from ~.46 to ~.58
+    // after measuring: at .46 the roof dominated so completely that a pixel
+    // probe aimed at a house wall came back with the roof's brown, and no
+    // amount of masonry detail could show because there was nowhere to put it.
+    tc        :{w:'#a8a294',r:'gable',rc:'#b8613a',wh:.56},
+    house     :{w:'#f0e7cd',r:'gable',rc:'#c2673f',wh:.60},
+    farm      :{w:'#7d7245',r:'flat', wh:1},
+    camp      :{w:'#8d7355',r:'gable',rc:'#9a7b57',wh:.62},
+    barracks  :{w:'#f0e7cd',r:'gable',rc:'#b8613a',wh:.58},
+    range     :{w:'#d8c9a8',r:'gable',rc:'#9a7b57',wh:.58},
+    stable    :{w:'#d8c9a8',r:'gable',rc:'#b8613a',wh:.58},
+    siege     :{w:'#c9b48c',r:'gable',rc:'#8d7355',wh:.60},
+    castle    :{w:'#a8a294',r:'cone', rc:'#5a7ea8',wh:.68,turret:true},
+    tower     :{w:'#a8a294',r:'cone', rc:'#b8613a',wh:.74},
+    wall      :{w:'#8d7355',r:'flat', wh:1},
+    gate      :{w:'#8d7355',r:'flat', wh:1},
+    swall     :{w:'#a8a294',r:'flat', wh:1},
+    sgate     :{w:'#a8a294',r:'flat', wh:1},
+    market    :{w:'#f0e7cd',r:'gable',rc:'#9a7b57',wh:.58},
+    monastery :{w:'#f0e7cd',r:'gable',rc:'#5a7ea8',wh:.58},
+    blacksmith:{w:'#a8a294',r:'gable',rc:'#b8613a',wh:.58},
+    dock      :{w:'#8d7355',r:'flat', wh:1},
+    university:{w:'#f0e7cd',r:'gable',rc:'#5a7ea8',wh:.58},
+    wonder    :{w:'#f0e7cd',r:'dome', rc:'#d9b44a',wh:.58},
+  },
+  buildBlds(){
+    const V=[],I=[];
+    const hex=c=>[parseInt(c.slice(1,3),16)/255,parseInt(c.slice(3,5),16)/255,parseInt(c.slice(5,7),16)/255];
+    const push=(p,n,c)=>{V.push(p[0],p[1],p[2],n[0],n[1],n[2],c[0],c[1],c[2]);return V.length/9-1;};
+    /* NB the normal is NEGATED. With this file's face winding, (b-a)x(d-a)
+       points INTO the solid. That inverted the lambert term on every wall and
+       roof, and — far worse — made panel()'s +offset push masonry, shingles and
+       timber framing INSIDE the wall where the backing quad hid them. Only the
+       windows showed, because they offset the other way. */
+    const quad=(a,b,c,d,col)=>{
+      const ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2],vx=d[0]-a[0],vy=d[1]-a[1],vz=d[2]-a[2];
+      let nx=-(uy*vz-uz*vy),ny=-(uz*vx-ux*vz),nz=-(ux*vy-uy*vx);
+      const L=Math.hypot(nx,ny,nz)||1;const n=[nx/L,ny/L,nz/L];
+      const i0=push(a,n,col),i1=push(b,n,col),i2=push(c,n,col),i3=push(d,n,col);
+      I.push(i0,i1,i2, i0,i2,i3);
+    };
+    const tri3=(a,b,c,col)=>{
+      const ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2],vx=c[0]-a[0],vy=c[1]-a[1],vz=c[2]-a[2];
+      let nx=-(uy*vz-uz*vy),ny=-(uz*vx-ux*vz),nz=-(ux*vy-uy*vx);
+      const L=Math.hypot(nx,ny,nz)||1;const n=[nx/L,ny/L,nz/L];
+      I.push(push(a,n,col),push(b,n,col),push(c,n,col));
+    };
+    /* ---- surface detail -----------------------------------------------------
+       Everything below works by RELIEF, not texture: lay a dark base quad, then
+       float the stones / shingles / planks a hair proud of it. The gaps between
+       them reveal the base, which is the mortar line and the shingle shadow.
+       That is what makes it read as masonry rather than a tinted flat wall, and
+       it needs no UVs, no atlas and no shader change. Windows and doors go the
+       other way — recessed INTO the wall — so they catch a real shadow edge. */
+    const add=(p,d,s)=>[p[0]+d[0]*s,p[1]+d[1]*s,p[2]+d[2]*s];
+    // a face is an origin plus a right and an up vector; pt(u,v) walks it
+    const fpt=(A,R,U,u,v)=>[A[0]+R[0]*u+U[0]*v, A[1]+R[1]*u+U[1]*v, A[2]+R[2]*u+U[2]*v];
+    // outward face normal — negated for the same reason as quad() above
+    const fnorm=(R,U)=>{let nx=-(R[1]*U[2]-R[2]*U[1]),ny=-(R[2]*U[0]-R[0]*U[2]),nz=-(R[0]*U[1]-R[1]*U[0]);
+      const L=Math.hypot(nx,ny,nz)||1;return [nx/L,ny/L,nz/L];};
+    const panel=(A,R,U,u0,v0,u1,v1,off,col)=>{
+      const N=fnorm(R,U);
+      quad(add(fpt(A,R,U,u0,v0),N,off),add(fpt(A,R,U,u1,v0),N,off),
+           add(fpt(A,R,U,u1,v1),N,off),add(fpt(A,R,U,u0,v1),N,off),col);
+    };
+    const shade=(c,f)=>[Math.max(0,Math.min(1,c[0]*f)),Math.max(0,Math.min(1,c[1]*f)),
+                        Math.max(0,Math.min(1,c[2]*f))];
+    /* Relief depth. 0.008 was ~0.6 SCREEN px at normal zoom — geometrically
+       present, visually nothing. A wall face is ~29px wide on screen at z=1, so
+       joints need ~2px to read, which is why the insets below are in the 0.03
+       range and not the 0.008 they started at. */
+    const REL=0.022;
+    /* One wall face. style: 'stone' = staggered masonry courses, 'plaster' =
+       smooth render with dark timber framing, 'plank' = vertical boarding. */
+    const wall=(A,R,U,col,style,seed,openings)=>{
+      panel(A,R,U,0,0,1,1,0,shade(col,0.55));            // mortar / backing
+      const H=Math.hypot(U[0],U[1],U[2]),W=Math.hypot(R[0],R[1],R[2]);
+      if(style==='plank'){
+        const n=Math.max(3,Math.round(W/0.13));
+        for(let i=0;i<n;i++){
+          const t=(hash2(seed+i*17,3)%5)/5;
+          panel(A,R,U,i/n+0.030,0.02,(i+1)/n-0.030,0.98,REL,shade(col,0.86+t*0.30));
+        }
+      }else if(style==='plaster'){
+        panel(A,R,U,0.02,0.01,0.98,0.99,REL,col);
+        const beam=shade(col,0.42);                       // timber framing
+        panel(A,R,U,0,0,1,0.055,REL*1.6,beam);            // sill beam
+        panel(A,R,U,0,0.945,1,1,REL*1.6,beam);            // head beam
+        const posts=Math.max(2,Math.round(W/0.42));
+        for(let i=0;i<=posts;i++){
+          const u=i/posts;
+          panel(A,R,U,Math.max(0,u-0.022),0,Math.min(1,u+0.022),1,REL*1.6,beam);
+        }
+        // one diagonal brace per bay, alternating direction — reads as half-timber
+        for(let i=0;i<posts;i++){
+          const u0=i/posts+0.03,u1=(i+1)/posts-0.03;
+          const dir=(hash2(seed+i*29,7)%2)?1:-1;
+          for(let s=0;s<5;s++){
+            const t=s/5,tn=(s+1)/5;
+            const ua=u0+(u1-u0)*(dir>0?t:1-t),ub=u0+(u1-u0)*(dir>0?tn:1-tn);
+            panel(A,R,U,Math.min(ua,ub),0.10+t*0.72,Math.max(ua,ub),0.10+tn*0.72,REL*1.5,beam);
+          }
+        }
+      }else{
+        const courses=Math.max(2,Math.round(H/0.115));
+        for(let r=0;r<courses;r++){
+          const v0=r/courses,v1=(r+1)/courses;
+          const stones=Math.max(2,Math.round(W/0.20));
+          const stag=(r%2)?0.5/stones:0;
+          for(let s=-1;s<=stones;s++){
+            const u0=s/stones+stag,u1=(s+1)/stones+stag;
+            const a=Math.max(0,u0),b=Math.min(1,u1);
+            if(b-a<0.02)continue;
+            const h=hash2(seed+r*131+s*7,r*29+s*13);
+            const f=0.80+(h%7)*0.075;
+            const mossy=(r===0&&h%6===0);
+            panel(A,R,U,a+0.026,v0+0.050,b-0.026,v1-0.050,REL,
+                  mossy?[col[0]*0.62,col[1]*0.86,col[2]*0.55]:shade(col,f));
+          }
+        }
+      }
+      // recessed openings: {u,v,w,h,arch}
+      if(openings)for(const o of openings){
+        const dark=[0.09,0.07,0.06];
+        panel(A,R,U,o.u-o.w/2,o.v,o.u+o.w/2,o.v+o.h,-REL*1.1,dark);
+        const fr=shade(col,0.72);
+        panel(A,R,U,o.u-o.w/2-0.018,o.v-0.012,o.u+o.w/2+0.018,o.v,REL*1.2,fr);      // sill
+        panel(A,R,U,o.u-o.w/2-0.018,o.v+o.h,o.u+o.w/2+0.018,o.v+o.h+0.014,REL*1.2,fr); // lintel
+      }
+    };
+    const box=(x0,z0,x1,z1,y0,y1,col,style,seed,win)=>{
+      const h=y1-y0,dx=x1-x0,dz=z1-z0;
+      const faces=[
+        [[x0,y0,z0],[dx,0,0],[0,h,0]],
+        [[x1,y0,z1],[-dx,0,0],[0,h,0]],
+        [[x1,y0,z0],[0,0,dz],[0,h,0]],
+        [[x0,y0,z1],[0,0,-dz],[0,h,0]],
+      ];
+      faces.forEach((f,i)=>wall(f[0],f[1],f[2],col,style,seed+i*911,win?win[i]:null));
+      quad([x0,y1,z0],[x1,y1,z0],[x1,y1,z1],[x0,y1,z1],shade(col,0.94));
+    };
+    /* Gable roof with real shingle rows. Ridge runs along x; each row overlaps
+       the one below and floats proud of a dark backing, so the rows self-shadow. */
+    const gable=(x0,z0,x1,z1,y0,y1,col,seed)=>{
+      const zm=(z0+z1)/2,dx=x1-x0;
+      const rows=Math.max(5,Math.round((y1-y0)/0.048));   // finer courses
+      for(const side of [0,1]){
+        const zEdge=side?z1:z0;
+        const A=side?[x1,y0,z1]:[x0,y0,z0], R=side?[-dx,0,0]:[dx,0,0];
+        const U=[0,y1-y0,side?zm-z1:zm-z0];
+        panel(A,R,U,0,0,1,1,0,shade(col,0.5));
+        for(let r=0;r<rows;r++){
+          // small overlap only — a big one buries the shadow line each row casts
+          const v0=r/rows,v1=(r+1)/rows+0.18/rows;
+          const f=0.82+((r%2)?0.22:0)+((hash2(seed+r*53,side)%5)*0.035);
+          panel(A,R,U,0.020,v0,0.980,Math.min(1,v1),REL*(1+0.5*(r%2)),shade(col,f));
+        }
+      }
+      tri3([x0,y0,z0],[x0,y1,zm],[x0,y0,z1],shade(col,0.8));
+      tri3([x1,y0,z1],[x1,y1,zm],[x1,y0,z0],shade(col,0.8));
+      // ridge cap
+      quad([x0,y1,zm-0.035],[x1,y1,zm-0.035],[x1,y1+0.02,zm+0.035],[x0,y1+0.02,zm+0.035],
+           shade(col,1.12));
+    };
+    const cone=(cx,cz,r,y0,y1,col,seg)=>{
+      seg=seg||8;
+      for(let i=0;i<seg;i++){
+        const a0=i/seg*6.283,a1=(i+1)/seg*6.283;
+        tri3([cx+Math.cos(a0)*r,y0,cz+Math.sin(a0)*r],
+             [cx+Math.cos(a1)*r,y0,cz+Math.sin(a1)*r],[cx,y1,cz],col);
+      }
+    };
+    const dome=(cx,cz,r,y0,y1,col)=>{
+      const seg=10,ring=4;
+      for(let j=0;j<ring;j++){
+        const t0=j/ring,t1=(j+1)/ring;
+        const r0=r*Math.cos(t0*1.5708),r1=r*Math.cos(t1*1.5708);
+        const h0=y0+(y1-y0)*Math.sin(t0*1.5708),h1=y0+(y1-y0)*Math.sin(t1*1.5708);
+        for(let i=0;i<seg;i++){
+          const a0=i/seg*6.283,a1=(i+1)/seg*6.283;
+          quad([cx+Math.cos(a0)*r0,h0,cz+Math.sin(a0)*r0],
+               [cx+Math.cos(a1)*r0,h0,cz+Math.sin(a1)*r0],
+               [cx+Math.cos(a1)*r1,h1,cz+Math.sin(a1)*r1],
+               [cx+Math.cos(a0)*r1,h1,cz+Math.sin(a0)*r1],col);
+        }
+      }
+    };
+    let n=0;
+    for(const b of G.blds){
+      if(!allied(b.p,localP)&&!b.seen)continue;
+      const M=this.BMASS[b.type]||this.BMASS.house;
+      const s=b.size,inset=s*0.10;
+      const x0=b.tx+inset,x1=b.tx+s-inset,z0=b.ty+inset,z1=b.ty+s-inset;
+      const g=this.groundH(b.tx+s/2,b.ty+s/2);
+      // under construction: short and scaffold-brown, growing with prog
+      const done=b.built?1:(0.22+0.55*(b.prog||0));
+      const H=(IHT[b.type]||18)*this.HS*done;
+      const wallC=hex(b.built?M.w:'#9a8560');
+      const wh=g+H*(M.r==='flat'?1:M.wh);
+      // wall treatment follows the palette: pale ashlar -> masonry, cream/buff
+      // -> half-timbered plaster, anything else -> boarding
+      const style=b.built?(M.w==='#a8a294'?'stone':(M.w==='#f0e7cd'||M.w==='#d8c9a8'||M.w==='#c9b48c')?'plaster':'plank'):'plank';
+      // openings, per face [S,N,E,W]. Door on the south face only.
+      let win=null;
+      if(b.built&&M.r!=='flat'&&H>0.28){
+        const per=s>=2?3:2;
+        win=[];
+        for(let f=0;f<4;f++){
+          const a=[];
+          for(let i=0;i<per;i++){
+            const u=(i+0.5)/per;
+            if(f===0&&Math.abs(u-0.5)<0.08)continue;   // leave room for the door
+            a.push({u,v:0.42,w:0.13,h:0.24});
+          }
+          if(f===0)a.push({u:0.5,v:0,w:0.18,h:0.50});   // door, floor to lintel
+          win.push(a);
+        }
+      }
+      box(x0,z0,x1,z1,g,wh,wallC,style,b.id*7919,win);
+      if(b.built&&M.r!=='flat'){
+        const rc=hex(M.rc);
+        if(M.r==='gable')gable(x0-inset*.6,z0-inset*.6,x1+inset*.6,z1+inset*.6,wh,g+H,rc,b.id*131);
+        else if(M.r==='cone')cone((x0+x1)/2,(z0+z1)/2,(x1-x0)*.62,wh,g+H,rc);
+        else dome((x0+x1)/2,(z0+z1)/2,(x1-x0)*.44,wh,g+H,rc);
+        if(M.turret){                       // castle: four spired corner turrets
+          const tr=s*.19;
+          for(const [ox,oz] of [[x0,z0],[x1,z0],[x0,z1],[x1,z1]]){
+            const ty0=g,ty1=g+H*.86;
+            box(ox-tr,oz-tr,ox+tr,oz+tr,ty0,ty1,hex(M.w),'stone',b.id*31+ox*13,null);
+            cone(ox,oz,tr*1.25,ty1,ty1+H*.34,hex(M.rc));
+          }
+        }
+        // team-colour banner block, the loudest ownership signal on screen
+        const tc2=teamColor(b.p);
+        const tcv=hex(tc2.length===7?tc2:'#3b7bd4');
+        const cx=(x0+x1)/2,cz=(z0+z1)/2,bw=s*.07;
+        box(cx-bw,cz-bw,cx+bw,cz+bw,g+H,g+H+H*.22,tcv);
+      }
+      n++;
+    }
+    const gl=this.gl;
+    if(!this.bvbo){this.bvbo=gl.createBuffer();this.bibo=gl.createBuffer();
+      this.bIdent=gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER,this.bIdent);
+      gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([0,0,0,1, 1,1]),gl.STATIC_DRAW);}
+    gl.bindBuffer(gl.ARRAY_BUFFER,this.bvbo);
+    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(V),gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.bibo);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(I),gl.DYNAMIC_DRAW);
+    this.bCount=I.length;this.bldN=n;this.bldKey=this.bldSig();
+  },
+  // cheap per-frame signature: buildings are tens, not thousands
+  bldSig(){
+    let h=G.blds.length*2654435761;
+    for(const b of G.blds)h=(h^(b.id*31+(b.built?7:(b.prog*20)|0)+b.p*3))>>>0;
+    return h+':'+MAP+':'+elevVer;
+  },
+  drawBlds(mvp){
+    if(this.noTrees)return;                      // shares the instanced path
+    if(!this.treeProg&&!this.initTrees())return;
+    const gl=this.gl,ex=this.iext;
+    if(this.bldKey!==this.bldSig())this.buildBlds();
+    if(!this.bCount)return;
+    gl.useProgram(this.treeProg);
+    gl.uniformMatrix4fv(this.treeLoc.uMVP,false,mvp);
+    gl.uniform3f(this.treeLoc.uLight,-0.46,0.80,-0.38);
+    gl.bindBuffer(gl.ARRAY_BUFFER,this.bvbo);
+    for(let i=0;i<3;i++){gl.enableVertexAttribArray(i);
+      gl.vertexAttribPointer(i,3,gl.FLOAT,false,36,i*12);ex.vertexAttribDivisorANGLE(i,0);}
+    gl.bindBuffer(gl.ARRAY_BUFFER,this.bIdent);
+    gl.enableVertexAttribArray(3);gl.vertexAttribPointer(3,4,gl.FLOAT,false,24,0);
+    ex.vertexAttribDivisorANGLE(3,1);
+    gl.enableVertexAttribArray(4);gl.vertexAttribPointer(4,2,gl.FLOAT,false,24,16);
+    ex.vertexAttribDivisorANGLE(4,1);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.bibo);
+    ex.drawElementsInstancedANGLE(gl.TRIANGLES,this.bCount,gl.UNSIGNED_SHORT,0,1);
+    ex.vertexAttribDivisorANGLE(3,0);ex.vertexAttribDivisorANGLE(4,0);
+    gl.disableVertexAttribArray(3);gl.disableVertexAttribArray(4);
+  },
+  /* ---- units ---------------------------------------------------------------
+     Five archetypes (man / cavalry / siege / ship / beast), each a small mesh
+     of boxed parts. Every vertex carries a PART index, and the vertex shader
+     swings the parts about hip and shoulder pivots from a per-instance walk
+     phase — so units actually walk and swing rather than sliding about frozen.
+     One instanced draw call per archetype; instances are rebuilt each frame
+     because units move every frame, which is ~44 bytes x unit count.
+     Team colour rides a per-vertex flag, so the tabard and the horse caparison
+     take the player colour while skin, timber and steel do not. */
+  U_MAN:0,U_CAV:1,U_SIEGE:2,U_SHIP:3,U_BEAST:4,
+  unitArch(t){
+    const d=UNITS[t]||{};
+    if(d.animal)return 4;
+    if(d.ship)return 3;
+    if(d.siege||t==='ram'||t==='treb'||t==='bombard'||t==='scorpion'||t==='mangonel')return 2;
+    if(d.cav)return 1;
+    return 0;
+  },
+  buildUnitMeshes(){
+    const V=[],I=[],off=[],cnt=[],piv=[];
+    const hex=c=>[parseInt(c.slice(1,3),16)/255,parseInt(c.slice(3,5),16)/255,parseInt(c.slice(5,7),16)/255];
+    const vpush=(p,n,c,part,team)=>{V.push(p[0],p[1],p[2],n[0],n[1],n[2],c[0],c[1],c[2],part,team);
+      return V.length/11-1;};
+    const q=(a,b,c,d,col,part,team)=>{
+      const ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2],vx=d[0]-a[0],vy=d[1]-a[1],vz=d[2]-a[2];
+      let nx=-(uy*vz-uz*vy),ny=-(uz*vx-ux*vz),nz=-(ux*vy-uy*vx);
+      const L=Math.hypot(nx,ny,nz)||1;const n=[nx/L,ny/L,nz/L];
+      const i0=vpush(a,n,col,part,team),i1=vpush(b,n,col,part,team),
+            i2=vpush(c,n,col,part,team),i3=vpush(d,n,col,part,team);
+      I.push(i0,i1,i2,i0,i2,i3);
+    };
+    // axis-aligned box from min/max, tagged with a part index
+    const bx=(x0,y0,z0,x1,y1,z1,col,part,team)=>{
+      team=team||0;
+      q([x0,y0,z0],[x1,y0,z0],[x1,y1,z0],[x0,y1,z0],col,part,team);
+      q([x1,y0,z1],[x0,y0,z1],[x0,y1,z1],[x1,y1,z1],col,part,team);
+      q([x1,y0,z0],[x1,y0,z1],[x1,y1,z1],[x1,y1,z0],col,part,team);
+      q([x0,y0,z1],[x0,y0,z0],[x0,y1,z0],[x0,y1,z1],col,part,team);
+      q([x0,y1,z0],[x1,y1,z0],[x1,y1,z1],[x0,y1,z1],col,part,team);
+      q([x0,y0,z1],[x1,y0,z1],[x1,y0,z0],[x0,y0,z0],col,part,team);
+    };
+    const SKIN=hex('#e0b78e'),CLOTH=hex('#8a7a5e'),STEEL=hex('#b9bec4'),
+          WOOD=hex('#6b4a2a'),DARK=hex('#3a2d1e'),HIDE=hex('#7d6a4e'),CANV=hex('#e6dcc2');
+    const mark=()=>off.push(I.length);
+    const seal=i=>cnt.push(I.length-off[i]);
+    // ---- 0 MAN: hip 0.26, shoulder 0.46 ----
+    mark();
+    bx(-.035,0,-.10,.035,.27,-.02,DARK,2);        // left leg
+    bx(-.035,0,.02,.035,.27,.10,DARK,3);          // right leg
+    bx(-.075,.26,-.10,.075,.48,.10,CLOTH,0,1);    // torso — team tabard
+    bx(-.055,.48,-.055,.055,.61,.055,SKIN,1);     // head
+    bx(-.045,.28,-.155,.045,.47,-.09,CLOTH,4,1);  // left arm
+    bx(-.045,.28,.09,.045,.47,.155,CLOTH,5,1);    // right arm (weapon side)
+    bx(-.02,.30,.115,.30,.345,.145,STEEL,6);      // weapon, held forward
+    seal(0);
+    piv.push([.26,.46]);
+    // ---- 1 CAVALRY: rider legs are static, horse legs swing ----
+    mark();
+    bx(-.05,0,-.14,.02,.24,-.08,DARK,2);          // fore/hind legs, paired
+    bx(-.05,0,.08,.02,.24,.14,DARK,3);
+    bx(.16,0,-.14,.23,.24,-.08,DARK,3);
+    bx(.16,0,.08,.23,.24,.14,DARK,2);
+    bx(-.10,.22,-.11,.28,.44,.11,HIDE,0,1);       // barrel + caparison
+    bx(.26,.34,-.06,.36,.56,.06,HIDE,1);          // neck
+    bx(.32,.48,-.055,.46,.60,.055,HIDE,1);        // head
+    bx(-.055,.42,-.09,.055,.62,.09,CLOTH,0,1);    // rider torso
+    bx(-.04,.62,-.04,.04,.74,.04,SKIN,1);         // rider head
+    bx(-.03,.44,.09,.03,.60,.14,CLOTH,5,1);       // rider arm
+    bx(-.01,.46,.11,.26,.485,.135,STEEL,6);       // lance
+    seal(1);
+    piv.push([.24,.52]);
+    // ---- 2 SIEGE: cart, wheels spin with the walk phase ----
+    mark();
+    bx(-.24,.10,-.16,.24,.30,.16,WOOD,0);         // chassis
+    bx(-.20,.30,-.05,.30,.36,.05,WOOD,6);         // beam / arm
+    bx(-.26,0,-.20,-.10,.22,-.14,DARK,2);         // wheels as blocks
+    bx(-.26,0,.14,-.10,.22,.20,DARK,3);
+    bx(.10,0,-.20,.26,.22,-.14,DARK,3);
+    bx(.10,0,.14,.26,.22,.20,DARK,2);
+    bx(-.05,.34,-.05,.05,.46,.05,CLOTH,1,1);      // crew
+    seal(2);
+    piv.push([.11,.30]);
+    // ---- 3 SHIP ----
+    mark();
+    bx(-.40,0,-.15,.40,.16,.15,WOOD,0);           // hull
+    bx(-.30,.16,-.11,.34,.22,.11,WOOD,0);         // deck
+    bx(-.02,.22,-.02,.02,.62,.02,WOOD,1);         // mast
+    bx(-.012,.30,-.20,.012,.60,.20,CANV,6,1);     // sail — team colour
+    seal(3);
+    piv.push([.16,.30]);
+    // ---- 4 BEAST ----
+    mark();
+    bx(-.16,.14,-.09,.18,.32,.09,HIDE,0);         // barrel
+    bx(-.13,0,-.09,-.07,.16,-.03,DARK,2);
+    bx(-.13,0,.03,-.07,.16,.09,DARK,3);
+    bx(.11,0,-.09,.17,.16,-.03,DARK,3);
+    bx(.11,0,.03,.17,.16,.09,DARK,2);
+    bx(.17,.20,-.055,.28,.32,.055,HIDE,1);        // head
+    seal(4);
+    piv.push([.15,.26]);
+    const gl=this.gl;
+    this.uvbo=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,this.uvbo);
+    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(V),gl.STATIC_DRAW);
+    this.uibo=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.uibo);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(I),gl.STATIC_DRAW);
+    this.uOff=off;this.uCnt=cnt;this.uPiv=piv;
+  },
+  initUnits(){
+    const gl=this.gl;
+    this.iext=this.iext||gl.getExtension('ANGLE_instanced_arrays');
+    if(!this.iext){this.noUnits=true;return false;}
+    const vs=`
+      attribute vec3 aPos; attribute vec3 aNrm; attribute vec3 aCol;
+      attribute vec2 aPT;        // part index, team flag
+      attribute vec4 aI0;        // x, baseY, z, yaw
+      attribute vec4 aI1;        // phase, scale, attack, spare
+      attribute vec3 aI2;        // team colour
+      uniform mat4 uMVP; uniform vec3 uLight; uniform vec2 uPiv;
+      varying vec3 vC;
+      vec3 rotX(vec3 p,float a){ return vec3(p.x, p.y*cos(a)-p.z*sin(a), p.y*sin(a)+p.z*cos(a)); }
+      vec3 rotZ(vec3 p,float a){ return vec3(p.x*cos(a)-p.y*sin(a), p.x*sin(a)+p.y*cos(a), p.z); }
+      void main(){
+        vec3 p=aPos; vec3 n=aNrm;
+        // aI1.w is the swing amplitude — 1 while walking, ~0.12 when idle so
+        // standing units breathe rather than freeze
+        float part=aPT.x, s=sin(aI1.x)*aI1.w, atk=aI1.z;
+        // limbs swing about the hip; arms about the shoulder, counter-phase
+        if(part==2.0||part==3.0){
+          float d=(part==2.0)?s:-s;
+          vec3 o=vec3(0.0,uPiv.x,0.0);
+          p=rotZ(p-o,d*0.55)+o; n=rotZ(n,d*0.55);
+        }else if(part==4.0||part==5.0||part==6.0){
+          float d=(part==4.0)?s:-s;
+          if(part==6.0)d=-s;
+          vec3 o=vec3(0.0,uPiv.y,0.0);
+          float a=d*0.32-atk*0.9;
+          p=rotZ(p-o,a)+o; n=rotZ(n,a);
+        }
+        p*=aI1.y; p.y+=0.0;
+        float c=cos(aI0.w),si=sin(aI0.w);
+        vec3 w=vec3(p.x*c-p.z*si, p.y, p.x*si+p.z*c);
+        vec3 wn=vec3(n.x*c-n.z*si, n.y, n.x*si+n.z*c);
+        gl_Position=uMVP*vec4(w.x+aI0.x, w.y+aI0.y, w.z+aI0.z, 1.0);
+        vec3 base=(aPT.y>0.5)?aI2:aCol;
+        float lam=max(0.0,dot(normalize(wn),uLight));
+        vC=base*(0.60+0.52*lam);
+      }`;
+    const fs=`precision mediump float; varying vec3 vC;
+      void main(){ gl_FragColor=vec4(vC,1.0); }`;
+    const mk=(t,s)=>{const sh=gl.createShader(t);gl.shaderSource(sh,s);gl.compileShader(sh);
+      if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS)){console.error(gl.getShaderInfoLog(sh));return null;}return sh;};
+    const v=mk(gl.VERTEX_SHADER,vs),f=mk(gl.FRAGMENT_SHADER,fs);
+    if(!v||!f){this.noUnits=true;return false;}
+    const p=gl.createProgram();gl.attachShader(p,v);gl.attachShader(p,f);
+    ['aPos','aNrm','aCol','aPT','aI0','aI1','aI2'].forEach((n,i)=>gl.bindAttribLocation(p,i,n));
+    gl.linkProgram(p);
+    if(!gl.getProgramParameter(p,gl.LINK_STATUS)){console.error(gl.getProgramInfoLog(p));this.noUnits=true;return false;}
+    this.uProg=p;
+    this.uLoc={uMVP:gl.getUniformLocation(p,'uMVP'),uLight:gl.getUniformLocation(p,'uLight'),
+      uPiv:gl.getUniformLocation(p,'uPiv')};
+    this.buildUnitMeshes();
+    this.uIvbo=[0,1,2,3,4].map(()=>gl.createBuffer());
+    this.uArr=[[],[],[],[],[]];
+    return true;
+  },
+  drawUnits(mvp){
+    if(this.noUnits)return;
+    if(!this.uProg&&!this.initUnits())return;
+    const gl=this.gl,ex=this.iext;
+    const A=this.uArr;for(let i=0;i<5;i++)A[i].length=0;
+    const t=G.t||0;
+    for(const u of G.units){
+      if(!allied(u.p,localP)&&!tileVis(u.x,u.y))continue;
+      const a=this.unitArch(u.type);
+      const tc=teamColor(u.p)||'#3b7bd4';
+      const r=parseInt(tc.slice(1,3),16)/255,g2=parseInt(tc.slice(3,5),16)/255,b2=parseInt(tc.slice(5,7),16)/255;
+      // walk phase advances with speed; idle units breathe slowly instead
+      const moving=(u.spd||0)>0.05;
+      const ph=moving?(t*7.5+u.id*1.7):(t*0.9+u.id*1.7);
+      const amp=moving?1:0.12;
+      const atk=(u.st==='attack')?Math.max(0,Math.sin(t*7.0+u.id)):0;
+      const d=UNITS[u.type]||{};
+      const sc=(d.animal?0.9:d.ship?1.5:d.siege?1.15:1)*(u.type==='elephant'?1.5:1);
+      // aI0 = x, baseY, z, yaw | aI1 = phase, scale, attack, swingAmp | aI2 = team rgb
+      A[a].push(u.x, elevF(u.x,u.y)*10*this.HS, u.y, (u.hdg||0),
+                ph, sc, atk, amp, r, g2, b2);
+    }
+    gl.useProgram(this.uProg);
+    gl.uniformMatrix4fv(this.uLoc.uMVP,false,mvp);
+    gl.uniform3f(this.uLoc.uLight,-0.46,0.80,-0.38);
+    gl.bindBuffer(gl.ARRAY_BUFFER,this.uvbo);
+    const st=44;
+    for(const [i,sz,o] of [[0,3,0],[1,3,12],[2,3,24],[3,2,36]]){
+      gl.enableVertexAttribArray(i);gl.vertexAttribPointer(i,sz,gl.FLOAT,false,st,o);
+      ex.vertexAttribDivisorANGLE(i,0);
+    }
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.uibo);
+    for(let a=0;a<5;a++){
+      const arr=A[a];if(!arr.length)continue;
+      gl.bindBuffer(gl.ARRAY_BUFFER,this.uIvbo[a]);
+      gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(arr),gl.DYNAMIC_DRAW);
+      gl.enableVertexAttribArray(4);gl.vertexAttribPointer(4,4,gl.FLOAT,false,44,0);
+      ex.vertexAttribDivisorANGLE(4,1);
+      gl.enableVertexAttribArray(5);gl.vertexAttribPointer(5,4,gl.FLOAT,false,44,16);
+      ex.vertexAttribDivisorANGLE(5,1);
+      gl.enableVertexAttribArray(6);gl.vertexAttribPointer(6,3,gl.FLOAT,false,44,32);
+      ex.vertexAttribDivisorANGLE(6,1);
+      gl.uniform2f(this.uLoc.uPiv,this.uPiv[a][0],this.uPiv[a][1]);
+      ex.drawElementsInstancedANGLE(gl.TRIANGLES,this.uCnt[a],gl.UNSIGNED_SHORT,
+        this.uOff[a]*2,arr.length/11);
+    }
+    for(let i=4;i<=6;i++){ex.vertexAttribDivisorANGLE(i,0);gl.disableVertexAttribArray(i);}
+    gl.disableVertexAttribArray(3);
+  },
+  /* Fog overlay. Without this the 3D view reveals the whole map — on Black
+     Forest that hands over the entire tree layout, which is a gameplay
+     difference, not a cosmetic gap. Source is fogS (512², power-of-two).
+     The 2D path's drifting mist layer is NOT ported yet. */
+  initFog(){
+    const gl=this.gl;
+    // Fog is a map-sized quad lying ON the ground plane, projected by the same
+    // camera matrix — so it rotates and tilts with the world instead of being
+    // pasted flat over the screen.
+    const vs=`attribute vec2 aCorner;
+      uniform mat4 uMVP; uniform float uMap;
+      varying vec2 vUV;
+      void main(){
+        gl_Position=uMVP*vec4(aCorner.x*uMap, 0.0, aCorner.y*uMap, 1.0);
+        vUV=aCorner;
+      }`;
+    const fs=`precision mediump float;
+      uniform sampler2D uFog; varying vec2 vUV;
+      void main(){ gl_FragColor=texture2D(uFog,vUV); }`;
+    const mk=(t,s)=>{const sh=gl.createShader(t);gl.shaderSource(sh,s);gl.compileShader(sh);
+      if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS)){console.error(gl.getShaderInfoLog(sh));return null;}return sh;};
+    const v=mk(gl.VERTEX_SHADER,vs),f=mk(gl.FRAGMENT_SHADER,fs);
+    if(!v||!f)return false;
+    const p=gl.createProgram();gl.attachShader(p,v);gl.attachShader(p,f);
+    gl.bindAttribLocation(p,0,'aCorner');       // deterministic index, see drawFog
+    gl.linkProgram(p);
+    if(!gl.getProgramParameter(p,gl.LINK_STATUS)){console.error(gl.getProgramInfoLog(p));return false;}
+    this.fogProg=p;
+    this.fogLoc={uMVP:gl.getUniformLocation(p,'uMVP'),
+      uMap:gl.getUniformLocation(p,'uMap'),uFog:gl.getUniformLocation(p,'uFog')};
+    this.quad=gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER,this.quad);
+    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([0,0, 1,0, 0,1, 1,0, 1,1, 0,1]),gl.STATIC_DRAW);
+    this.fogTex=gl.createTexture();
+    this.fogVerAt=-1;
+    return true;
+  },
+  drawFog(mvp){
+    const gl=this.gl;
+    if(!this.fogProg&&!this.initFog())return;
+    if(fogDirty)renderFogCanvas();     // in 3D nothing else drives this; draw() does in 2D
+    if(this.fogVerAt!==fogVer){
+      gl.bindTexture(gl.TEXTURE_2D,this.fogTex);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false);
+      gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,fogS);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+      this.fogVerAt=fogVer;
+    }
+    gl.useProgram(this.fogProg);
+    gl.disable(gl.DEPTH_TEST); gl.depthMask(false);
+    gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+    gl.bindBuffer(gl.ARRAY_BUFFER,this.quad);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
+    gl.uniformMatrix4fv(this.fogLoc.uMVP,false,mvp);
+    gl.uniform1f(this.fogLoc.uMap,MAP);
+    gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.fogTex);
+    gl.uniform1i(this.fogLoc.uFog,0);
+    gl.drawArrays(gl.TRIANGLES,0,6);
+    gl.disable(gl.BLEND); gl.depthMask(true); gl.enable(gl.DEPTH_TEST);
+  },
+  upload(){
+    const gl=this.gl;
+    gl.bindTexture(gl.TEXTURE_2D,this.tex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,terrain);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+    /* Mipmaps. The terrain canvas is non-power-of-two, which WebGL1 forbids
+       mipmapping — hence the old LINEAR-only path, which shimmered badly at the
+       zoom floor (a ~2.2x minification of a 2912px texture, full screen, every
+       frame). WebGL2 allows NPOT mipmaps, so take them when we have them. */
+    if(this.gl2){
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
+      this.terrainMips=true;
+    }else{
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+      this.terrainMips=false;
+    }
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+    /* Anisotropy. This is the one that matters for a TILTING camera: the ground
+       plane is viewed at a grazing angle, where isotropic filtering picks a mip
+       from the worst axis and smears the terrain to mush. Capped at 8 — beyond
+       that costs bandwidth on mobile for no visible gain at this texel density. */
+    if(this.aniso)
+      gl.texParameterf(gl.TEXTURE_2D,this.aniso.TEXTURE_MAX_ANISOTROPY_EXT,
+                       Math.min(8,this.anisoMax));
+    this.texVer=terrainVer;
+  },
+  draw(){
+    if(!G||!vw||!vh)return;
+    if(!this.init())return;
+    const gl=this.gl,c=this.canvas;
+    if(c.width!==vw*dpr||c.height!==vh*dpr){c.width=vw*dpr;c.height=vh*dpr;}
+    gl.viewport(0,0,c.width,c.height);
+    gl.clearColor(.071,.086,.043,1);
+    gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+    if(this.meshKey!==MAP+':'+elevVer)this.buildMesh();
+    if(this.failed)return;
+    if(this.texVer!==terrainVer)this.upload();
+    /* NB: the depthRange split added in the stage-2 foundation is GONE, and
+       deliberately so. It emulated 2D's painter order (flat terrain blit before
+       all entities) because depth was a fake tile-based key. The camera is now
+       a real projection, so depth is real: terrain occluding an entity behind a
+       hill is CORRECT in 3D, not a bug to be engineered around. */
+    const mvp=this.mvp();
+    gl.useProgram(this.prog);
+    gl.bindBuffer(gl.ARRAY_BUFFER,this.vbo);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.ibo);
+    const st=24;
+    gl.enableVertexAttribArray(this.loc.aPos);
+    gl.vertexAttribPointer(this.loc.aPos,3,gl.FLOAT,false,st,0);
+    gl.enableVertexAttribArray(this.loc.aUV);
+    gl.vertexAttribPointer(this.loc.aUV,2,gl.FLOAT,false,st,12);
+    gl.enableVertexAttribArray(this.loc.aShade);
+    gl.vertexAttribPointer(this.loc.aShade,1,gl.FLOAT,false,st,20);
+    gl.uniformMatrix4fv(this.loc.uMVP,false,mvp);
+    gl.uniform1f(this.loc.uHScale,this.HS);
+    gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.tex);
+    gl.uniform1i(this.loc.uTex,0);
+    gl.drawElements(gl.TRIANGLES,this.idxCount,this.idxType,0);
+    this.drawTrees(mvp);
+    this.drawBlds(mvp);
+    this.drawUnits(mvp);
+    this.drawFog(mvp);
+  },
+};
+let use3D=false;
+function toggle3D(){
+  if(!use3D&&!R3.init())return;          // no WebGL: stay on 2D and say so
+  use3D=!use3D;
+  document.body.classList.toggle('r3d',use3D);
+  const b=document.getElementById('d3Btn');
+  if(b)b.classList.toggle('sel',use3D);
+  toast(use3D?'3D — drag to pan, right-drag or two fingers to rotate/tilt, ⟲ to reset'
+             :'2D renderer');
+}
+document.getElementById('d3Btn').addEventListener('click',toggle3D);
+/* The standalone rotate handler that used to live here is GONE. It bound a
+   SECOND independent pointerdown to #view3 and would now fight the shared
+   onDown/onMove that give 3D its tap, command, box-select and pan. Its
+   gestures live in onMove (right/middle drag) and twoFingerOrbit; its R key
+   moved into the main keydown handler so it cannot shadow the contextual
+   train/build keys ('r' is Ram at a siege workshop and Turtle Ship at a dock). */
+document.getElementById('camBtn').onclick=()=>{
+  R3.yaw=R3.homeYaw;R3.setPitch(R3.homePitch);toast('Camera reset');
+};
 function frame(now){
   requestAnimationFrame(frame);
   if(!G)return;
@@ -9988,7 +11367,7 @@ function frame(now){
   }
   updateTop();
   updateOverlays();
-  draw();
+  if(use3D)R3.draw();else draw();
 }
 // dock the minimap + zoom buttons into the panel on wide screens, overlay on phones
 const miniDock=document.getElementById('miniDock'),mmq=matchMedia('(min-width:760px)');

@@ -10380,9 +10380,29 @@ const R3={
     if(this.failed)return false;
     if(this.gl)return true;
     const c=document.getElementById('view3');
-    const gl=c.getContext('webgl',{antialias:true,alpha:false,depth:true});
+    const opt={antialias:true,alpha:false,depth:true};
+    /* Prefer WebGL2: it gives mipmaps on NON-power-of-two textures, which the
+       terrain canvas is (e.g. 2912²), plus 32-bit indices and instancing in
+       core. WebGL1 remains a full fallback. */
+    let gl=c.getContext('webgl2',opt); this.gl2=!!gl;
+    if(!gl){gl=c.getContext('webgl',opt);}
     if(!gl){this.failed=true;toast('This device has no WebGL — staying on the 2D view');return false;}
     this.canvas=c; this.gl=gl;
+    /* TRAP: under WebGL2 getExtension('ANGLE_instanced_arrays') returns NULL,
+       because instancing is core there. Every instanced path in this file
+       (trees, buildings, units) checks this.iext and would silently disable
+       itself. Shim it so the ~20 ANGLE call sites keep working unchanged. */
+    if(this.gl2){
+      this.iext={
+        vertexAttribDivisorANGLE:(i,d)=>gl.vertexAttribDivisor(i,d),
+        drawElementsInstancedANGLE:(m,n,t,o,c2)=>gl.drawElementsInstanced(m,n,t,o,c2),
+      };
+    }else this.iext=gl.getExtension('ANGLE_instanced_arrays');
+    // anisotropy matters far more than usual here: tilting the camera views the
+    // ground at a grazing angle, which is exactly what isotropic filtering ruins
+    this.aniso=gl.getExtension('EXT_texture_filter_anisotropic')
+             ||gl.getExtension('WEBKIT_EXT_texture_filter_anisotropic');
+    this.anisoMax=this.aniso?gl.getParameter(this.aniso.MAX_TEXTURE_MAX_ANISOTROPY_EXT):1;
     const vs=`
       attribute vec3 aPos;      // tile x, height in PIXELS, tile y
       attribute vec2 aUV;
@@ -10444,7 +10464,9 @@ const R3={
     }
     const I=(N+1)*(N+1)>65535?new Uint32Array(idx):new Uint16Array(idx);
     this.idxType=I.BYTES_PER_ELEMENT===4?gl.UNSIGNED_INT:gl.UNSIGNED_SHORT;
-    if(this.idxType===gl.UNSIGNED_INT&&!gl.getExtension('OES_element_index_uint')){
+    // same WebGL2 trap as the instancing extension: OES_element_index_uint
+    // returns null under WebGL2 because 32-bit indices are core there
+    if(this.idxType===gl.UNSIGNED_INT&&!this.gl2&&!gl.getExtension('OES_element_index_uint')){
       this.failed=true;toast('This device cannot render a map this large in 3D');return;
     }
     gl.bindBuffer(gl.ARRAY_BUFFER,this.vbo);gl.bufferData(gl.ARRAY_BUFFER,verts,gl.STATIC_DRAW);
@@ -11203,11 +11225,28 @@ const R3={
     gl.bindTexture(gl.TEXTURE_2D,this.tex);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
     gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,terrain);
-    // non-power-of-two canvas: clamp + linear, no mipmaps
     gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+    /* Mipmaps. The terrain canvas is non-power-of-two, which WebGL1 forbids
+       mipmapping — hence the old LINEAR-only path, which shimmered badly at the
+       zoom floor (a ~2.2x minification of a 2912px texture, full screen, every
+       frame). WebGL2 allows NPOT mipmaps, so take them when we have them. */
+    if(this.gl2){
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
+      this.terrainMips=true;
+    }else{
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+      this.terrainMips=false;
+    }
     gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+    /* Anisotropy. This is the one that matters for a TILTING camera: the ground
+       plane is viewed at a grazing angle, where isotropic filtering picks a mip
+       from the worst axis and smears the terrain to mush. Capped at 8 — beyond
+       that costs bandwidth on mobile for no visible gain at this texel density. */
+    if(this.aniso)
+      gl.texParameterf(gl.TEXTURE_2D,this.aniso.TEXTURE_MAX_ANISOTROPY_EXT,
+                       Math.min(8,this.anisoMax));
     this.texVer=terrainVer;
   },
   draw(){
