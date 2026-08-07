@@ -41,6 +41,11 @@
   /* ---------- canvas ---------- */
   #viewwrap{flex:1 1 auto;position:relative;overflow:hidden;background:#12160b;}
   #view{position:absolute;inset:0;width:100%;height:100%;touch-action:none;}
+  /* 3D renderer (rewrite in progress) — sits exactly over #view; only one of the
+     two is visible at a time so they can be compared frame for frame. */
+  #view3{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:none;}
+  body.r3d #view{display:none;}
+  body.r3d #view3{display:block;}
   #minimap{position:absolute;top:8px;right:8px;width:132px;height:77px;
     background:transparent;
     filter:drop-shadow(0 3px 8px rgba(0,0,0,.55));}
@@ -256,6 +261,7 @@
 
   <div id="viewwrap">
     <canvas id="view"></canvas>
+    <canvas id="view3"></canvas>
     <canvas id="minimap" width="200" height="116"></canvas>
     <div id="zoomBtns">
       <button id="zin" aria-label="Zoom in">+</button>
@@ -264,6 +270,7 @@
       <button id="homeBtn" aria-label="Go to Town Hall" title="Jump to your Town Hall">⌂</button>
       <button id="idleBtn" aria-label="Idle villager" title="Jump to an idle villager (.)">🧑‍🌾</button>
       <button id="deselBtn" aria-label="Deselect" title="Deselect everything (Esc)">✕</button>
+      <button id="d3Btn" aria-label="Toggle 3D view" title="Switch between the 2D and 3D renderers">3D</button>
       <button id="panelBtn" aria-label="Hide panel" title="Hide the command panel for a bigger map">▾</button>
     </div>
     <div id="clock" class="ovt"></div>
@@ -4512,8 +4519,12 @@ function stampCleared(x,y){
   tctx.strokeStyle='#8a6a3a';tctx.lineWidth=.7;
   tctx.beginPath();tctx.ellipse(sx,sy-2,1.4,.8,0,0,7);tctx.stroke();
 }
+// Bumped whenever the terrain canvas is repainted. The 3D renderer uses that
+// canvas as its ground texture, so this is how it knows to re-upload.
+let terrainVer=0;
 function refreshTerrain(){
   if(!G)return;
+  terrainVer++;
   tctx.setTransform(TREZT,0,0,TREZT,0,0);
   // AoE2-style ground: tightly-spaced warm olive tones so no tile checkerboard
   // shows — the texture comes from the fine grain pass below, not tile contrast
@@ -9928,6 +9939,160 @@ function begin(){
   }
   last=performance.now();
 }
+/* ═══════════════════ 3D RENDERER (rewrite, stage 1) ═══════════════════
+   Raw WebGL — no library, because the artifact CSP blocks external scripts and
+   the game has to stay one self-contained file.
+
+   The camera is the important idea here. Rather than inventing a 3D camera and
+   trying to make it look like the old view, the vertex shader reproduces the 2D
+   projection EXACTLY:
+
+       screenX = ((wx - wz) * IW - cam.x) * zoom
+       screenY = ((wx + wz) * IH - height - cam.y) * zoom
+
+   which is what isoPt() + the ctx transform in draw() already do. So both
+   renderers frame the world identically and can be compared frame for frame,
+   and every existing screen-space thing (tap hit-testing, the minimap, camera
+   clamping) keeps working untouched while the rewrite proceeds.
+
+   Stage 1 renders the ground only: a real height-mapped mesh, textured with the
+   existing terrain canvas — so all the shoreline/water work carries straight
+   over, and hills become actual geometry instead of the painted rim lines the
+   2D view fakes them with. Units and buildings are later stages. */
+const R3={
+  gl:null, prog:null, tex:null, texVer:-1, mesh:null, meshKey:'', failed:false,
+  HILL:9,                       // hill height in 2D pixels — matches the fake rim shading
+  init(){
+    if(this.failed)return false;
+    if(this.gl)return true;
+    const c=document.getElementById('view3');
+    const gl=c.getContext('webgl',{antialias:true,alpha:false,depth:true});
+    if(!gl){this.failed=true;toast('This device has no WebGL — staying on the 2D view');return false;}
+    this.canvas=c; this.gl=gl;
+    const vs=`
+      attribute vec3 aPos;      // tile x, height in px, tile y
+      attribute vec2 aUV;
+      attribute float aShade;
+      uniform vec2 uCam; uniform float uZoom; uniform vec2 uView;
+      uniform vec2 uIso; uniform float uSpan;
+      varying vec2 vUV; varying float vShade;
+      void main(){
+        float sx=((aPos.x-aPos.z)*uIso.x-uCam.x)*uZoom;
+        float sy=((aPos.x+aPos.z)*uIso.y-aPos.y-uCam.y)*uZoom;
+        // further south = drawn in front = smaller depth
+        float d=1.0-(aPos.x+aPos.z)/uSpan;
+        gl_Position=vec4(sx/(uView.x*0.5)-1.0, 1.0-sy/(uView.y*0.5), d, 1.0);
+        vUV=aUV; vShade=aShade;
+      }`;
+    const fs=`
+      precision mediump float;
+      uniform sampler2D uTex;
+      varying vec2 vUV; varying float vShade;
+      void main(){
+        vec4 t=texture2D(uTex,vUV);
+        gl_FragColor=vec4(t.rgb*vShade,1.0);
+      }`;
+    const mk=(type,src)=>{const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);
+      if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){console.error(gl.getShaderInfoLog(s));return null;}return s;};
+    const v=mk(gl.VERTEX_SHADER,vs),f=mk(gl.FRAGMENT_SHADER,fs);
+    if(!v||!f){this.failed=true;return false;}
+    const p=gl.createProgram();gl.attachShader(p,v);gl.attachShader(p,f);gl.linkProgram(p);
+    if(!gl.getProgramParameter(p,gl.LINK_STATUS)){console.error(gl.getProgramInfoLog(p));this.failed=true;return false;}
+    this.prog=p;
+    this.loc={aPos:gl.getAttribLocation(p,'aPos'),aUV:gl.getAttribLocation(p,'aUV'),
+      aShade:gl.getAttribLocation(p,'aShade'),uCam:gl.getUniformLocation(p,'uCam'),
+      uZoom:gl.getUniformLocation(p,'uZoom'),uView:gl.getUniformLocation(p,'uView'),
+      uIso:gl.getUniformLocation(p,'uIso'),uSpan:gl.getUniformLocation(p,'uSpan'),
+      uTex:gl.getUniformLocation(p,'uTex')};
+    this.tex=gl.createTexture();
+    this.vbo=gl.createBuffer(); this.ibo=gl.createBuffer();
+    gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL);
+    return true;
+  },
+  // Ground mesh: one quad per tile, corner heights averaged from the elevation
+  // grid so hills are continuous instead of stepping at every cell.
+  buildMesh(){
+    const gl=this.gl,N=MAP,H=this.HILL;
+    const ev=(x,y)=>(x<0||y<0||x>=N||y>=N||!G.elev)?0:(G.elev[y*N+x]?1:0);
+    const cornerH=(cx,cy)=>(ev(cx-1,cy-1)+ev(cx,cy-1)+ev(cx-1,cy)+ev(cx,cy))/4*H;
+    const verts=new Float32Array((N+1)*(N+1)*6);
+    let o=0;
+    for(let y=0;y<=N;y++)for(let x=0;x<=N;x++){
+      const h=cornerH(x,y);
+      // cheap lambert-ish term from the local slope, warm light from the NW
+      const slope=(cornerH(x+1,y)+cornerH(x,y+1)-cornerH(x-1,y)-cornerH(x,y-1))/(4*H||1);
+      verts[o++]=x; verts[o++]=h; verts[o++]=y;
+      verts[o++]=x/N; verts[o++]=y/N;
+      verts[o++]=Math.max(.78,Math.min(1.18,1-slope*.34));
+    }
+    const idx=[];
+    for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+      const a=y*(N+1)+x,b=a+1,c=a+N+1,d=c+1;
+      idx.push(a,c,b, b,c,d);
+    }
+    const I=(N+1)*(N+1)>65535?new Uint32Array(idx):new Uint16Array(idx);
+    this.idxType=I.BYTES_PER_ELEMENT===4?gl.UNSIGNED_INT:gl.UNSIGNED_SHORT;
+    if(this.idxType===gl.UNSIGNED_INT&&!gl.getExtension('OES_element_index_uint')){
+      this.failed=true;toast('This device cannot render a map this large in 3D');return;
+    }
+    gl.bindBuffer(gl.ARRAY_BUFFER,this.vbo);gl.bufferData(gl.ARRAY_BUFFER,verts,gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.ibo);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,I,gl.STATIC_DRAW);
+    this.idxCount=idx.length;
+    this.meshKey=N+':'+(G.elevVer||0);
+  },
+  upload(){
+    const gl=this.gl;
+    gl.bindTexture(gl.TEXTURE_2D,this.tex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,terrain);
+    // non-power-of-two canvas: clamp + linear, no mipmaps
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+    this.texVer=terrainVer;
+  },
+  draw(){
+    if(!G||!vw||!vh)return;
+    if(!this.init())return;
+    const gl=this.gl,c=this.canvas;
+    if(c.width!==vw*dpr||c.height!==vh*dpr){c.width=vw*dpr;c.height=vh*dpr;}
+    gl.viewport(0,0,c.width,c.height);
+    gl.clearColor(.071,.086,.043,1);
+    gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+    if(this.meshKey!==MAP+':'+(G.elevVer||0))this.buildMesh();
+    if(this.failed)return;
+    if(this.texVer!==terrainVer)this.upload();
+    gl.useProgram(this.prog);
+    gl.bindBuffer(gl.ARRAY_BUFFER,this.vbo);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.ibo);
+    const st=24;
+    gl.enableVertexAttribArray(this.loc.aPos);
+    gl.vertexAttribPointer(this.loc.aPos,3,gl.FLOAT,false,st,0);
+    gl.enableVertexAttribArray(this.loc.aUV);
+    gl.vertexAttribPointer(this.loc.aUV,2,gl.FLOAT,false,st,12);
+    gl.enableVertexAttribArray(this.loc.aShade);
+    gl.vertexAttribPointer(this.loc.aShade,1,gl.FLOAT,false,st,20);
+    gl.uniform2f(this.loc.uCam,G.cam.x,G.cam.y);
+    gl.uniform1f(this.loc.uZoom,G.cam.z);
+    gl.uniform2f(this.loc.uView,vw,vh);
+    gl.uniform2f(this.loc.uIso,IW,IH);
+    gl.uniform1f(this.loc.uSpan,MAP*2);
+    gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.tex);
+    gl.uniform1i(this.loc.uTex,0);
+    gl.drawElements(gl.TRIANGLES,this.idxCount,this.idxType,0);
+  },
+};
+let use3D=false;
+function toggle3D(){
+  if(!use3D&&!R3.init())return;          // no WebGL: stay on 2D and say so
+  use3D=!use3D;
+  document.body.classList.toggle('r3d',use3D);
+  const b=document.getElementById('d3Btn');
+  if(b)b.classList.toggle('sel',use3D);
+  toast(use3D?'3D renderer (ground only — units and buildings still to come)':'2D renderer');
+}
+document.getElementById('d3Btn').addEventListener('click',toggle3D);
 function frame(now){
   requestAnimationFrame(frame);
   if(!G)return;
@@ -9978,7 +10143,7 @@ function frame(now){
   }
   updateTop();
   updateOverlays();
-  draw();
+  if(use3D)R3.draw();else draw();
 }
 // dock the minimap + zoom buttons into the panel on wide screens, overlay on phones
 const miniDock=document.getElementById('miniDock'),mmq=matchMedia('(min-width:760px)');

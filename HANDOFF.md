@@ -168,6 +168,24 @@ Plan agreed 2026-08-05: lockstep — peers exchange COMMANDS, not state, and eac
 - Determinism test method: set `pendingSeed`, call `newGame()`, step N times, compare `stateHash()`. Verified identical on all 3 maps and 8 players. **Re-run after ANY sim change.**
 - Watch out: `Object.keys(G.res)` ordering, `Array.sort` stability, and `Date.now()` would all break lockstep. None are currently used in the sim.
 
+## 3D RENDERER REWRITE — IN PROGRESS (stage 1 of 6 done, 2026-08-07, NOT deployed)
+Daniel asked for 3D unit models instead of 2D sprites. He was given four options (pre-rendered 3D→sprites, harder 2D shading, 3D units over 2D world, full rewrite) with the trade-offs, and **chose the full 3D rewrite** knowing it is a multi-session job that replaces the renderer and the art direction. That is the decision; don't relitigate it.
+
+**The one architectural rule: the 3D renderer is built BESIDE the 2D one, never instead of it.** `use3D` + the `#d3Btn` button swap `body.r3d`, which shows `#view3` and hides `#view`. Reasons, in order of importance:
+1. The previous from-scratch attempt (`../tiny-engine`) was parked at step 2 with "that's worse, go back to the old game." A toggle makes every stage directly A/B comparable against the thing it is replacing, so "worse" is visible immediately rather than at the end.
+2. The game stays playable and shippable at every commit.
+3. **The simulation must not be touched.** Determinism baselines are the proof — re-run them after every stage. Multiplayer survives the rewrite for free precisely because rendering is not in the hash.
+
+**Camera — the key idea.** The vertex shader reproduces the EXISTING 2D projection exactly rather than inventing a 3D camera:
+`screenX=((wx-wz)*IW-cam.x)*zoom`, `screenY=((wx+wz)*IH-height-cam.y)*zoom` — i.e. what `isoPt()` + the ctx transform in `draw()` already do. Consequences worth keeping: both renderers frame the world identically (so screenshots can be diffed), and **every screen-space system keeps working untouched** — tap hit-testing, the minimap, `clampCam`, box select. Do not replace this with a conventional lookAt/perspective camera without a plan for all of those.
+
+- **Raw WebGL, no library.** The artifact CSP blocks external scripts and the game must stay one self-contained file; inlining three.js would add ~600KB. `R3` is ~150 lines and lives just above `frame()`.
+- **Stage 1 (DONE): ground.** Height-mapped mesh, one quad per tile, corner heights averaged from `G.elev` so hills are continuous instead of stepping per cell. **Textured with the existing `terrain` canvas** — which means all the concept-art palette work and the whole open-map shoreline/water pass carry into 3D for free, and stage 1 looked right on the first try. `terrainVer` is bumped in `refreshTerrain` and is how R3 knows to re-upload. Hills are real geometry now, not the painted rim lines the 2D view fakes.
+- **Remaining stages:** 2 trees/resources → 3 buildings (**`isoBlock`/`roofGable`/`coneRoof` already compute real 3D corners and project them by hand — porting them to actual geometry is the natural next step, not a rewrite**) → 4 units (the rigs are parameterised by costume tables; build low-poly meshes from the same data) → 5 fog/selection/projectiles/corpses → 6 retire the 2D path, or keep it as a low-end fallback.
+- **Perf note, stated honestly:** the measured 0.01ms for `R3.draw()` on 8p/128 is CPU submit time only — GL is asynchronous and this does NOT measure GPU cost. Real frame cost is unknown until there is something heavy on screen; treat mobile GPU load as the top open risk for stages 4-5.
+- **Gotcha:** WebGL was created without `preserveDrawingBuffer`, so `view3.toDataURL()` only works in the SAME tick as the draw. The `/save` screenshot recipe must call `R3.draw()` and `toDataURL()` back to back.
+- Verified at stage 1: four determinism baselines exact, toggle works both directions, both renderers still paint, 0 GL errors, 0 console errors.
+
 ## Recent fixes (last published state)
 - Label "open-map" (2026-08-07, sw **tq-v31**). Daniel: "change it from a tile to just an open map with the texture." **The grass texture was never the problem** — it is smooth and was left alone. Three things were drawing the grid, all in `refreshTerrain`:
   1. **The shoreline was a 26px diamond staircase.** Water fills whole tiles and the sand was a constant-width strip along the tile edge, so every coast traced the cell boundary exactly. Now a pass after the water loop walks each water/land edge and stamps jittered lobes **both ways** across it, plus a dither band so the top of the beach has no hard outer rim. Lobes are flattened ALONG the shore — round ones read as a row of cotton-wool bubbles (first attempt did exactly that).
