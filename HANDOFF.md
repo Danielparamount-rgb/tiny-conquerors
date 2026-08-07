@@ -69,7 +69,7 @@ A mobile-friendly, browser-based RTS inspired by Age of Empires II: The Conquero
 
 ## Render app deployment — ✅ LIVE
 - **https://tiny-conquerors.onrender.com** — Render static site `tiny-conquerors`, service ID `srv-d9pibf5bedkc73c5qumg`, connected to GitHub repo Danielparamount-rgb/tiny-conquerors, branch `main`, **publish directory `app`**, no build command. Auto-deploys on push to main.
-- Current live version: **sw `tq-v25`** (multiplayer-live). There are now TWO Render services: the static site (`app`) and the relay Web Service (`relay`) — see MULTIPLAYER. Verified after every deploy by fetching sw.js + index.html from the shell (bypasses the cache-first SW) — check the byte size matches the local `app/index.html` exactly, that's the quickest proof the right build shipped.
+- Current live version: **sw `tq-v26`** (dropped-player-ai). There are now TWO Render services: the static site (`app`) and the relay Web Service (`relay`) — see MULTIPLAYER. Verified after every deploy by fetching sw.js + index.html from the shell (bypasses the cache-first SW) — check the byte size matches the local `app/index.html` exactly, that's the quickest proof the right build shipped.
 - **Commit-message gotcha**: PowerShell here-strings choke on messages containing double quotes (`git commit -m @'...'@` split mid-message once). Use the Bash tool with `git commit -F - << 'EOF'` for multi-line messages.
 - First verified live 2026-08-05 (tq-v1): SW active, manifest served as `application/manifest+json` (installable), icons OK, zero console errors.
 - **GOTCHA — Render header rule for the manifest**: Render serves `.webmanifest` as `binary/octet-stream`, which can block Add-to-Home-Screen. Fixed with a dashboard Headers rule: path `/manifest.webmanifest`, name `Content-Type`, value `application/manifest+json`. Saving headers triggers a redeploy — during it files 404 inconsistently for ~30s; that's transient, re-check before diagnosing.
@@ -90,7 +90,7 @@ A mobile-friendly, browser-based RTS inspired by Age of Empires II: The Conquero
 - Deploy checklist for future updates: edit tiny-conquerors.html → run `build-app.ps1` (MANDATORY — app/index.html is a generated copy and goes stale silently) → bump VERSION in app/sw.js ('tq-v2', ...) → `git add -A; git commit; git push` → Render auto-deploys on push to main.
 - IP boundary told to user (they asked for "exactly like AoE2", "just for friends"): imitate style with ORIGINAL art/sounds only; no ripped Microsoft assets, especially once hosted on Render.
 
-## MULTIPLAYER — ✅ WORKING END TO END (2026-08-06, sw tq-v25)
+## MULTIPLAYER — ✅ WORKING END TO END (2026-08-06, sw tq-v26)
 **It is live. Two people on https://tiny-conquerors.onrender.com can play each other right now**: Play with Friends → Host → read the 4-letter code out → the other person Joins. Verified in production, not just locally — two browser tabs on the live site, through the deployed relay, ran 1800 turns with commands crossing the wire and finished on identical `stateHash()` (`83bfc2fa`).
 
 ### The relay service
@@ -105,7 +105,15 @@ A mobile-friendly, browser-based RTS inspired by Age of Empires II: The Conquero
   - **`face:p===0?1:-1` in addUnit is deliberately NOT localP** — it is written into the unit record, so keying it to the viewer would have two peers build different units.
 - **Lockstep** (`NET_LAG=5` turns = 250ms): orders are scheduled 5 turns ahead; a turn runs only when every peer's list for it has arrived. Falling behind stalls everyone — that is the point — and after 2.5s the others are told who they're waiting for. Hashes go out every 20 turns.
 - **`drainCmds()` no-ops in netMode** — the queue is shipped, not applied locally, or every order would execute twice on one machine.
-- **Failure handling**: a desync halts both peers within a second with a message that does not blame the player's connection; a peer that closes ends the match by name after 4s. A dropped player currently ends the battle — handing their town to an AI would need a moment every machine agreed on, and one of them is gone. That is the obvious next feature (broadcast a "seat N becomes AI at turn T" command).
+- **Failure handling**: a desync halts both peers within a second with a message that does not blame the player's connection.
+- **A dropped player's seat passes to the computer** (sw tq-v26). The whole trick is that every machine must flip on the SAME turn:
+  - Only the relay knows a socket died, so **the relay names the turn**: `maxTurn + AI_TAKEOVER_DELAY(20)`, broadcast as `{t:'ai',seat,turn,name}`. That turn is always in everyone's future, because no peer can have executed past the leaver's last command yet.
+  - Filling the gap between that last command and the takeover turn rests on **WebSocket delivery being ordered**: by the time a peer gets the notice, everything the leaver DID send has already arrived. So `netSeatCmds` treats a missing list for a `netGone` seat as empty, and every peer fills the same blanks with the same nothing.
+  - Handovers are walked **in seat order, not Map order** (`for(let s=0;s<NP;s++)if(netAiAt.get(s)===netTurn)`) — Map iteration order is one more thing two machines could disagree about.
+  - `netSeatToAI` seeds the AI from values identical on every peer (`G.t+90`, `.1*seat`); `nextAtk` is in `stateHash`, so it has to match exactly.
+  - **When the LAST opponent goes, `netGoOffline()` drops to a plain offline game** rather than depending on a relay nobody is on the other end of. **Gotcha found in testing:** that transition beats the takeover turn, so `netRunTurn` never comes round to honour it and the abandoned seat sat there as a dead town. `netGoOffline` now applies every pending handover on its way out — there is nobody left to disagree with. It also flushes the player's own in-flight commands so the last 250ms of orders aren't binned.
+  - Verified three-peer on a local relay (both survivors flipped on turn 3016 and were still on identical hashes 1400 turns later, AI-grown town matching on both) and again two-peer against the deployed relay from the live site.
+  - **Still missing: reconnect.** Rejoining would need the relay to keep a replay of commands from turn 0 and a way to hand the seat back from the AI.
 - **The artifact cannot do multiplayer** — its CSP blocks all outbound connections. `netAvailable()`/the socket error message point at the web app.
 
 ### Test recipe (reuse this)
@@ -122,7 +130,7 @@ Plan agreed 2026-08-05: lockstep — peers exchange COMMANDS, not state, and eac
    - Two fixes fell out of the move: the wall-line build now uses `bldCostOf` (it used the raw `BLDS.cost`, so **Mayan half-price walls never applied to a line**), and villagers sent to help now go to the first section actually placed rather than whatever unbuilt wall `G.blds.find` turned up first.
 3. ✅ **Relay server** (sw tq-v25, commit 6bcbd84) — `relay/`, deployed, see above.
 4. ✅ **Lockstep loop** — see above.
-5. ✅ **Lobby** (host/join by code, civ picks, host-set map/AI/skill/teams/pace). Teams and reconnect are the remaining polish: a dropped player ends the match rather than being taken over by an AI.
+5. ✅ **Lobby** (host/join by code, civ picks, host-set map/AI/skill/teams/pace) and ✅ **drop handling** (the computer takes an abandoned seat on a relay-appointed turn). Reconnect is the remaining piece.
 **Key facts for whoever continues:**
 - `SR()`/`SRi(n)` = the ONLY randomness allowed to affect G. `seedSim(s)` sets it; `gameSeed` holds the seed and is saved. Cosmetic randomness stays on `Math.random()` deliberately (75 of the 84 sites) — peers may differ there.
 - **`uid=1` reset in newGame is load-bearing** — commands reference units by id and `creepToward` reads `u.id%4`. Removing it desyncs peers.
@@ -131,6 +139,7 @@ Plan agreed 2026-08-05: lockstep — peers exchange COMMANDS, not state, and eac
 - Watch out: `Object.keys(G.res)` ordering, `Array.sort` stability, and `Date.now()` would all break lockstep. None are currently used in the sim.
 
 ## Recent fixes (last published state)
+- Label "dropped-player-ai" (2026-08-06, sw **tq-v26**, commit 510d152). A dropped player's seat now passes to the computer instead of ending the battle; design and the gotcha it turned up are in the MULTIPLAYER section above.
 - Label "multiplayer-live" (2026-08-06, sw **tq-v25**, commit 6bcbd84). Multiplayer steps 3-5 — **the thing the app exists for now works**. Full design, the relay's Render settings, the failure-handling rules and the two-tab test recipe are all in the MULTIPLAYER section above; this entry is just the pointer.
   - The one preparatory change worth knowing about independently: **the `localP` sweep**. Roughly 200 hardcoded references to player 0 in the view layer became `localP`. Verified behaviour-preserving by building a page from the previous commit and running seven scenarios (three maps, 2/3/4/8 players, three team modes, three civs) head-to-head — every hash identical. That head-to-head-against-the-last-commit trick is worth reusing for any future sweep of this kind.
 - Label "wildlife-and-commands" (2026-08-06, sw **tq-v24**, commits d68ffcf + 19ce974). Three pieces in one pass; user asked for the whole recommended list at once.
@@ -328,7 +337,7 @@ Plan agreed 2026-08-05: lockstep — peers exchange COMMANDS, not state, and eac
 - **Multiplayer: DONE** (label "multiplayer-live", 2026-08-06) — all five steps, live and verified in production.
 - **Recommended next by priority** (reassessed 2026-08-06, with multiplayer working):
   1. **Play it with a real friend on real phones and see what breaks.** Everything so far was verified by two tabs on one machine — same clock, same network, no packet loss, no phone falling asleep mid-turn. The unknowns are latency spikes, backgrounded browsers on iOS, and whether `NET_LAG=5` (250ms) is enough over a phone network. This is worth doing before building more on top.
-  2. **Dropped players and reconnect.** Today a drop ends the battle. Handing the seat to an AI needs a "seat N becomes AI at turn T" command every peer applies on the same turn — the command layer already makes that expressible. Reconnect additionally needs the relay to keep a replay of commands from turn 0.
+  2. **Reconnect.** Drops are handled (the AI takes the seat); rejoining is not. It needs the relay to keep a replay of commands from turn 0 so a returning peer can fast-forward, plus a way to hand the seat back from the AI on an agreed turn.
   3. **Multiplayer teams in the lobby** — the row exists and is wired to `netTeams`, but nobody has played a 2v2 through it.
   4. **AI use of the newer systems** — it still never builds walls, never loads a transport, never sets a fish trap, and never hunts deer away from its town.
   5. Cosmetic leftovers offered but not taken: fire on damaged buildings, blood/scorch decals, unit-specific death poses, a richer backdrop beyond the map edge.
