@@ -9970,8 +9970,63 @@ function begin(){
    existing terrain canvas — so all the shoreline/water work carries straight
    over, and hills become actual geometry instead of the painted rim lines the
    2D view fakes them with. Units and buildings are later stages. */
+/* ---- minimal mat4 (column-major, GL order) ---------------------------- */
+function m4mul(a,b){
+  const o=new Float32Array(16);
+  for(let c=0;c<4;c++)for(let r=0;r<4;r++){
+    let s=0; for(let k=0;k<4;k++) s+=a[k*4+r]*b[c*4+k];
+    o[c*4+r]=s;
+  }
+  return o;
+}
+function m4ortho(l,r,b,t,n,f){
+  const o=new Float32Array(16);
+  o[0]=2/(r-l); o[5]=2/(t-b); o[10]=-2/(f-n); o[15]=1;
+  o[12]=-(r+l)/(r-l); o[13]=-(t+b)/(t-b); o[14]=-(f+n)/(f-n);
+  return o;
+}
+function m4look(ex,ey,ez,cx,cy,cz){
+  let fx=cx-ex,fy=cy-ey,fz=cz-ez;
+  let rl=1/Math.hypot(fx,fy,fz); fx*=rl; fy*=rl; fz*=rl;
+  // right = normalize(cross(f, worldUp)); worldUp = (0,1,0)
+  let sx=fz,sy=0,sz=-fx;                       // cross(f,(0,1,0)) = (fz,0,-fx)
+  rl=1/Math.hypot(sx,sy,sz); sx*=rl; sy*=rl; sz*=rl;
+  // up = cross(right, f)
+  const ux=sy*fz-sz*fy, uy=sz*fx-sx*fz, uz=sx*fy-sy*fx;
+  const o=new Float32Array(16);
+  o[0]=sx; o[4]=sy; o[8]=sz;   o[12]=-(sx*ex+sy*ey+sz*ez);
+  o[1]=ux; o[5]=uy; o[9]=uz;   o[13]=-(ux*ex+uy*ey+uz*ez);
+  o[2]=-fx;o[6]=-fy;o[10]=-fz; o[14]=  fx*ex+fy*ey+fz*ez;
+  o[15]=1;
+  return o;
+}
 const R3={
   gl:null, prog:null, tex:null, texVer:-1, mesh:null, meshKey:'', failed:false,
+  /* Real 3D camera. Daniel chose a rotating/tilting camera, so the Stage-1
+     trick of hard-coding the 2D isometric projection into the shader is gone —
+     this is a genuine orthographic view matrix and the world can be spun.
+     HOME is the classic isometric orientation: yaw 45°, pitch atan(1/√2)
+     = 35.264°, which is what produces the 2:1 diamond grid the game has always
+     used. Pan and zoom still come from G.cam, so the existing controls, the
+     minimap jump and camera clamping keep driving the 3D view unchanged;
+     rotation is the only genuinely new axis. */
+  yaw:Math.PI/4, pitch:Math.atan(1/Math.SQRT2), PPT:26*Math.SQRT2,
+  homeYaw:Math.PI/4, homePitch:Math.atan(1/Math.SQRT2),
+  // world target (tile coords) that the 2D camera is currently centred on
+  target(){
+    const sx=G.cam.x+vw/G.cam.z/2, sy=G.cam.y+vh/G.cam.z/2;
+    return {x:(sx/IW+sy/IH)/2, y:(sy/IH-sx/IW)/2};
+  },
+  mvp(){
+    const t=this.target();
+    const cp=Math.cos(this.pitch), sp=Math.sin(this.pitch);
+    const D=MAP*2;                                   // far enough to clear the map
+    const ex=t.x+cp*Math.sin(this.yaw)*D, ey=sp*D, ez=t.y+cp*Math.cos(this.yaw)*D;
+    const V=m4look(ex,ey,ez,t.x,0,t.y);
+    const hw=vw/G.cam.z/(2*this.PPT), hh=vh/G.cam.z/(2*this.PPT);
+    const P=m4ortho(-hw,hw,-hh,hh,-MAP*4,MAP*4);
+    return m4mul(P,V);
+  },
   // Hill height in 2D pixels. MUST stay 10: the 2D renderer lifts everything on
   // a hill by elevTile(...)*10 (buildings L6386/L6445, rubble L8664, hit-test
   // L9096). Stage 1 shipped 9, which floated every 3D hill 1px off the 2D one.
@@ -9984,20 +10039,15 @@ const R3={
     if(!gl){this.failed=true;toast('This device has no WebGL — staying on the 2D view');return false;}
     this.canvas=c; this.gl=gl;
     const vs=`
-      attribute vec3 aPos;      // tile x, height in px, tile y
+      attribute vec3 aPos;      // tile x, height in PIXELS, tile y
       attribute vec2 aUV;
       attribute float aShade;
-      uniform vec2 uCam; uniform float uZoom; uniform vec2 uView;
-      uniform vec2 uIso; uniform float uSpan;
+      uniform mat4 uMVP; uniform float uHScale;
       varying vec2 vUV; varying float vShade;
       void main(){
-        float sx=((aPos.x-aPos.z)*uIso.x-uCam.x)*uZoom;
-        float sy=((aPos.x+aPos.z)*uIso.y-aPos.y-uCam.y)*uZoom;
-        // further south = drawn in front = smaller depth.
-        // x2 because NDC z spans [-1,1], not [0,1] — the old form threw away
-        // half the depth buffer for nothing.
-        float d=1.0-2.0*(aPos.x+aPos.z)/uSpan;
-        gl_Position=vec4(sx/(uView.x*0.5)-1.0, 1.0-sy/(uView.y*0.5), d, 1.0);
+        // height arrives in 2D pixels; the world is in tiles, so rescale it
+        vec3 p=vec3(aPos.x, aPos.y*uHScale, aPos.z);
+        gl_Position=uMVP*vec4(p,1.0);
         vUV=aUV; vShade=aShade;
       }`;
     const fs=`
@@ -10016,9 +10066,8 @@ const R3={
     if(!gl.getProgramParameter(p,gl.LINK_STATUS)){console.error(gl.getProgramInfoLog(p));this.failed=true;return false;}
     this.prog=p;
     this.loc={aPos:gl.getAttribLocation(p,'aPos'),aUV:gl.getAttribLocation(p,'aUV'),
-      aShade:gl.getAttribLocation(p,'aShade'),uCam:gl.getUniformLocation(p,'uCam'),
-      uZoom:gl.getUniformLocation(p,'uZoom'),uView:gl.getUniformLocation(p,'uView'),
-      uIso:gl.getUniformLocation(p,'uIso'),uSpan:gl.getUniformLocation(p,'uSpan'),
+      aShade:gl.getAttribLocation(p,'aShade'),
+      uMVP:gl.getUniformLocation(p,'uMVP'),uHScale:gl.getUniformLocation(p,'uHScale'),
       uTex:gl.getUniformLocation(p,'uTex')};
     this.tex=gl.createTexture();
     this.vbo=gl.createBuffer(); this.ibo=gl.createBuffer();
@@ -10062,13 +10111,14 @@ const R3={
      The 2D path's drifting mist layer is NOT ported yet. */
   initFog(){
     const gl=this.gl;
+    // Fog is a map-sized quad lying ON the ground plane, projected by the same
+    // camera matrix — so it rotates and tilts with the world instead of being
+    // pasted flat over the screen.
     const vs=`attribute vec2 aCorner;
-      uniform vec2 uCam,uView,uIso; uniform float uZoom,uMap;
+      uniform mat4 uMVP; uniform float uMap;
       varying vec2 vUV;
       void main(){
-        float x=aCorner.x*uMap,y=aCorner.y*uMap;
-        float sx=((x-y)*uIso.x-uCam.x)*uZoom, sy=((x+y)*uIso.y-uCam.y)*uZoom;
-        gl_Position=vec4(sx/(uView.x*0.5)-1.0, 1.0-sy/(uView.y*0.5), 0.0, 1.0);
+        gl_Position=uMVP*vec4(aCorner.x*uMap, 0.0, aCorner.y*uMap, 1.0);
         vUV=aCorner;
       }`;
     const fs=`precision mediump float;
@@ -10083,8 +10133,7 @@ const R3={
     gl.linkProgram(p);
     if(!gl.getProgramParameter(p,gl.LINK_STATUS)){console.error(gl.getProgramInfoLog(p));return false;}
     this.fogProg=p;
-    this.fogLoc={uCam:gl.getUniformLocation(p,'uCam'),uView:gl.getUniformLocation(p,'uView'),
-      uIso:gl.getUniformLocation(p,'uIso'),uZoom:gl.getUniformLocation(p,'uZoom'),
+    this.fogLoc={uMVP:gl.getUniformLocation(p,'uMVP'),
       uMap:gl.getUniformLocation(p,'uMap'),uFog:gl.getUniformLocation(p,'uFog')};
     this.quad=gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER,this.quad);
@@ -10093,7 +10142,7 @@ const R3={
     this.fogVerAt=-1;
     return true;
   },
-  drawFog(){
+  drawFog(mvp){
     const gl=this.gl;
     if(!this.fogProg&&!this.initFog())return;
     if(fogDirty)renderFogCanvas();     // in 3D nothing else drives this; draw() does in 2D
@@ -10114,10 +10163,7 @@ const R3={
     gl.bindBuffer(gl.ARRAY_BUFFER,this.quad);
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
-    gl.uniform2f(this.fogLoc.uCam,G.cam.x,G.cam.y);
-    gl.uniform2f(this.fogLoc.uView,vw,vh);
-    gl.uniform2f(this.fogLoc.uIso,IW,IH);
-    gl.uniform1f(this.fogLoc.uZoom,G.cam.z);
+    gl.uniformMatrix4fv(this.fogLoc.uMVP,false,mvp);
     gl.uniform1f(this.fogLoc.uMap,MAP);
     gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.fogTex);
     gl.uniform1i(this.fogLoc.uFog,0);
@@ -10147,14 +10193,12 @@ const R3={
     if(this.meshKey!==MAP+':'+elevVer)this.buildMesh();
     if(this.failed)return;
     if(this.texVer!==terrainVer)this.upload();
-    /* Depth budget split. Ground gets the far half of the window depth range,
-       entities the near half, so no ground fragment can ever occlude an entity
-       — which is exactly the 2D semantics, where the terrain is one flat blit
-       BEFORE every entity. Ground-vs-ground self-occlusion still works, which
-       matters now that hills are real geometry.
-       gl.clear writes window depth 1.0 regardless of depthRange, and ground at
-       the map corner also writes 1.0, so depthFunc MUST stay LEQUAL. */
-    gl.depthRange(0.5,1.0);
+    /* NB: the depthRange split added in the stage-2 foundation is GONE, and
+       deliberately so. It emulated 2D's painter order (flat terrain blit before
+       all entities) because depth was a fake tile-based key. The camera is now
+       a real projection, so depth is real: terrain occluding an entity behind a
+       hill is CORRECT in 3D, not a bug to be engineered around. */
+    const mvp=this.mvp();
     gl.useProgram(this.prog);
     gl.bindBuffer(gl.ARRAY_BUFFER,this.vbo);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.ibo);
@@ -10165,17 +10209,12 @@ const R3={
     gl.vertexAttribPointer(this.loc.aUV,2,gl.FLOAT,false,st,12);
     gl.enableVertexAttribArray(this.loc.aShade);
     gl.vertexAttribPointer(this.loc.aShade,1,gl.FLOAT,false,st,20);
-    gl.uniform2f(this.loc.uCam,G.cam.x,G.cam.y);
-    gl.uniform1f(this.loc.uZoom,G.cam.z);
-    gl.uniform2f(this.loc.uView,vw,vh);
-    gl.uniform2f(this.loc.uIso,IW,IH);
-    gl.uniform1f(this.loc.uSpan,MAP*2);
+    gl.uniformMatrix4fv(this.loc.uMVP,false,mvp);
+    gl.uniform1f(this.loc.uHScale,1/IW);
     gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.tex);
     gl.uniform1i(this.loc.uTex,0);
     gl.drawElements(gl.TRIANGLES,this.idxCount,this.idxType,0);
-    // entities will draw here at depthRange(0.0,0.499) — stage 2b onward
-    gl.depthRange(0.0,1.0);
-    this.drawFog();
+    this.drawFog(mvp);
   },
 };
 let use3D=false;
@@ -10185,9 +10224,35 @@ function toggle3D(){
   document.body.classList.toggle('r3d',use3D);
   const b=document.getElementById('d3Btn');
   if(b)b.classList.toggle('sel',use3D);
-  toast(use3D?'3D renderer (ground only — units and buildings still to come)':'2D renderer');
+  toast(use3D?'3D — drag to rotate, shift-drag to tilt, R to reset (ground only so far)'
+             :'2D renderer');
 }
 document.getElementById('d3Btn').addEventListener('click',toggle3D);
+/* Camera rotation. Deliberately on the 3D canvas only, so nothing about the 2D
+   input path changes: #view3 is display:none in 2D mode and receives no events.
+   Pan and zoom still come from G.cam via the existing controls. */
+(function(){
+  const c=document.getElementById('view3');
+  let drag=null;
+  c.addEventListener('pointerdown',e=>{
+    if(!use3D)return;
+    drag={x:e.clientX,y:e.clientY,yaw:R3.yaw,pitch:R3.pitch,tilt:e.shiftKey};
+    c.setPointerCapture(e.pointerId);
+  });
+  c.addEventListener('pointermove',e=>{
+    if(!drag)return;
+    if(drag.tilt) R3.pitch=Math.max(.12,Math.min(1.50,drag.pitch+(e.clientY-drag.y)*.005));
+    else          R3.yaw=drag.yaw-(e.clientX-drag.x)*.006;
+    e.preventDefault();
+  });
+  const end=e=>{ if(drag){ try{c.releasePointerCapture(e.pointerId);}catch(_){} drag=null; } };
+  c.addEventListener('pointerup',end);
+  c.addEventListener('pointercancel',end);
+  addEventListener('keydown',e=>{
+    if(!use3D||e.ctrlKey||e.metaKey||e.altKey)return;
+    if(e.key==='r'||e.key==='R'){ R3.yaw=R3.homeYaw; R3.pitch=R3.homePitch; toast('Camera reset'); }
+  });
+})();
 function frame(now){
   requestAnimationFrame(frame);
   if(!G)return;
