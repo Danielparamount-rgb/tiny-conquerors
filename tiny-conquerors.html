@@ -10376,6 +10376,10 @@ const R3={
   // a hill by elevTile(...)*10 (buildings L6386/L6445, rubble L8664, hit-test
   // L9096). Stage 1 shipped 9, which floated every 3D hill 1px off the 2D one.
   HILL:10,
+  /* Render toggles, settable from the console for A/B measurement.
+     face: bitmask 1=trees, 2=(reserved, buildings — see the audit in draw()),
+           4=units.  cull: frustum-cull the tree chunks. */
+  dbg:{face:5, cull:1},
   init(){
     if(this.failed)return false;
     if(this.gl)return true;
@@ -10507,14 +10511,11 @@ const R3={
         const n=nrm(p0,p1,ap);
         tri(push(p0,n,c),push(p1,n,c),push(ap,n,c));
       }
-      // underside so it is solid when seen from below at a low pitch
-      const c2=hex(col),dn=[0,-1,0];
-      for(let i=0;i<seg;i++){
-        const a0=i/seg*6.283,a1=(i+1)/seg*6.283;
-        tri(push([Math.cos(a1)*r,y0,Math.sin(a1)*r],dn,c2),
-            push([Math.cos(a0)*r,y0,Math.sin(a0)*r],dn,c2),
-            push([0,y0,0],dn,c2));
-      }
+      /* The cone underside used to be emitted here. It is PROVABLY unseeable:
+         its normal is (0,-1,0) and the eye sits at y = sin(pitch)*D with pitch
+         clamped to [0.35, 1.45], so dot(n, viewDir) >= 0.343 at every legal
+         camera — never even marginal. Removing it takes the pine from 66 to 38
+         triangles (-21% of all tree geometry) for exactly zero visual change. */
     };
     const prism=(y0,y1,r,seg,col)=>{
       const c=hex(col);
@@ -10538,8 +10539,14 @@ const R3={
       };
       for(const f of F){
         const a=at(P[f[0]]),b=at(P[f[1]]),d=at(P[f[2]]);
-        const n=nrm(a,b,d);
-        tri(push(a,n,c),push(b,n,c),push(d,n,c));
+        const n=nrm(a,b,d);          // normal unchanged, so shading is bit-identical
+        const i0=push(a,n,c),i1=push(b,n,c),i2=push(d,n,c);
+        /* REVERSED winding. The blob is the ONLY tree primitive whose winding
+           normal points OUTWARD; cone and prism both point INTO the solid. One
+           global cullFace mode cannot cover both, so the blob is flipped to
+           match. Vertex data is untouched — this is a visual no-op until
+           CULL_FACE is enabled in draw(). */
+        tri(i0,i2,i1);
       }
     };
     // ---- species 0: pine. radius 1, total height ~1.15 ----
@@ -10598,7 +10605,7 @@ const R3={
     this.treeLoc={uMVP:gl.getUniformLocation(p,'uMVP'),uLight:gl.getUniformLocation(p,'uLight')};
     this.buildTreeMeshes();
     this.ivbo=[gl.createBuffer(),gl.createBuffer()];
-    this.iCount=[0,0];this.treeKey='';
+    this.iCount=[0,0];this.iAll=[0,0];this.treeKey='';this.cullKey='';
     return true;
   },
   /* One instance per tree, split by species so each is one drawElementsInstanced.
@@ -10617,18 +10624,72 @@ const R3={
       A[sp].push(r.x+.5, this.groundH(r.x+.5,r.y+.5), r.y+.5, rr/IW,
                  hp*this.HS/this.treeH[sp], h>=5?0.80:1.0);
     }
+    /* Keep the FULL set on the CPU and size the GPU buffer to match; the visible
+       subset is packed into it each time the camera moves (see cullTrees). */
+    this.treeAll=[new Float32Array(A[0]),new Float32Array(A[1])];
+    this.treeVis=[new Float32Array(A[0].length),new Float32Array(A[1].length)];
     for(let s=0;s<2;s++){
       gl.bindBuffer(gl.ARRAY_BUFFER,this.ivbo[s]);
-      gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(A[s]),gl.STATIC_DRAW);
+      gl.bufferData(gl.ARRAY_BUFFER,this.treeAll[s],gl.DYNAMIC_DRAW);
       this.iCount[s]=A[s].length/6;
+      this.iAll[s]=A[s].length/6;
     }
     this.treeKey=MAP+':'+elevVer+':'+resGen+':'+resVer;
+    this.cullKey='';                       // force a re-cull against the new set
+  },
+  /* Frustum cull. The camera is ORTHOGRAPHIC, so "inside the view" is just a
+     rectangle test in the camera's own basis — no planes, no matrix. Pack the
+     survivors into the front of the existing buffer and draw fewer instances;
+     two draw calls either way, which matters because draw calls are the
+     expensive thing on mobile and chunking would have meant ~50 of them.
+     Only re-runs when the camera actually moved, so panning costs one pass over
+     the trees and holding still costs nothing.
+     MARGIN is in world units and must cover a tree's own extent: canopy radius
+     reaches 15.1/IW = 0.58 tiles and height reaches ~40*HS = 1.26, and height
+     leans into the screen-up axis. 2.5 is comfortably past both — cull too
+     tightly and canopies pop out at the screen edge. */
+  cullTrees(){
+    if(!this.treeAll)return;
+    const B=this.basis();
+    const key=this.yaw+','+this.pitch+','+G.cam.x+','+G.cam.y+','+G.cam.z+','+vw+','+vh
+             +','+this.treeKey+','+this.dbg.cull;
+    if(key===this.cullKey)return;
+    this.cullKey=key;
+    const gl=this.gl;
+    if(!this.dbg.cull){                     // A/B switch: draw everything
+      for(let s=0;s<2;s++){
+        gl.bindBuffer(gl.ARRAY_BUFFER,this.ivbo[s]);
+        gl.bufferSubData(gl.ARRAY_BUFFER,0,this.treeAll[s]);
+        this.iCount[s]=this.iAll[s];
+      }
+      return;
+    }
+    const M=2.5;
+    const hw=vw/G.cam.z/(2*this.PPT)+M, hh=vh/G.cam.z/(2*this.PPT)+M;
+    for(let s=0;s<2;s++){
+      const src=this.treeAll[s],dst=this.treeVis[s];
+      let o=0;
+      for(let i=0;i<src.length;i+=6){
+        const wx=src[i]-B.tx, wy=src[i+1], wz=src[i+2]-B.tz;
+        const sx=wx*B.rx+wz*B.rz;
+        if(sx<-hw||sx>hw)continue;
+        const sy=wx*B.ux+wy*B.uy+wz*B.uz;
+        if(sy<-hh||sy>hh)continue;
+        dst[o]=src[i];dst[o+1]=src[i+1];dst[o+2]=src[i+2];
+        dst[o+3]=src[i+3];dst[o+4]=src[i+4];dst[o+5]=src[i+5];
+        o+=6;
+      }
+      gl.bindBuffer(gl.ARRAY_BUFFER,this.ivbo[s]);
+      gl.bufferSubData(gl.ARRAY_BUFFER,0,dst.subarray(0,o));
+      this.iCount[s]=o/6;
+    }
   },
   drawTrees(mvp){
     if(this.noTrees)return;
     if(!this.treeProg&&!this.initTrees())return;
     const gl=this.gl,ex=this.iext;
     if(this.treeKey!==MAP+':'+elevVer+':'+resGen+':'+resVer)this.buildTrees();
+    this.cullTrees();
     if(!this.iCount[0]&&!this.iCount[1])return;
     gl.useProgram(this.treeProg);
     gl.uniformMatrix4fv(this.treeLoc.uMVP,false,mvp);
@@ -11387,9 +11448,26 @@ const R3={
     gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.tex);
     gl.uniform1i(this.loc.uTex,0);
     gl.drawElements(gl.TRIANGLES,this.idxCount,this.idxType,0);
+    /* Backface culling is GLOBAL state, exactly like vertexAttribDivisor, and
+       this file has NO single winding convention. Audited every builder:
+         ground grid       -> winding normal +Y, i.e. FRONT — would VANISH if culled
+         tree cone/prism   -> point INTO the solid  -> cull FRONT
+         tree blob         -> flipped above to match -> cull FRONT
+         buildings, units  -> quad/tri3/fnorm negate -> cull FRONT
+         fx mesh           -> quadUp is outward, bx is inward: MIXED, never cullable
+       So the span is scoped HERE per pass, not enabled once in init(). Trees and
+       units are closed convex solids, so a back face always has a front face of
+       the same body nearer the camera — removing back faces cannot change a
+       pixel. Buildings are NOT in the mask: their relief panels are single-sided
+       quads floated proud of a backing, so culling them would punch holes. */
+    const FC=this.dbg.face;
+    if(FC&1){gl.enable(gl.CULL_FACE);gl.cullFace(gl.FRONT);}
     this.drawTrees(mvp);
+    if(FC&1)gl.disable(gl.CULL_FACE);
     this.drawBlds(mvp);
+    if(FC&4){gl.enable(gl.CULL_FACE);gl.cullFace(gl.FRONT);}
     this.drawUnits(mvp);
+    if(FC&4)gl.disable(gl.CULL_FACE);
     this.drawFx3(mvp);
     this.drawFog(mvp);
   },
