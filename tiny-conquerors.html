@@ -11155,6 +11155,112 @@ const R3={
     for(let i=4;i<=6;i++){ex.vertexAttribDivisorANGLE(i,0);gl.disableVertexAttribArray(i);}
     gl.disableVertexAttribArray(3);
   },
+  /* ---- selection rings, projectiles, corpses --------------------------------
+     One dynamic merged mesh rebuilt each frame, drawn through the building
+     shader as a single identity instance — no new program, no new instance
+     buffer. Counts are small (selection is dozens, projectiles dozens, corpses
+     capped at 140), so a rebuild is cheaper than tracking dirtiness.
+     Selection rings are REAL GROUND GEOMETRY rather than screen-space ellipses:
+     under a rotating camera a ground circle projects to an ellipse whose
+     orientation changes with yaw, which a screen-space ellipse cannot express. */
+  buildFx(){
+    const V=[],I=[];
+    const push=(p,n,c)=>{V.push(p[0],p[1],p[2],n[0],n[1],n[2],c[0],c[1],c[2]);return V.length/9-1;};
+    const UP=[0,1,0];
+    const quadUp=(a,b,c,d,col)=>{
+      const i0=push(a,UP,col),i1=push(b,UP,col),i2=push(c,UP,col),i3=push(d,UP,col);
+      I.push(i0,i1,i2,i0,i2,i3);
+    };
+    const bx=(cx,cy,cz,hx,hy,hz,col)=>{
+      const X=[cx-hx,cx+hx],Y=[cy-hy,cy+hy],Z=[cz-hz,cz+hz];
+      const P=(i,j,k)=>[X[i],Y[j],Z[k]];
+      const f=(a,b,c,d,n)=>{const i0=push(a,n,col),i1=push(b,n,col),i2=push(c,n,col),i3=push(d,n,col);
+        I.push(i0,i1,i2,i0,i2,i3);};
+      f(P(0,0,0),P(1,0,0),P(1,1,0),P(0,1,0),[0,0,-1]);
+      f(P(1,0,1),P(0,0,1),P(0,1,1),P(1,1,1),[0,0,1]);
+      f(P(1,0,0),P(1,0,1),P(1,1,1),P(1,1,0),[1,0,0]);
+      f(P(0,0,1),P(0,0,0),P(0,1,0),P(0,1,1),[-1,0,0]);
+      f(P(0,1,0),P(1,1,0),P(1,1,1),P(0,1,1),[0,1,0]);
+      f(P(0,0,1),P(1,0,1),P(1,0,0),P(0,0,0),[0,-1,0]);
+    };
+    // flat annulus lying on the terrain, following its height
+    const ring=(cx,cz,r,w,col)=>{
+      const seg=22;
+      for(let i=0;i<seg;i++){
+        const a0=i/seg*6.283,a1=(i+1)/seg*6.283;
+        const c0=Math.cos(a0),s0=Math.sin(a0),c1=Math.cos(a1),s1=Math.sin(a1);
+        const p=(ct,st,rr)=>{const x=cx+ct*rr,z=cz+st*rr;
+          return [x,this.groundH(x,z)+0.012,z];};
+        quadUp(p(c0,s0,r-w),p(c1,s1,r-w),p(c1,s1,r+w),p(c0,s0,r+w),col);
+      }
+    };
+    const GOLD=[0.89,0.70,0.24],WHITE=[0.92,0.92,0.90];
+    // selection
+    for(const id of (G.sel||[])){
+      const u=G.units.find(x=>x.id===id);
+      if(u){ring(u.x,u.y,0.34,0.045,GOLD);continue;}
+      const b=G.blds.find(x=>x.id===id);
+      if(b)ring(b.tx+b.size/2,b.ty+b.size/2,b.size*0.62,0.055,GOLD);
+    }
+    if(G.inspect&&G.inspect.id!==undefined){
+      const u=G.units.find(x=>x.id===G.inspect.id);
+      if(u)ring(u.x,u.y,0.34,0.04,WHITE);
+      else{const b=G.blds.find(x=>x.id===G.inspect.id);
+        if(b)ring(b.tx+b.size/2,b.ty+b.size/2,b.size*0.62,0.05,WHITE);}
+    }
+    if(G.inspect&&G.inspect.res){
+      const r=G.res[G.inspect.res];
+      if(r)ring(r.x+0.5,r.y+0.5,0.4,0.04,WHITE);
+    }
+    // projectiles — position along the flight plus a real parabolic arc
+    const PC={ball:[0.16,0.15,0.14],stone:[0.42,0.40,0.36],bolt:[0.35,0.26,0.14]};
+    for(const q of (G.proj||[])){
+      const t=Math.max(0,Math.min(1,q.t/q.dur));
+      const x=q.x0+(q.x1-q.x0)*t, z=q.y0+(q.y1-q.y0)*t;
+      const arc=(q.kind==='stone'?0.9:q.kind==='ball'?0.18:0.34);
+      const y=this.groundH(x,z)+0.14+arc*4*t*(1-t);
+      const col=PC[q.kind]||[0.38,0.29,0.16];
+      const s=q.kind==='stone'?0.055:q.kind==='ball'?0.04:0.028;
+      bx(x,y,z,s,s,s,col);
+    }
+    // corpses — a low flattened form that fades with the existing timer
+    for(const c of (G.corpses||[])){
+      const f=Math.max(0,Math.min(1,c.t/c.max));
+      if(f<=0.02)continue;
+      const g=this.groundH(c.x,c.y);
+      const k=0.30+0.45*f;                    // darkens as it decays
+      bx(c.x,g+0.035,c.y,0.13,0.035,0.09,[k*0.34,k*0.30,k*0.26]);
+    }
+    const gl=this.gl;
+    if(!this.fxvbo){this.fxvbo=gl.createBuffer();this.fxibo=gl.createBuffer();}
+    gl.bindBuffer(gl.ARRAY_BUFFER,this.fxvbo);
+    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(V),gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.fxibo);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(I),gl.DYNAMIC_DRAW);
+    this.fxCount=I.length;
+  },
+  drawFx3(mvp){
+    if(this.noTrees)return;
+    if(!this.treeProg&&!this.initTrees())return;
+    this.buildFx();
+    if(!this.fxCount)return;
+    const gl=this.gl,ex=this.iext;
+    gl.useProgram(this.treeProg);
+    gl.uniformMatrix4fv(this.treeLoc.uMVP,false,mvp);
+    gl.uniform3f(this.treeLoc.uLight,-0.46,0.80,-0.38);
+    gl.bindBuffer(gl.ARRAY_BUFFER,this.fxvbo);
+    for(let i=0;i<3;i++){gl.enableVertexAttribArray(i);
+      gl.vertexAttribPointer(i,3,gl.FLOAT,false,36,i*12);ex.vertexAttribDivisorANGLE(i,0);}
+    gl.bindBuffer(gl.ARRAY_BUFFER,this.bIdent);
+    gl.enableVertexAttribArray(3);gl.vertexAttribPointer(3,4,gl.FLOAT,false,24,0);
+    ex.vertexAttribDivisorANGLE(3,1);
+    gl.enableVertexAttribArray(4);gl.vertexAttribPointer(4,2,gl.FLOAT,false,24,16);
+    ex.vertexAttribDivisorANGLE(4,1);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.fxibo);
+    ex.drawElementsInstancedANGLE(gl.TRIANGLES,this.fxCount,gl.UNSIGNED_SHORT,0,1);
+    ex.vertexAttribDivisorANGLE(3,0);ex.vertexAttribDivisorANGLE(4,0);
+    gl.disableVertexAttribArray(3);gl.disableVertexAttribArray(4);
+  },
   /* Fog overlay. Without this the 3D view reveals the whole map — on Black
      Forest that hands over the entire tree layout, which is a gameplay
      difference, not a cosmetic gap. Source is fogS (512², power-of-two).
@@ -11284,6 +11390,7 @@ const R3={
     this.drawTrees(mvp);
     this.drawBlds(mvp);
     this.drawUnits(mvp);
+    this.drawFx3(mvp);
     this.drawFog(mvp);
   },
 };
