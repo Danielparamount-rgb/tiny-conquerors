@@ -448,6 +448,17 @@
   </div>
 </div>
 
+<div class="overlay" id="netCatch" style="display:none">
+  <div class="scroll">
+    <h1 style="font-size:22px">Rejoining the battle</h1>
+    <p class="sub">Replaying everything you missed</p>
+    <div style="height:14px;background:#241a10;border:2px solid #6b5330;border-radius:8px;overflow:hidden;margin:14px 0 8px">
+      <i id="netCatchBar" style="display:block;height:100%;width:0%;background:linear-gradient(#c9a227,#8a6a1a);transition:width .12s"></i>
+    </div>
+    <p class="sub" id="netCatchTxt" style="margin:0"></p>
+  </div>
+</div>
+
 <div class="overlay" id="netHalt" style="display:none">
   <div class="scroll">
     <h1 style="font-size:22px" id="netHaltTitle">Connection lost</h1>
@@ -1802,6 +1813,7 @@ let cmdQ=[];         // commands issued this turn, not yet applied
 // believing it is player 3 of a room that no longer exists.
 function resetNet(){
   netMode=false;localP=0;humanSlots=[0];netCivs=null;netTeams=null;cmdQ=[];
+  netSendFrom=0;netReplay=null;netReplaying=false;
 }
 function issue(k,d){
   const c=Object.assign({k,p:localP},d);
@@ -2030,6 +2042,10 @@ let netLobby={players:[],cfg:null,host:0};
 let netPlayers=[];            // seat -> {seat,name,civ,team} for the running match
 let netGone=new Set();        // seats that dropped — we stall on them forever otherwise
 let netAiAt=new Map();        // seat -> the turn the computer takes their banner
+let netHumanAt=new Map();     // seat -> the turn a returning player takes it back
+let netSendFrom=0;            // first turn we answer for; null while an AI holds our seat
+let netReplay=null;           // the catch-up in progress, if any
+let netReplaying=false;       // suppresses the feed chatter while thousands of turns fly past
 let netLeftName='';           // who dropped, for the message when the stall runs out
 function netUrl(){
   const h=location.hostname;
@@ -2050,7 +2066,9 @@ function netReset(){
   netClose();netRoom='';netHost=false;
   netTurn=0;netIn=new Map();netSent=-1;netStall=0;netStallSeat=-1;
   netLobby={players:[],cfg:null,host:0};netPlayers=[];
-  netGone=new Set();netAiAt=new Map();netLeftName='';
+  netGone=new Set();netAiAt=new Map();netHumanAt=new Map();netLeftName='';
+  netSendFrom=0;netReplay=null;netReplaying=false;
+  const ov=document.getElementById('netCatch');if(ov)ov.style.display='none';
 }
 function netConnect(then){
   if(!netAvailable()){mpStatus('Multiplayer needs the web app — open tiny-conquerors.onrender.com');return;}
@@ -2097,6 +2115,20 @@ function netOn(m){
       netGone.add(m.seat);
       netAiAt.set(m.seat,m.turn);
       break;
+    case 'human':
+      netHumanAt.set(m.seat,m.turn);
+      if(m.seat===localP){
+        // Start answering for our seat from that turn — and start NOW, not when
+        // we reach it, or the others would arrive at the changeover turn with
+        // nothing from us and stall.
+        netSendFrom=m.turn;netTopUp();
+      }
+      break;
+    case 'back':
+      if(netMode)feed(m.name+' is rejoining — catching up');
+      break;
+    case 'rejoin':
+      netRejoin(m);break;
     case 'err':
       mpStatus(m.msg);break;
     case 'chat':
@@ -2139,6 +2171,7 @@ function netBegin(m){
   mission=null;
   netMode=true;
   netTurn=0;netIn=new Map();netSent=-1;netStall=0;
+  netSendFrom=0;netHumanAt=new Map();
   cmdQ=[];
   pendingSeed=m.seed>>>0;
   document.getElementById('mpOverlay').style.display='none';
@@ -2149,6 +2182,114 @@ function netBegin(m){
   const names=players.map(p=>p.name).join(', ');
   toast('Battle begun — '+names+(ai?' and '+ai+' computer opponent'+(ai>1?'s':''):''));
   feed('Multiplayer battle begun');
+}
+/* ---- rejoining a battle already in progress ----
+   No state is shipped. The relay hands over the command journal and we replay
+   the match from turn 0, which is the same determinism everything else rests
+   on. (Shipping a saved game instead does NOT work: it reloads to an identical
+   hash and then diverges the moment it is stepped, because saving drops unit
+   paths and reloading rewinds the simulation RNG.) Replay runs a few hundred
+   times faster than real time, so a long absence costs a few seconds. */
+function netRejoin(m){
+  const players=m.players||[];
+  const cfg=m.cfg||{};
+  netPlayers=players;
+  const ai=Math.max(0,Math.min(8-players.length,cfg.ai|0));
+  NP=players.length+ai;playersSel=NP;
+  mapSel=cfg.map|0;diffSel=cfg.diff==null?1:cfg.diff|0;
+  turboSel=cfg.turbo|0;teamSel=cfg.team|0;
+  netCivs=[];for(const p of players)netCivs[p.seat]=p.civ;
+  localP=m.seat;
+  civSel=netCivs[localP]!=null?netCivs[localP]:0;
+  humanSlots=players.map(p=>p.seat);   // as the match STARTED; the journal edits it from there
+  netTeams=null;
+  if((cfg.team|0)===1){
+    netTeams=[];const half=Math.ceil(NP/2);
+    for(let q=0;q<NP;q++)netTeams[q]=q<half?0:1;
+  }
+  mission=null;netMode=true;
+  netTurn=0;netIn=new Map();netSent=-1;netStall=0;netStallSeat=-1;
+  // Deliberately NOT seeded from the relay's current aiSeats: the journal's own
+  // handovers rebuild this, and a seat that left, came back and left again would
+  // otherwise end up mislabelled.
+  netGone=new Set();
+  netAiAt=new Map();netHumanAt=new Map();
+  netSendFrom=null;                    // a spectator until the relay hands the seat back
+  cmdQ=[];
+  pendingSeed=m.seed>>>0;
+  document.getElementById('mpOverlay').style.display='none';
+  document.getElementById('startOverlay').style.display='none';
+  initAudio();if(AC&&AC.state==='suspended')AC.resume();
+  begin();
+  /* Sort the journal into "replay this" and "this belongs to the live stream".
+     The cut is the highest turn EVERY present seat has already sent for, so the
+     journal is complete through it — inclusive. Everything above is the live
+     stream's job, with one exception handled just below. */
+  const cut=Math.max(0,m.cut|0);
+  const cmds=new Map(),ev=new Map();
+  for(const e of (m.journal||[])){
+    if(e.cmds){
+      if(e.turn<=cut){let b=cmds.get(e.turn);if(!b){b={};cmds.set(e.turn,b);}b[e.seat]=e.cmds;}
+      else netStore(e.seat,e.turn,e.cmds);   // hand the tail straight to the live buffer
+    }else{
+      if(e.turn<=cut){let a=ev.get(e.turn);if(!a){a=[];ev.set(e.turn,a);}a.push(e);}
+      else if(e.ai!==undefined)netAiAt.set(e.ai,e.turn);
+      else if(e.hu!==undefined)netHumanAt.set(e.hu,e.turn);
+    }
+  }
+  /* The exception: a seat that had run ahead of the cut already sent those turns
+     before we connected, so they will never be broadcast to us — and the empty
+     ones were never journalled at all. Without this the first such turn stalls
+     the rejoin forever, waiting on a message nobody is going to send. */
+  const upTo=m.sentUpTo||{};
+  for(const p of netPlayers){
+    const hi=upTo[p.seat];
+    if(hi===undefined)continue;
+    for(let t=cut+1;t<=hi;t++){
+      const bag=netIn.get(t);
+      if(!bag||bag[p.seat]===undefined)netStore(p.seat,t,[]);
+    }
+  }
+  netReplay={cmds,ev,cut,target:m.turn|0,t0:performance.now()};
+  netReplaying=true;
+  document.getElementById('netCatch').style.display='flex';
+  netCatchProgress(0);
+  netCatchUp();
+}
+function netCatchProgress(frac){
+  const el=document.getElementById('netCatchBar');
+  if(el)el.style.width=Math.round(Math.max(0,Math.min(1,frac))*100)+'%';
+  const t=document.getElementById('netCatchTxt');
+  if(t&&netReplay)t.textContent='Turn '+netTurn+' of '+netReplay.cut
+    +' · '+Math.round(G?G.t/60:0)+' minutes of battle so far';
+}
+function netCatchUp(){
+  if(!netReplay)return;
+  const R=netReplay,t0=performance.now();
+  // time-sliced so the page keeps painting and the socket keeps draining
+  while(netTurn<=R.cut&&performance.now()-t0<24){
+    const evs=R.ev.get(netTurn);
+    if(evs)for(let s=0;s<NP;s++)for(const e of evs){
+      if(e.ai===s)netSeatToAI(s);
+      if(e.hu===s)netSeatToHuman(s);
+    }
+    const bag=R.cmds.get(netTurn);
+    const arr=[];
+    for(const p of netPlayers)arr[p.seat]=(bag&&bag[p.seat])||[];
+    applyTick(arr);
+    step(.05);
+    netTurn++;
+  }
+  netCatchProgress(R.cut?netTurn/(R.cut+1):1);
+  if(netTurn<=R.cut){setTimeout(netCatchUp,0);return;}
+  // The journal is spent; whatever arrived live while we were replaying is next.
+  let guard=0;
+  while(guard++<20000&&netRunTurn());
+  netReplaying=false;netReplay=null;
+  document.getElementById('netCatch').style.display='none';
+  const secs=((performance.now()-R.t0)/1000).toFixed(1);
+  feed('Caught up in '+secs+'s — asking for your banner back');
+  netSend({t:'resume'});
 }
 /* ---- the turn machinery ---- */
 function netSeatCmds(turn){
@@ -2176,10 +2317,31 @@ function netSeatToAI(seat){
   if(!G||G.ais[seat])return;
   G.ais[seat]={wave:0,nextAtk:G.t+90,tick:.1*seat,attacking:false};
   humanSlots=humanSlots.filter(s=>s!==seat);
-  const who=(netPlayers.find(p=>p.seat===seat)||{}).name||('Player '+(seat+1));
+  // Keeping netGone in step here is what lets a REPLAY rebuild it: the live path
+  // adds a seat the moment the 'left' notice arrives (which is what covers the
+  // gap before the takeover turn), but a replay sees only journal handovers.
+  netGone.add(seat);
+  if(netReplaying)return;      // replaying history — don't narrate it
+  const who=netSeatName(seat);
   feed(who+' has left — the computer takes their banner',true);
   if(allied(seat,localP))toast(who+' left; the computer fights on for them');
   refreshPanel();
+}
+/* The other direction: a player who dropped has caught up and wants the reins
+   back. Same discipline as the handover — an agreed turn, applied everywhere. */
+function netSeatToHuman(seat){
+  if(!G||!G.ais[seat])return;  // already somebody's
+  G.ais[seat]=null;
+  if(!humanSlots.includes(seat))humanSlots.push(seat);
+  netGone.delete(seat);
+  if(netReplaying)return;
+  const who=netSeatName(seat);
+  feed(who+' has returned to the field');
+  if(seat===localP)toast('You have your banner back');
+  refreshPanel();
+}
+function netSeatName(seat){
+  return (netPlayers.find(p=>p.seat===seat)||{}).name||('Player '+(seat+1));
 }
 // Are we the only person still here? Then the relay has nothing left to relay.
 function netAlone(){
@@ -2212,8 +2374,15 @@ function netStore(seat,turn,cmds){
 }
 function netTopUp(){
   // keep the outbound window full: every turn up to netTurn+NET_LAG has been
-  // told what we intend to do, even if the answer is "nothing"
-  while(netSent<netTurn+NET_LAG){
+  // told what we intend to do, even if the answer is "nothing".
+  // netSendFrom is the first turn this machine ANSWERS FOR. While the computer
+  // holds our seat it is null and we say nothing at all — sending then would
+  // race the other peers, some using our list and some the empty one the seat's
+  // absence implies.
+  if(netSendFrom===null)return;
+  if(netSent<netSendFrom-1)netSent=netSendFrom-1;
+  const end=Math.max(netTurn,netSendFrom)+NET_LAG;
+  while(netSent<end){
     const turn=netSent+1;
     const cmds=takeCmds();
     netStore(localP,turn,cmds);
@@ -2223,21 +2392,28 @@ function netTopUp(){
 }
 function netStepReady(){return !!netSeatCmds(netTurn);}
 function netRunTurn(){
+  // Handovers resolve BEFORE we work out whose orders this turn even needs —
+  // they change the answer. Doing it the other way round let one peer use a
+  // returning player's list for the changeover turn while another, not yet
+  // holding that message, used the empty one their absence implied.
+  // Walked in seat order rather than Map order for the same reason.
+  for(let s=0;s<NP;s++){
+    if(netAiAt.get(s)===netTurn)netSeatToAI(s);
+    if(netHumanAt.get(s)===netTurn)netSeatToHuman(s);
+  }
   const arr=netSeatCmds(netTurn);
   if(!arr)return false;
-  // Seat handovers happen BEFORE the turn runs, walked in seat order rather
-  // than Map order — two peers must never disagree about which came first.
-  for(let s=0;s<NP;s++)if(netAiAt.get(s)===netTurn)netSeatToAI(s);
   applyTick(arr);
   netIn.delete(netTurn);
   step(.05);
   netTurn++;
   netTopUp();
   if(netTurn%20===0)netSend({t:'hash',turn:netTurn,h:stateHash()});
-  // Once every other person has gone the relay has nothing left to relay: drop
-  // to a plain offline game against the computers rather than depending on a
-  // connection nobody is on the other end of.
-  if(netAlone())netGoOffline('You fight on alone against the computer');
+  // Being the last one left is NOT a reason to hang up. An earlier version did
+  // drop to offline here, which quietly made reconnect impossible in a two
+  // player game — the very case where someone's phone dropping matters most.
+  // Staying in the room costs nothing (the lockstep loop trivially satisfies
+  // itself) and keeps the door open for them to come back.
   return true;
 }
 function netHalt(title,sub,body){
