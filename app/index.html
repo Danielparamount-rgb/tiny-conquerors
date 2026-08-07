@@ -2047,7 +2047,7 @@ let netSock=null,netRoom='',netHost=false,netName='';
 let netTurn=0;                // the next turn to execute
 let netIn=new Map();          // turn -> {seat: cmds}
 let netSent=-1;               // highest turn we have shipped commands for
-let netStall=0,netStallSeat=-1;
+let netStall=0,netStallSeat=-1,netStallSaid=false;
 let netLobby={players:[],cfg:null,host:0};
 let netPlayers=[];            // seat -> {seat,name,civ,team} for the running match
 let netGone=new Set();        // seats that dropped — we stall on them forever otherwise
@@ -9797,6 +9797,12 @@ function frame(now){
         if(netStall>2.5&&w&&netStallSeat!==w.seat){
           netStallSeat=w.seat;toast('Waiting for '+w.name+'…');
         }
+        // Behind a proxy a vanished player takes ~15-20s to be confirmed dead,
+        // so say what is about to happen rather than leaving people staring.
+        if(netStall>8&&w&&!netStallSaid){
+          netStallSaid=true;
+          feed(w.name+' has gone quiet — if they don\'t return the computer will take their banner',true);
+        }
         // A dropped seat is handled by the relay's takeover notice, so netWaitingOn
         // already ignores it. Reaching here still waiting on a gone seat means the
         // notice never came — the relay itself is in trouble, not the player.
@@ -9807,7 +9813,7 @@ function frame(now){
         else if(netStall>45)
           netHalt('Lost contact','Nothing has arrived from '+(w?w.name:'the other players')+' for 45 seconds.',
             'Your connection, or theirs, has gone quiet.');
-      }else{netStall=0;netStallSeat=-1;}
+      }else{netStall=0;netStallSeat=-1;netStallSaid=false;}
     }else{
       while(acc>=.05&&guard++<6){step(.05);acc-=.05;}
     }

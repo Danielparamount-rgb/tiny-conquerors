@@ -60,6 +60,17 @@ const AI_TAKEOVER_DELAY = 20;        // turns (~1s) — invisible, and far beyon
    So the room keeps a journal: every NON-EMPTY command list plus every seat
    handover. Empty lists are the overwhelming majority and are simply implied. */
 const MAX_JOURNAL = 40000;           // entries; past this a room stops being rejoinable
+/* How fast a vanished player is noticed. This matters more than it looks: until
+   the relay spots the drop, every other peer is stalled waiting for orders that
+   are never coming.
+   Locally a closed socket raises 'close' at once. Behind Render's proxy it does
+   NOT — the server sees nothing at all, and the only thing that reveals the
+   corpse is a missed heartbeat. Measured on the deployed service: with a 30s
+   ping the delay was anywhere up to a minute.
+   Pinging every 5s and allowing three misses puts detection at ~15-20s while
+   still forgiving a phone that briefly suspends its tab. */
+const PING_MS = 5000;
+const MISSES_ALLOWED = 3;
 
 /* Room codes skip O/0/I/1/S/5 — these get read aloud and typed on phones. */
 const ALPHABET = 'ABCDEFGHJKLMNPQRTUVWXYZ23456789';
@@ -156,8 +167,8 @@ const server = http.createServer((req, res) => {
 const wss = new WebSocketServer({ server, maxPayload: MAX_FRAME });
 
 wss.on('connection', (ws) => {
-  ws.isAlive = true;
-  ws.on('pong', () => { ws.isAlive = true; });
+  ws.missed = 0;
+  ws.on('pong', () => { ws.missed = 0; });
 
   ws.on('message', (raw) => {
     let m;
@@ -359,14 +370,20 @@ wss.on('connection', (ws) => {
   ws.on('error', () => leave(ws));
 });
 
-/* Dead sockets and abandoned rooms. Render's free tier will also idle the whole
-   service out after a while — that is expected, the client reconnects. */
+/* Dead sockets. Terminating one raises 'close', which is what actually runs
+   leave() and starts the AI handover — behind a proxy this is the ONLY thing
+   that does. */
 setInterval(() => {
   wss.clients.forEach((ws) => {
-    if (!ws.isAlive) { try { ws.terminate(); } catch (_) {} return; }
-    ws.isAlive = false;
+    if (ws.missed >= MISSES_ALLOWED) { try { ws.terminate(); } catch (_) {} return; }
+    ws.missed++;
     try { ws.ping(); } catch (_) {}
   });
+}, PING_MS);
+
+/* Abandoned rooms. Render's free tier will also idle the whole service out after
+   a while, which ends any match in progress — in-memory rooms do not survive it. */
+setInterval(() => {
   const now = Date.now();
   for (const [code, r] of rooms) {
     if (now - r.seen > IDLE_MS || r.seats.every((s) => !s)) rooms.delete(code);
