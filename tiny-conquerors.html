@@ -1134,8 +1134,11 @@ function newGame(){
    Declared HERE rather than beside refreshTerrain because genMap/setMapSize
    below bump them, and `let` in the temporal dead zone would throw. */
 let terrainVer=0,elevVer=0,fogVer=0;
+// resVer: ANY change of G.res membership. resGen: new game / load / map resize
+// (a full rebuild rather than an incremental one). Render-side only.
+let resVer=0,resGen=0;
 function genMap(){
-  miniResDirty=true;elevVer++;
+  miniResDirty=true;elevVer++;resVer++;resGen++;
   if(mapSel===1)genMapForest();
   else if(mapSel===2)genMapHallowed();
   else genMapRiver();
@@ -1208,7 +1211,7 @@ function dropCarcass(u){
   }
   G.res[k]={type:'food',sub:'meat',x,y,amt:meat};
   G.map[y][x]=1;                        // a carcass occupies its tile like any other pile
-  miniResDirty=true;
+  miniResDirty=true;resVer++;
   // whoever was hunting it walks straight over to butcher the kill
   for(const o of G.units){
     if(o.hp<=0||o.type!=='villager')continue;
@@ -2031,7 +2034,7 @@ const CMDS={
     if(!spot)return;
     pay(c.p,cost);
     G.res[spot.k]={type:'fish',x:spot.x,y:spot.y,amt:250};
-    miniResDirty=true;
+    miniResDirty=true;resVer++;
     for(const sh of G.units)                 // an idle fishing boat steams straight to it
       if(sh.p===c.p&&UNITS[sh.type].fisher&&sh.hp>0&&sh.state==='idle'){cmdGather(sh,spot.k);break;}
     if(c.p===localP){snd('place');updateTop();feed('Fish Trap set');}},
@@ -3229,7 +3232,7 @@ function updateUnit(u,dt){
           col:r.type==='wood'?'#caa66b':r.type==='food'?'#c0392b':r.type==='fish'?'#bcd8e4':'#ffd75e'});
         if(r.amt<=0){
           if(r.type!=='fish')G.map[r.y][r.x]=0; // spent fisheries stay open water
-          delete G.res[u.resKey];miniResDirty=true;
+          delete G.res[u.resKey];miniResDirty=true;resVer++;
           if(r.type==='wood')stampCleared(r.x,r.y);}
         const cap=carryCap(u)+(meat&&cv.huntCarry?cv.huntCarry:0); // Goths shoulder more meat
         if(u.carry>=cap||!G.res[u.resKey]){
@@ -3915,7 +3918,7 @@ function loadGame(){
     if(UNITS[u.type].garCap&&!u.gar)u.gar=[];};
   for(const u of G.units){seedMot(u);if(u.gar)for(const gu of u.gar)seedMot(gu);}
   for(const b of G.blds)if(b.gar)for(const gu of b.gar)seedMot(gu);
-  miniResDirty=true;fogDirty=true;
+  miniResDirty=true;fogDirty=true;resVer++;resGen++;
   updateFog();refreshTerrain();clampCam();
   updateTop();refreshPanel();
   return true;
@@ -10449,6 +10452,184 @@ const R3={
     this.idxCount=idx.length;
     this.meshKey=N+':'+elevVer;      // must match the check in draw()
   },
+  /* ---- trees as REAL GEOMETRY ---------------------------------------------
+     Billboards were the right answer while the camera was locked (a billboard
+     IS the exact projection of a solid under a fixed orthographic view). The
+     camera rotates now, so they are not: baked NW light would swing with the
+     view and cards would shear. So: two low-poly species meshes, drawn
+     INSTANCED — one instance per tree, ~16 bytes each, which is why 8,800
+     trees on Black Forest cost ~140KB instead of the ~10MB a merged
+     per-tree mesh would.
+     Colours are lifted from getResSpr's own palettes so the species read the
+     same as the 2D art. Lighting is a real lambert term from the NW, which is
+     the whole point: it now responds to the camera instead of being painted on. */
+  TREE_PINE:{dark:['#13290c','#1c3d14','#265219','#336b23','#478a32'],
+             light:['#173312','#22491a','#2e6021','#3d7c2c','#54993c'],trunk:'#4a3018'},
+  TREE_LEAF:{dark:['#122a0c','#1d4213','#28581a','#357024','#458830','#589b3e'],
+             light:['#17330f','#255018','#316a20','#40852b','#529f38','#66b447'],trunk:'#54381e'},
+  buildTreeMeshes(){
+    const V=[],I=[];                       // pos3, nrm3, col3  -> 9 floats/vert
+    const hex=c=>[parseInt(c.slice(1,3),16)/255,parseInt(c.slice(3,5),16)/255,parseInt(c.slice(5,7),16)/255];
+    const push=(p,n,c)=>{V.push(p[0],p[1],p[2],n[0],n[1],n[2],c[0],c[1],c[2]);return V.length/9-1;};
+    const tri=(a,b,c)=>{I.push(a,b,c);};
+    const nrm=(a,b,c)=>{const ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2],
+      vx=c[0]-a[0],vy=c[1]-a[1],vz=c[2]-a[2];
+      let nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;
+      const L=Math.hypot(nx,ny,nz)||1;return [nx/L,ny/L,nz/L];};
+    // n-gon cone: apex at y1, base ring radius r at y0
+    const cone=(y0,y1,r,seg,col)=>{
+      const c=hex(col);
+      for(let i=0;i<seg;i++){
+        const a0=i/seg*6.283,a1=(i+1)/seg*6.283;
+        const p0=[Math.cos(a0)*r,y0,Math.sin(a0)*r],p1=[Math.cos(a1)*r,y0,Math.sin(a1)*r],ap=[0,y1,0];
+        const n=nrm(p0,p1,ap);
+        tri(push(p0,n,c),push(p1,n,c),push(ap,n,c));
+      }
+      // underside so it is solid when seen from below at a low pitch
+      const c2=hex(col),dn=[0,-1,0];
+      for(let i=0;i<seg;i++){
+        const a0=i/seg*6.283,a1=(i+1)/seg*6.283;
+        tri(push([Math.cos(a1)*r,y0,Math.sin(a1)*r],dn,c2),
+            push([Math.cos(a0)*r,y0,Math.sin(a0)*r],dn,c2),
+            push([0,y0,0],dn,c2));
+      }
+    };
+    const prism=(y0,y1,r,seg,col)=>{
+      const c=hex(col);
+      for(let i=0;i<seg;i++){
+        const a0=i/seg*6.283,a1=(i+1)/seg*6.283;
+        const b0=[Math.cos(a0)*r,y0,Math.sin(a0)*r],b1=[Math.cos(a1)*r,y0,Math.sin(a1)*r];
+        const t0=[b0[0],y1,b0[2]],t1=[b1[0],y1,b1[2]];
+        const n=nrm(b0,b1,t1);
+        const i0=push(b0,n,c),i1=push(b1,n,c),i2=push(t1,n,c),i3=push(t0,n,c);
+        tri(i0,i1,i2);tri(i0,i2,i3);
+      }
+    };
+    // rough sphere-ish blob (octahedron subdivided once) — cheap, reads round
+    const blob=(cx,cy,cz,r,col,jit)=>{
+      const c=hex(col);
+      const P=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+      const F=[[0,2,4],[2,1,4],[1,3,4],[3,0,4],[2,0,5],[1,2,5],[3,1,5],[0,3,5]];
+      const at=v=>{
+        const s=1+(jit?((Math.abs(v[0]*3+v[1]*5+v[2]*7)%3)-1)*0.12:0);
+        return [cx+v[0]*r*s, cy+v[1]*r*s*0.82, cz+v[2]*r*s];
+      };
+      for(const f of F){
+        const a=at(P[f[0]]),b=at(P[f[1]]),d=at(P[f[2]]);
+        const n=nrm(a,b,d);
+        tri(push(a,n,c),push(b,n,c),push(d,n,c));
+      }
+    };
+    // ---- species 0: pine. radius 1, total height ~1.15 ----
+    const P=this.TREE_PINE, L=this.TREE_LEAF;
+    const off=[],cnt=[];
+    off.push(0);
+    prism(0,.30,.11,5,P.trunk);
+    cone(.20,.62,1.00,7,P.light[1]);
+    cone(.40,.82,.76,7,P.light[2]);
+    cone(.60,1.00,.52,7,P.light[3]);
+    cone(.78,1.18,.28,7,P.light[4]);
+    cnt.push(I.length);
+    // ---- species 1: broadleaf ----
+    off.push(I.length);
+    prism(0,.52,.13,5,L.trunk);
+    blob(0,.86,0,.86,L.light[2],true);
+    blob(-.30,1.02,-.16,.54,L.light[3],true);
+    blob(.26,.96,.22,.50,L.light[4],true);
+    blob(-.06,1.20,.02,.38,L.light[5],true);
+    cnt.push(I.length-off[1]);
+    const gl=this.gl;
+    this.tvbo=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,this.tvbo);
+    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(V),gl.STATIC_DRAW);
+    this.tibo=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.tibo);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(I),gl.STATIC_DRAW);
+    this.treeOff=off;this.treeCnt=cnt;this.treeVerts=V.length/9;
+    this.treeH=[1.18,1.35];              // mesh height per species, for scaling
+  },
+  initTrees(){
+    const gl=this.gl;
+    this.iext=this.iext||gl.getExtension('ANGLE_instanced_arrays');
+    if(!this.iext){this.noTrees=true;return false;}   // pre-2013 device; ground only
+    const vs=`
+      attribute vec3 aPos; attribute vec3 aNrm; attribute vec3 aCol;
+      attribute vec4 aI0;      // tileX, baseY, tileZ, scaleXZ
+      attribute vec2 aI1;      // scaleY, shade
+      uniform mat4 uMVP; uniform vec3 uLight;
+      varying vec3 vC;
+      void main(){
+        vec3 p=vec3(aPos.x*aI0.w+aI0.x, aPos.y*aI1.x+aI0.y, aPos.z*aI0.w+aI0.z);
+        gl_Position=uMVP*vec4(p,1.0);
+        float lam=max(0.0,dot(normalize(aNrm),uLight));
+        vC=aCol*aI1.y*(0.42+0.78*lam);
+      }`;
+    const fs=`precision mediump float; varying vec3 vC;
+      void main(){ gl_FragColor=vec4(vC,1.0); }`;
+    const mk=(t,s)=>{const sh=gl.createShader(t);gl.shaderSource(sh,s);gl.compileShader(sh);
+      if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS)){console.error(gl.getShaderInfoLog(sh));return null;}return sh;};
+    const v=mk(gl.VERTEX_SHADER,vs),f=mk(gl.FRAGMENT_SHADER,fs);
+    if(!v||!f){this.noTrees=true;return false;}
+    const p=gl.createProgram();gl.attachShader(p,v);gl.attachShader(p,f);
+    ['aPos','aNrm','aCol','aI0','aI1'].forEach((n,i)=>gl.bindAttribLocation(p,i,n));
+    gl.linkProgram(p);
+    if(!gl.getProgramParameter(p,gl.LINK_STATUS)){console.error(gl.getProgramInfoLog(p));this.noTrees=true;return false;}
+    this.treeProg=p;
+    this.treeLoc={uMVP:gl.getUniformLocation(p,'uMVP'),uLight:gl.getUniformLocation(p,'uLight')};
+    this.buildTreeMeshes();
+    this.ivbo=[gl.createBuffer(),gl.createBuffer()];
+    this.iCount=[0,0];this.treeKey='';
+    return true;
+  },
+  /* One instance per tree, split by species so each is one drawElementsInstanced.
+     Variant keying matches getResSpr exactly (hash2(x*13,y*17)%8, pine when
+     h%3===0, rr=10+(h%4)*1.7, dark when h>=5) so the 3D forest has the same
+     species mix and size spread as the 2D art. */
+  buildTrees(){
+    const gl=this.gl,A=[[],[]];
+    for(const k in G.res){
+      const r=G.res[k];
+      if(r.type!=='wood')continue;
+      const h=hash2(r.x*13,r.y*17)%8;
+      const sp=(h%3===0)?0:1;
+      const rr=10+(h%4)*1.7;
+      const hp=(sp?30:34)+(h%4)*2.5;                 // sprite-space height in px
+      A[sp].push(r.x+.5, this.groundH(r.x+.5,r.y+.5), r.y+.5, rr/IW,
+                 hp*this.HS/this.treeH[sp], h>=5?0.80:1.0);
+    }
+    for(let s=0;s<2;s++){
+      gl.bindBuffer(gl.ARRAY_BUFFER,this.ivbo[s]);
+      gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(A[s]),gl.STATIC_DRAW);
+      this.iCount[s]=A[s].length/6;
+    }
+    this.treeKey=MAP+':'+elevVer+':'+resGen+':'+resVer;
+  },
+  drawTrees(mvp){
+    if(this.noTrees)return;
+    if(!this.treeProg&&!this.initTrees())return;
+    const gl=this.gl,ex=this.iext;
+    if(this.treeKey!==MAP+':'+elevVer+':'+resGen+':'+resVer)this.buildTrees();
+    if(!this.iCount[0]&&!this.iCount[1])return;
+    gl.useProgram(this.treeProg);
+    gl.uniformMatrix4fv(this.treeLoc.uMVP,false,mvp);
+    gl.uniform3f(this.treeLoc.uLight,-0.46,0.80,-0.38);   // key light from the NW
+    gl.bindBuffer(gl.ARRAY_BUFFER,this.tvbo);
+    for(let i=0;i<3;i++){gl.enableVertexAttribArray(i);
+      gl.vertexAttribPointer(i,3,gl.FLOAT,false,36,i*12);ex.vertexAttribDivisorANGLE(i,0);}
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.tibo);
+    for(let s=0;s<2;s++){
+      if(!this.iCount[s])continue;
+      gl.bindBuffer(gl.ARRAY_BUFFER,this.ivbo[s]);
+      gl.enableVertexAttribArray(3);gl.vertexAttribPointer(3,4,gl.FLOAT,false,24,0);
+      ex.vertexAttribDivisorANGLE(3,1);
+      gl.enableVertexAttribArray(4);gl.vertexAttribPointer(4,2,gl.FLOAT,false,24,16);
+      ex.vertexAttribDivisorANGLE(4,1);
+      ex.drawElementsInstancedANGLE(gl.TRIANGLES,this.treeCnt[s],gl.UNSIGNED_SHORT,
+        this.treeOff[s]*2,this.iCount[s]);
+    }
+    // divisors are GLOBAL per attribute index — leaving these at 1 would make the
+    // ground pass read one vertex for the whole terrain next frame.
+    ex.vertexAttribDivisorANGLE(3,0);ex.vertexAttribDivisorANGLE(4,0);
+    gl.disableVertexAttribArray(3);gl.disableVertexAttribArray(4);
+  },
   /* Fog overlay. Without this the 3D view reveals the whole map — on Black
      Forest that hands over the entire tree layout, which is a gameplay
      difference, not a cosmetic gap. Source is fogS (512², power-of-two).
@@ -10558,6 +10739,7 @@ const R3={
     gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.tex);
     gl.uniform1i(this.loc.uTex,0);
     gl.drawElements(gl.TRIANGLES,this.idxCount,this.idxType,0);
+    this.drawTrees(mvp);
     this.drawFog(mvp);
   },
 };
