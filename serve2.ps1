@@ -21,7 +21,25 @@ while ($listener.IsListening) {
   $file = Join-Path $root $path
   if (Test-Path $file) {
     $bytes = [System.IO.File]::ReadAllBytes($file)
-    $ctx.Response.ContentType = "text/html; charset=utf-8"
+    # Real MIME types matter here: a browser refuses to register a service
+    # worker served as text/html, which is why local SW testing used to be
+    # impossible. Everything unknown still falls back to text/html.
+    $ctx.Response.ContentType = switch ([IO.Path]::GetExtension($file).ToLower()) {
+      ".js"          { "application/javascript; charset=utf-8" }
+      ".mjs"         { "application/javascript; charset=utf-8" }
+      ".json"        { "application/json; charset=utf-8" }
+      ".webmanifest" { "application/manifest+json; charset=utf-8" }
+      ".css"         { "text/css; charset=utf-8" }
+      ".png"         { "image/png" }
+      ".jpg"         { "image/jpeg" }
+      ".jpeg"        { "image/jpeg" }
+      ".svg"         { "image/svg+xml" }
+      ".ico"         { "image/x-icon" }
+      default        { "text/html; charset=utf-8" }
+    }
+    # No-store keeps the browser cache out of service-worker update tests;
+    # a stale sw.js is exactly the bug this rig is here to reproduce.
+    $ctx.Response.Headers.Add("Cache-Control", "no-store")
     $ctx.Response.ContentLength64 = $bytes.Length
     $ctx.Response.OutputStream.Write($bytes, 0, $bytes.Length)
   } else {

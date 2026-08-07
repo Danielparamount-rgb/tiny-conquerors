@@ -11575,7 +11575,38 @@ requestAnimationFrame(frame);
 </script>
 
 <script>
-if ('serviceWorker' in navigator)
-  addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+(function(){
+  var BUILD = 'tq-v35';
+  addEventListener('load', function(){
+    var ov = document.getElementById('startOverlay');
+    if (!ov) return;
+    var d = document.createElement('div');
+    d.textContent = 'build ' + BUILD;
+    d.style.cssText = 'position:absolute;right:9px;bottom:7px;font-size:10px;letter-spacing:.5px;' +
+                      'opacity:.4;pointer-events:none;';
+    ov.appendChild(d);
+  });
+
+  if (!('serviceWorker' in navigator)) return;
+  var reg = null, had = !!navigator.serviceWorker.controller;
+  function check(){ if (reg) reg.update().catch(function(){}); }
+
+  addEventListener('load', function(){
+    navigator.serviceWorker.register('sw.js').then(function(r){ reg = r; check(); }).catch(function(){});
+  });
+
+  // An installed PWA is usually resumed, not reloaded, so coming back to the
+  // foreground is the only moment some phones ever look for a new build.
+  addEventListener('visibilitychange', function(){ if (!document.hidden) check(); });
+
+  navigator.serviceWorker.addEventListener('controllerchange', function(){
+    if (!had) return;  // first ever install - there is nothing to replace
+    var ov = document.getElementById('startOverlay');
+    // Never yank the page out from under a live match, least of all a
+    // multiplayer one where a reload drops the player out of lockstep.
+    if (!ov || ov.style.display !== 'none') location.reload();
+    else if (typeof toast === 'function') toast('New version ready - restart the app to update');
+  });
+})();
 </script>
 </body></html>

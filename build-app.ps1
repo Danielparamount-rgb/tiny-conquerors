@@ -16,13 +16,53 @@ $head = @'
 <link rel="apple-touch-icon" href="icon-192.png">
 </head><body>
 '@
+# The build stamp comes out of app\sw.js so there is only ever one version to
+# bump. It is shown in the corner of the start screen, which is how you tell at
+# a glance whether a phone is actually running the build you just shipped.
+$swSrc = [IO.File]::ReadAllText("$root\app\sw.js")
+if ($swSrc -notmatch "VERSION\s*=\s*'([^']+)'") { throw "No VERSION found in app\sw.js" }
+$ver = $Matches[1]
+
 $tail = @'
 
 <script>
-if ('serviceWorker' in navigator)
-  addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+(function(){
+  var BUILD = '__BUILD_VERSION__';
+  addEventListener('load', function(){
+    var ov = document.getElementById('startOverlay');
+    if (!ov) return;
+    var d = document.createElement('div');
+    d.textContent = 'build ' + BUILD;
+    d.style.cssText = 'position:absolute;right:9px;bottom:7px;font-size:10px;letter-spacing:.5px;' +
+                      'opacity:.4;pointer-events:none;';
+    ov.appendChild(d);
+  });
+
+  if (!('serviceWorker' in navigator)) return;
+  var reg = null, had = !!navigator.serviceWorker.controller;
+  function check(){ if (reg) reg.update().catch(function(){}); }
+
+  addEventListener('load', function(){
+    navigator.serviceWorker.register('sw.js').then(function(r){ reg = r; check(); }).catch(function(){});
+  });
+
+  // An installed PWA is usually resumed, not reloaded, so coming back to the
+  // foreground is the only moment some phones ever look for a new build.
+  addEventListener('visibilitychange', function(){ if (!document.hidden) check(); });
+
+  navigator.serviceWorker.addEventListener('controllerchange', function(){
+    if (!had) return;  // first ever install - there is nothing to replace
+    var ov = document.getElementById('startOverlay');
+    // Never yank the page out from under a live match, least of all a
+    // multiplayer one where a reload drops the player out of lockstep.
+    if (!ov || ov.style.display !== 'none') location.reload();
+    else if (typeof toast === 'function') toast('New version ready - restart the app to update');
+  });
+})();
 </script>
 </body></html>
 '@
+$tail = $tail.Replace('__BUILD_VERSION__', $ver)
 [IO.File]::WriteAllText("$root\app\index.html", $head + $game + $tail)
+"build stamp: $ver"
 "app/index.html built: $((Get-Item "$root\app\index.html").Length) bytes"
