@@ -4651,16 +4651,30 @@ function refreshTerrain(){
   if(G.elev)for(let y=0;y<MAP;y++)for(let x=0;x<MAP;x++){
     if(!G.elev[y*MAP+x])continue;
     const e=(xx,yy)=>xx<0||yy<0||xx>=MAP||yy>=MAP?0:G.elev[yy*MAP+xx];
+    // Hill rims used to be dead-straight strokes along the tile edge, which
+    // drew a visible lattice over every hill — the pale "grid lines" in the
+    // open-map complaint. Break each rim into jittered segments so it reads as
+    // a contour of the slope instead of the boundary of a cell.
+    const hh4=hash2(x*67,y*89);
+    const wav=(x1,y1,x2,y2)=>{
+      const N=4;
+      tctx.moveTo(x1,y1);
+      for(let s=1;s<=N;s++){
+        const t=s/N, jx=x1+(x2-x1)*t, jy=y1+(y2-y1)*t;
+        const o=s===N?0:((((hh4>>>(s*4))%11)-5)*.55);
+        tctx.lineTo(jx+(y2-y1?o:0),jy+(x2-x1?o:0));
+      }
+    };
     tctx.lineWidth=2.4;
-    tctx.strokeStyle='rgba(240,248,205,.32)';
+    tctx.strokeStyle='rgba(240,248,205,.19)';
     tctx.beginPath();
-    if(!e(x,y-1)){tctx.moveTo(x*TILE,y*TILE+1);tctx.lineTo(x*TILE+TILE,y*TILE+1);}
-    if(!e(x-1,y)){tctx.moveTo(x*TILE+1,y*TILE);tctx.lineTo(x*TILE+1,y*TILE+TILE);}
+    if(!e(x,y-1))wav(x*TILE,y*TILE+1,x*TILE+TILE,y*TILE+1);
+    if(!e(x-1,y))wav(x*TILE+1,y*TILE,x*TILE+1,y*TILE+TILE);
     tctx.stroke();
-    tctx.strokeStyle='rgba(22,34,12,.35)';
+    tctx.strokeStyle='rgba(22,34,12,.21)';
     tctx.beginPath();
-    if(!e(x,y+1)){tctx.moveTo(x*TILE,y*TILE+TILE-1);tctx.lineTo(x*TILE+TILE,y*TILE+TILE-1);}
-    if(!e(x+1,y)){tctx.moveTo(x*TILE+TILE-1,y*TILE);tctx.lineTo(x*TILE+TILE-1,y*TILE+TILE);}
+    if(!e(x,y+1))wav(x*TILE,y*TILE+TILE-1,x*TILE+TILE,y*TILE+TILE-1);
+    if(!e(x+1,y))wav(x*TILE+TILE-1,y*TILE,x*TILE+TILE-1,y*TILE+TILE);
     tctx.stroke();
   }
   G.waterList=Object.keys(G.water).map(k=>{
@@ -4710,22 +4724,75 @@ function refreshTerrain(){
     }
   }
   // water: depth-graded, with submerged stones, deep-water blobs and bank foam
+  const SHAL=[96,172,214],DEEP=[43,116,166];
+  // Continuous 0..1 shelf: 0 = touching the shore, 1 = open water. This is the
+  // EUCLIDEAN distance to the nearest land tile, deliberately not an integer
+  // ring count — integer rings drew concentric diamond bands and every small
+  // pond came out as a bullseye. Off-map counts as land, so the board edge
+  // shelves like a coast instead of a cliff.
+  const wdep=(x,y)=>{
+    let best=9;
+    for(let dy2=-3;dy2<=3;dy2++)for(let dx2=-3;dx2<=3;dx2++){
+      if(!isLand(x+dx2,y+dy2))continue;
+      const d=Math.sqrt(dx2*dx2+dy2*dy2);
+      if(d<best)best=d;
+    }
+    return Math.max(0,Math.min(1,(best-1)/2.2));
+  };
+  const wdepArr=new Float32Array(MAP*MAP);
+  for(const k in G.water){const[x,y]=k.split(',').map(Number);wdepArr[y*MAP+x]=wdep(x,y);}
+  // Depth at a tile CORNER = mean of the four tiles meeting there. Sampling at
+  // corners and bilinearly interpolating across the tile is what stops open
+  // water reading as a mosaic of flat diamonds — one colour per tile always
+  // will, however smooth the underlying field is.
+  const cdep=(cx,cy)=>{let s=0,n=0;
+    for(const[ox,oy] of [[-1,-1],[0,-1],[-1,0],[0,0]]){
+      const x=cx+ox,y=cy+oy;
+      if(x<0||y<0||x>=MAP||y>=MAP)continue;
+      s+=wdepArr[y*MAP+x];n++;}
+    return n?s/n:0;};
+  const WSUB=6,WSS=TILE/WSUB;
   for(const k in G.water){
     const[wx,wy]=k.split(',').map(Number);
     const px=wx*TILE,py=wy*TILE,h=hash2(wx*11,wy*7);
     const edge=isLand(wx,wy-1)||isLand(wx,wy+1)||isLand(wx-1,wy)||isLand(wx+1,wy);
-    // concept-art pass: bright azure with pale turquoise shallows.
-    // A per-tile VERTICAL GRADIENT restarts at every tile boundary, which at these
-    // brighter values banded into a visible checkerboard on open water. So the tile
-    // is flat-filled and depth comes from a smooth low-frequency wobble in world
-    // space instead — continuous across tiles, no seams. Don't reintroduce a
-    // per-tile gradient here.
-    const wob=(Math.sin(wx*.37)+Math.sin(wy*.29)+Math.sin((wx+wy)*.19))/3;
-    tctx.fillStyle=shadeCol(edge?'#5aa8d2':'#2f7cae',wob*.035);
-    tctx.fillRect(px,py,TILE,TILE);
-    // soft depth variation
-    tctx.fillStyle=edge?'rgba(130,190,210,.13)':'rgba(8,24,40,.2)';
-    tctx.beginPath();tctx.ellipse(px+6+(h%12),py+8+(h%9),7,4,0,0,7);tctx.fill();
+    /* Bright azure with pale turquoise shallows.
+       TWO things made open water read as a grid and both are fixed here:
+       (1) a per-tile VERTICAL GRADIENT that restarted at every tile boundary —
+           invisible at the old dark values, a hard checkerboard once brightened;
+       (2) shallow-vs-deep as a per-tile BOOLEAN, which ringed every shore with a
+           row of lighter diamonds.
+       So: depth is a distance-to-shore ramp (0..3) lerped smoothly, plus a
+       low-frequency wobble in world space. Don't reintroduce either a per-tile
+       gradient or a boolean shallow test. */
+    const t4=wdepArr[wy*MAP+wx];
+    const d00=cdep(wx,wy),d10=cdep(wx+1,wy),d01=cdep(wx,wy+1),d11=cdep(wx+1,wy+1);
+    for(let sy=0;sy<WSUB;sy++)for(let sx=0;sx<WSUB;sx++){
+      const u=(sx+.5)/WSUB,v=(sy+.5)/WSUB;
+      const d=d00*(1-u)*(1-v)+d10*u*(1-v)+d01*(1-u)*v+d11*u*v;
+      const gx=wx+u,gy=wy+v;
+      const wob=(Math.sin(gx*.37)+Math.sin(gy*.29)+Math.sin((gx+gy)*.19))/3*9;
+      tctx.fillStyle='rgb('+((SHAL[0]+(DEEP[0]-SHAL[0])*d+wob)|0)+','
+                           +((SHAL[1]+(DEEP[1]-SHAL[1])*d+wob)|0)+','
+                           +((SHAL[2]+(DEEP[2]-SHAL[2])*d+wob)|0)+')';
+      // half-pixel overfill so the sub-cells leave no seams of their own
+      tctx.fillRect(px+sx*WSS-.5,py+sy*WSS-.5,WSS+1,WSS+1);
+    }
+    // depth mottling at a scale LARGER than one tile, so the eye can never
+    // pick out an individual cell in open water
+    // alpha RAMPS with depth — a hard threshold here drew a tile-aligned dark
+    // block across the middle of every pond, which is the artefact this whole
+    // pass exists to remove
+    if(t4>0){
+      tctx.fillStyle='rgba(18,58,94,'+(.085*t4).toFixed(3)+')';
+      tctx.beginPath();tctx.ellipse(px+13+((h>>>3)%18)-9,py+13+((h>>>7)%18)-9,
+        17+((h>>>11)%10),12+((h>>>13)%8),0,0,7);tctx.fill();
+      if(h%5===0){
+        tctx.fillStyle='rgba(150,205,230,'+(.07*t4).toFixed(3)+')';
+        tctx.beginPath();tctx.ellipse(px+13+((h>>>5)%16)-8,py+13+((h>>>9)%16)-8,
+          15+((h>>>15)%9),11+((h>>>17)%7),0,0,7);tctx.fill();
+      }
+    }
     // baked wave glints, two rows
     const oy2=4+(h%14);
     tctx.strokeStyle='rgba(190,220,235,.32)';tctx.lineWidth=1.1;
@@ -4747,6 +4814,61 @@ function refreshTerrain(){
     if(isLand(wx,wy+1))foam(px+1,py+TILE-1.4,px+TILE-1,py+TILE-1.4);
     if(isLand(wx-1,wy))foam(px+1.4,py+1,px+1.4,py+TILE-1);
     if(isLand(wx+1,wy))foam(px+TILE-1.4,py+1,px+TILE-1.4,py+TILE-1);
+  }
+  /* ── organic shoreline ────────────────────────────────────────────────
+     Water is filled per TILE and the sand was a constant-width strip along the
+     tile edge, so every coast read as a 26px diamond staircase — the single
+     biggest reason the world looked like a grid rather than an open map.
+     Walk each water/land boundary and stamp jittered lobes BOTH ways across it
+     so the waterline wanders over the tile edge. Purely cosmetic: G.water is
+     still the only authority on what floats and what walks, so pathing,
+     dock placement and naval routing are untouched. Runs AFTER the water pass
+     (it has to paint into water tiles as well as land ones). */
+  for(const k in G.water){
+    const[wx,wy]=k.split(',').map(Number);
+    for(const[dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx=wx+dx,ny=wy+dy,nk=nx+','+ny;
+      if(nx<0||ny<0||nx>=MAP||ny>=MAP)continue;
+      if(G.water[nk]||G.ford[nk])continue;
+      const h=hash2(nx*53+wx*7,ny*97+wy*3);
+      // shared edge endpoints; (dx,dy) is already the unit normal into the land
+      let ax,ay,bx2,by2;
+      if(dx===1){ax=nx*TILE;ay=ny*TILE;bx2=nx*TILE;by2=ny*TILE+TILE;}
+      else if(dx===-1){ax=nx*TILE+TILE;ay=ny*TILE;bx2=nx*TILE+TILE;by2=ny*TILE+TILE;}
+      else if(dy===1){ax=nx*TILE;ay=ny*TILE;bx2=nx*TILE+TILE;by2=ny*TILE;}
+      else{ax=nx*TILE;ay=ny*TILE+TILE;bx2=nx*TILE+TILE;by2=ny*TILE+TILE;}
+      // Lobes are flattened ALONG the shore (rx across the beach is small, ry
+      // along it is large) — round ones read as a row of cotton-wool bubbles.
+      const lob=(cx,cy,across,along,c)=>{tctx.fillStyle=c;
+        tctx.beginPath();
+        tctx.ellipse(cx,cy,dy?along:across,dy?across:along,0,0,7);tctx.fill();};
+      for(let s=0;s<9;s++){
+        const t=(s+.5)/9;
+        const ex=ax+(bx2-ax)*t,ey=ay+(by2-ay)*t;
+        const j=(((h>>>(s*3))%11)-5)*.6;           // slide along the edge
+        const sx4=dy?j:0, sy4=dx?j:0;
+        // water pushes irregularly into the land tile
+        if(((h>>>(s*2))&3)!==0){
+          const d1=1+((h>>>(s*3+2))%4);
+          lob(ex+dx*d1+sx4,ey+dy*d1+sy4,3.1+((h>>>s)%3),5.6+((h>>>(s+4))%4),'#5aa8d2');
+        }
+        // ragged sand further up the beach
+        const d2=4+((h>>>(s*3+5))%7);
+        lob(ex+dx*d2+sx4*1.1,ey+dy*d2+sy4*1.1,3.4+((h>>>(s+2))%3),6.2+((h>>>(s+6))%5),
+            s%3===0?'#ab9165':'#c9b078');
+        // a spit of sand eating back out into the water
+        if(((h>>>(s*2+1))&3)===0)
+          lob(ex-dx*2.6+sx4*.7,ey-dy*2.6+sy4*.7,2.2,3.6,'#c9b078');
+      }
+      // dither the top of the beach into the grass so it has no hard outer rim
+      for(let s=0;s<16;s++){
+        const t=((h>>>(s*2))%64)/64;
+        const ex=ax+(bx2-ax)*t,ey=ay+(by2-ay)*t;
+        const d3=8+((h>>>(s+3))%9);
+        tctx.fillStyle=s%2?'rgba(201,176,120,.5)':'rgba(171,145,101,.4)';
+        tctx.fillRect(ex+dx*d3-1,ey+dy*d3-1,2.4+((h>>>s)%3),2.2);
+      }
+    }
   }
   // fords: wet sand shallows with rippling water and stepping stones
   for(const k in G.ford){
