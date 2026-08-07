@@ -10919,6 +10919,220 @@ const R3={
     ex.vertexAttribDivisorANGLE(3,0);ex.vertexAttribDivisorANGLE(4,0);
     gl.disableVertexAttribArray(3);gl.disableVertexAttribArray(4);
   },
+  /* ---- units ---------------------------------------------------------------
+     Five archetypes (man / cavalry / siege / ship / beast), each a small mesh
+     of boxed parts. Every vertex carries a PART index, and the vertex shader
+     swings the parts about hip and shoulder pivots from a per-instance walk
+     phase — so units actually walk and swing rather than sliding about frozen.
+     One instanced draw call per archetype; instances are rebuilt each frame
+     because units move every frame, which is ~44 bytes x unit count.
+     Team colour rides a per-vertex flag, so the tabard and the horse caparison
+     take the player colour while skin, timber and steel do not. */
+  U_MAN:0,U_CAV:1,U_SIEGE:2,U_SHIP:3,U_BEAST:4,
+  unitArch(t){
+    const d=UNITS[t]||{};
+    if(d.animal)return 4;
+    if(d.ship)return 3;
+    if(d.siege||t==='ram'||t==='treb'||t==='bombard'||t==='scorpion'||t==='mangonel')return 2;
+    if(d.cav)return 1;
+    return 0;
+  },
+  buildUnitMeshes(){
+    const V=[],I=[],off=[],cnt=[],piv=[];
+    const hex=c=>[parseInt(c.slice(1,3),16)/255,parseInt(c.slice(3,5),16)/255,parseInt(c.slice(5,7),16)/255];
+    const vpush=(p,n,c,part,team)=>{V.push(p[0],p[1],p[2],n[0],n[1],n[2],c[0],c[1],c[2],part,team);
+      return V.length/11-1;};
+    const q=(a,b,c,d,col,part,team)=>{
+      const ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2],vx=d[0]-a[0],vy=d[1]-a[1],vz=d[2]-a[2];
+      let nx=-(uy*vz-uz*vy),ny=-(uz*vx-ux*vz),nz=-(ux*vy-uy*vx);
+      const L=Math.hypot(nx,ny,nz)||1;const n=[nx/L,ny/L,nz/L];
+      const i0=vpush(a,n,col,part,team),i1=vpush(b,n,col,part,team),
+            i2=vpush(c,n,col,part,team),i3=vpush(d,n,col,part,team);
+      I.push(i0,i1,i2,i0,i2,i3);
+    };
+    // axis-aligned box from min/max, tagged with a part index
+    const bx=(x0,y0,z0,x1,y1,z1,col,part,team)=>{
+      team=team||0;
+      q([x0,y0,z0],[x1,y0,z0],[x1,y1,z0],[x0,y1,z0],col,part,team);
+      q([x1,y0,z1],[x0,y0,z1],[x0,y1,z1],[x1,y1,z1],col,part,team);
+      q([x1,y0,z0],[x1,y0,z1],[x1,y1,z1],[x1,y1,z0],col,part,team);
+      q([x0,y0,z1],[x0,y0,z0],[x0,y1,z0],[x0,y1,z1],col,part,team);
+      q([x0,y1,z0],[x1,y1,z0],[x1,y1,z1],[x0,y1,z1],col,part,team);
+      q([x0,y0,z1],[x1,y0,z1],[x1,y0,z0],[x0,y0,z0],col,part,team);
+    };
+    const SKIN=hex('#e0b78e'),CLOTH=hex('#8a7a5e'),STEEL=hex('#b9bec4'),
+          WOOD=hex('#6b4a2a'),DARK=hex('#3a2d1e'),HIDE=hex('#7d6a4e'),CANV=hex('#e6dcc2');
+    const mark=()=>off.push(I.length);
+    const seal=i=>cnt.push(I.length-off[i]);
+    // ---- 0 MAN: hip 0.26, shoulder 0.46 ----
+    mark();
+    bx(-.035,0,-.10,.035,.27,-.02,DARK,2);        // left leg
+    bx(-.035,0,.02,.035,.27,.10,DARK,3);          // right leg
+    bx(-.075,.26,-.10,.075,.48,.10,CLOTH,0,1);    // torso — team tabard
+    bx(-.055,.48,-.055,.055,.61,.055,SKIN,1);     // head
+    bx(-.045,.28,-.155,.045,.47,-.09,CLOTH,4,1);  // left arm
+    bx(-.045,.28,.09,.045,.47,.155,CLOTH,5,1);    // right arm (weapon side)
+    bx(-.02,.30,.115,.30,.345,.145,STEEL,6);      // weapon, held forward
+    seal(0);
+    piv.push([.26,.46]);
+    // ---- 1 CAVALRY: rider legs are static, horse legs swing ----
+    mark();
+    bx(-.05,0,-.14,.02,.24,-.08,DARK,2);          // fore/hind legs, paired
+    bx(-.05,0,.08,.02,.24,.14,DARK,3);
+    bx(.16,0,-.14,.23,.24,-.08,DARK,3);
+    bx(.16,0,.08,.23,.24,.14,DARK,2);
+    bx(-.10,.22,-.11,.28,.44,.11,HIDE,0,1);       // barrel + caparison
+    bx(.26,.34,-.06,.36,.56,.06,HIDE,1);          // neck
+    bx(.32,.48,-.055,.46,.60,.055,HIDE,1);        // head
+    bx(-.055,.42,-.09,.055,.62,.09,CLOTH,0,1);    // rider torso
+    bx(-.04,.62,-.04,.04,.74,.04,SKIN,1);         // rider head
+    bx(-.03,.44,.09,.03,.60,.14,CLOTH,5,1);       // rider arm
+    bx(-.01,.46,.11,.26,.485,.135,STEEL,6);       // lance
+    seal(1);
+    piv.push([.24,.52]);
+    // ---- 2 SIEGE: cart, wheels spin with the walk phase ----
+    mark();
+    bx(-.24,.10,-.16,.24,.30,.16,WOOD,0);         // chassis
+    bx(-.20,.30,-.05,.30,.36,.05,WOOD,6);         // beam / arm
+    bx(-.26,0,-.20,-.10,.22,-.14,DARK,2);         // wheels as blocks
+    bx(-.26,0,.14,-.10,.22,.20,DARK,3);
+    bx(.10,0,-.20,.26,.22,-.14,DARK,3);
+    bx(.10,0,.14,.26,.22,.20,DARK,2);
+    bx(-.05,.34,-.05,.05,.46,.05,CLOTH,1,1);      // crew
+    seal(2);
+    piv.push([.11,.30]);
+    // ---- 3 SHIP ----
+    mark();
+    bx(-.40,0,-.15,.40,.16,.15,WOOD,0);           // hull
+    bx(-.30,.16,-.11,.34,.22,.11,WOOD,0);         // deck
+    bx(-.02,.22,-.02,.02,.62,.02,WOOD,1);         // mast
+    bx(-.012,.30,-.20,.012,.60,.20,CANV,6,1);     // sail — team colour
+    seal(3);
+    piv.push([.16,.30]);
+    // ---- 4 BEAST ----
+    mark();
+    bx(-.16,.14,-.09,.18,.32,.09,HIDE,0);         // barrel
+    bx(-.13,0,-.09,-.07,.16,-.03,DARK,2);
+    bx(-.13,0,.03,-.07,.16,.09,DARK,3);
+    bx(.11,0,-.09,.17,.16,-.03,DARK,3);
+    bx(.11,0,.03,.17,.16,.09,DARK,2);
+    bx(.17,.20,-.055,.28,.32,.055,HIDE,1);        // head
+    seal(4);
+    piv.push([.15,.26]);
+    const gl=this.gl;
+    this.uvbo=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,this.uvbo);
+    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(V),gl.STATIC_DRAW);
+    this.uibo=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.uibo);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(I),gl.STATIC_DRAW);
+    this.uOff=off;this.uCnt=cnt;this.uPiv=piv;
+  },
+  initUnits(){
+    const gl=this.gl;
+    this.iext=this.iext||gl.getExtension('ANGLE_instanced_arrays');
+    if(!this.iext){this.noUnits=true;return false;}
+    const vs=`
+      attribute vec3 aPos; attribute vec3 aNrm; attribute vec3 aCol;
+      attribute vec2 aPT;        // part index, team flag
+      attribute vec4 aI0;        // x, baseY, z, yaw
+      attribute vec4 aI1;        // phase, scale, attack, spare
+      attribute vec3 aI2;        // team colour
+      uniform mat4 uMVP; uniform vec3 uLight; uniform vec2 uPiv;
+      varying vec3 vC;
+      vec3 rotX(vec3 p,float a){ return vec3(p.x, p.y*cos(a)-p.z*sin(a), p.y*sin(a)+p.z*cos(a)); }
+      vec3 rotZ(vec3 p,float a){ return vec3(p.x*cos(a)-p.y*sin(a), p.x*sin(a)+p.y*cos(a), p.z); }
+      void main(){
+        vec3 p=aPos; vec3 n=aNrm;
+        // aI1.w is the swing amplitude — 1 while walking, ~0.12 when idle so
+        // standing units breathe rather than freeze
+        float part=aPT.x, s=sin(aI1.x)*aI1.w, atk=aI1.z;
+        // limbs swing about the hip; arms about the shoulder, counter-phase
+        if(part==2.0||part==3.0){
+          float d=(part==2.0)?s:-s;
+          vec3 o=vec3(0.0,uPiv.x,0.0);
+          p=rotZ(p-o,d*0.55)+o; n=rotZ(n,d*0.55);
+        }else if(part==4.0||part==5.0||part==6.0){
+          float d=(part==4.0)?s:-s;
+          if(part==6.0)d=-s;
+          vec3 o=vec3(0.0,uPiv.y,0.0);
+          float a=d*0.32-atk*0.9;
+          p=rotZ(p-o,a)+o; n=rotZ(n,a);
+        }
+        p*=aI1.y; p.y+=0.0;
+        float c=cos(aI0.w),si=sin(aI0.w);
+        vec3 w=vec3(p.x*c-p.z*si, p.y, p.x*si+p.z*c);
+        vec3 wn=vec3(n.x*c-n.z*si, n.y, n.x*si+n.z*c);
+        gl_Position=uMVP*vec4(w.x+aI0.x, w.y+aI0.y, w.z+aI0.z, 1.0);
+        vec3 base=(aPT.y>0.5)?aI2:aCol;
+        float lam=max(0.0,dot(normalize(wn),uLight));
+        vC=base*(0.60+0.52*lam);
+      }`;
+    const fs=`precision mediump float; varying vec3 vC;
+      void main(){ gl_FragColor=vec4(vC,1.0); }`;
+    const mk=(t,s)=>{const sh=gl.createShader(t);gl.shaderSource(sh,s);gl.compileShader(sh);
+      if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS)){console.error(gl.getShaderInfoLog(sh));return null;}return sh;};
+    const v=mk(gl.VERTEX_SHADER,vs),f=mk(gl.FRAGMENT_SHADER,fs);
+    if(!v||!f){this.noUnits=true;return false;}
+    const p=gl.createProgram();gl.attachShader(p,v);gl.attachShader(p,f);
+    ['aPos','aNrm','aCol','aPT','aI0','aI1','aI2'].forEach((n,i)=>gl.bindAttribLocation(p,i,n));
+    gl.linkProgram(p);
+    if(!gl.getProgramParameter(p,gl.LINK_STATUS)){console.error(gl.getProgramInfoLog(p));this.noUnits=true;return false;}
+    this.uProg=p;
+    this.uLoc={uMVP:gl.getUniformLocation(p,'uMVP'),uLight:gl.getUniformLocation(p,'uLight'),
+      uPiv:gl.getUniformLocation(p,'uPiv')};
+    this.buildUnitMeshes();
+    this.uIvbo=[0,1,2,3,4].map(()=>gl.createBuffer());
+    this.uArr=[[],[],[],[],[]];
+    return true;
+  },
+  drawUnits(mvp){
+    if(this.noUnits)return;
+    if(!this.uProg&&!this.initUnits())return;
+    const gl=this.gl,ex=this.iext;
+    const A=this.uArr;for(let i=0;i<5;i++)A[i].length=0;
+    const t=G.t||0;
+    for(const u of G.units){
+      if(!allied(u.p,localP)&&!tileVis(u.x,u.y))continue;
+      const a=this.unitArch(u.type);
+      const tc=teamColor(u.p)||'#3b7bd4';
+      const r=parseInt(tc.slice(1,3),16)/255,g2=parseInt(tc.slice(3,5),16)/255,b2=parseInt(tc.slice(5,7),16)/255;
+      // walk phase advances with speed; idle units breathe slowly instead
+      const moving=(u.spd||0)>0.05;
+      const ph=moving?(t*7.5+u.id*1.7):(t*0.9+u.id*1.7);
+      const amp=moving?1:0.12;
+      const atk=(u.st==='attack')?Math.max(0,Math.sin(t*7.0+u.id)):0;
+      const d=UNITS[u.type]||{};
+      const sc=(d.animal?0.9:d.ship?1.5:d.siege?1.15:1)*(u.type==='elephant'?1.5:1);
+      // aI0 = x, baseY, z, yaw | aI1 = phase, scale, attack, swingAmp | aI2 = team rgb
+      A[a].push(u.x, elevF(u.x,u.y)*10*this.HS, u.y, (u.hdg||0),
+                ph, sc, atk, amp, r, g2, b2);
+    }
+    gl.useProgram(this.uProg);
+    gl.uniformMatrix4fv(this.uLoc.uMVP,false,mvp);
+    gl.uniform3f(this.uLoc.uLight,-0.46,0.80,-0.38);
+    gl.bindBuffer(gl.ARRAY_BUFFER,this.uvbo);
+    const st=44;
+    for(const [i,sz,o] of [[0,3,0],[1,3,12],[2,3,24],[3,2,36]]){
+      gl.enableVertexAttribArray(i);gl.vertexAttribPointer(i,sz,gl.FLOAT,false,st,o);
+      ex.vertexAttribDivisorANGLE(i,0);
+    }
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.uibo);
+    for(let a=0;a<5;a++){
+      const arr=A[a];if(!arr.length)continue;
+      gl.bindBuffer(gl.ARRAY_BUFFER,this.uIvbo[a]);
+      gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(arr),gl.DYNAMIC_DRAW);
+      gl.enableVertexAttribArray(4);gl.vertexAttribPointer(4,4,gl.FLOAT,false,44,0);
+      ex.vertexAttribDivisorANGLE(4,1);
+      gl.enableVertexAttribArray(5);gl.vertexAttribPointer(5,4,gl.FLOAT,false,44,16);
+      ex.vertexAttribDivisorANGLE(5,1);
+      gl.enableVertexAttribArray(6);gl.vertexAttribPointer(6,3,gl.FLOAT,false,44,32);
+      ex.vertexAttribDivisorANGLE(6,1);
+      gl.uniform2f(this.uLoc.uPiv,this.uPiv[a][0],this.uPiv[a][1]);
+      ex.drawElementsInstancedANGLE(gl.TRIANGLES,this.uCnt[a],gl.UNSIGNED_SHORT,
+        this.uOff[a]*2,arr.length/11);
+    }
+    for(let i=4;i<=6;i++){ex.vertexAttribDivisorANGLE(i,0);gl.disableVertexAttribArray(i);}
+    gl.disableVertexAttribArray(3);
+  },
   /* Fog overlay. Without this the 3D view reveals the whole map — on Black
      Forest that hands over the entire tree layout, which is a gameplay
      difference, not a cosmetic gap. Source is fogS (512², power-of-two).
@@ -11030,6 +11244,7 @@ const R3={
     gl.drawElements(gl.TRIANGLES,this.idxCount,this.idxType,0);
     this.drawTrees(mvp);
     this.drawBlds(mvp);
+    this.drawUnits(mvp);
     this.drawFog(mvp);
   },
 };
