@@ -10054,6 +10054,20 @@ const R3={
   yaw:Math.PI/4, pitch:Math.PI/6, PPT:26*Math.SQRT2,
   homeYaw:Math.PI/4, homePitch:Math.PI/6,
   get HS(){ return 1/(Math.cos(Math.PI/6)*this.PPT); },
+  /* Pitch limits, both of which guard real failures rather than taste.
+     FLOOR 0.35 rad (20°): below atan(HILL*HS)=0.3043 a descending ray can be
+       shallower than the terrain slope, so (ray.y - groundH) stops being
+       monotonic and the bisection in pickGround can bracket the WRONG
+       crossing — clicks land on the far side of a hill. Measured monotone at
+       0.35/0.30/0.22 and NOT monotone at 0.12. 0.35 also keeps 1/sin(pitch)
+       at 2.9, so a 1px finger error stays ~0.1 tiles.
+     CEILING 1.45 rad (83°): at exactly π/2 the view direction is parallel to
+       world up, cross(f,(0,1,0)) is the ZERO vector, and m4look normalises it
+       to NaN — the entire view matrix becomes NaN and the screen goes blank.
+     Clamped in setPitch so no path (drag, keybind, a future saved camera)
+     can reach a degenerate angle. */
+  PITCH_MIN:0.35, PITCH_MAX:1.45,
+  setPitch(v){ this.pitch=Math.max(this.PITCH_MIN,Math.min(this.PITCH_MAX,v)); },
   // world target (tile coords) that the 2D camera is currently centred on
   target(){
     const sx=G.cam.x+vw/G.cam.z/2, sy=G.cam.y+vh/G.cam.z/2;
@@ -10082,7 +10096,16 @@ const R3={
     const x0=Math.floor(fx),z0=Math.floor(fz),tx=fx-x0,tz=fz-z0;
     const h00=this.cornerH(x0,z0),h10=this.cornerH(x0+1,z0),
           h01=this.cornerH(x0,z0+1),h11=this.cornerH(x0+1,z0+1);
-    return (h00*(1-tx)*(1-tz)+h10*tx*(1-tz)+h01*(1-tx)*tz+h11*tx*tz)*this.HS;
+    /* Interpolate on the MATCHING TRIANGLE, not bilinearly. buildMesh emits
+       (a,c,b),(b,c,d), so the split diagonal runs along tx+tz=1. Bilinear
+       disagrees with the drawn surface by up to 1.25px on saddle quads
+       (verified exhaustively over all 512 3x3 elevation patterns) — about
+       0.11 tiles of pick slip at the pitch floor, i.e. picks drifting off
+       what is actually on screen. Continuous across the diagonal: both
+       branches give h10 at (1,0) and h01 at (0,1). */
+    const h=(tx+tz<=1) ? h00+(h10-h00)*tx+(h01-h00)*tz
+                       : h11+(h01-h11)*(1-tx)+(h10-h11)*(1-tz);
+    return h*this.HS;
   },
   // screen CSS px -> world ray. Orthographic, so unproject the near and far
   // NDC points and subtract.
@@ -10099,33 +10122,33 @@ const R3={
      the ray leaves the map before descending). Coarse march then bisect: the
      terrain is one elevation step tall, so a 0.5-tile stride cannot skip a
      feature, and 24 bisections put the answer well inside a pixel. */
+  /* G.elev is binary (the only writes are =1), so the whole height field lives
+     in a slab [0, HILL*HS] = 0.314 tiles thick and the ray always descends.
+     Search exactly [t0,t1]: t0 enters the slab top, t1 crosses y=0. That span
+     is HILL*HS/sin(pitch) — under 1 world unit even at the pitch floor, so
+     2-3 half-tile steps. The earlier version marched up to MAP*3 = 384 steps
+     and could still dead-end; below the slab there is only the y=0 plane,
+     which a descending ray meets EXACTLY ONCE, so this returns a point for
+     every screen pixel. Callers decide whether that point is on the board. */
   pickGround(sx,sy){
     const r=this.ray(sx,sy); if(!r||r.dy>=-1e-6)return null;
-    const top=this.HILL*this.HS+.001;
-    let t=(top-r.oy)/r.dy;                  // enter at the highest ground can be
-    if(!isFinite(t))return null;
-    if(t<0)t=0;
+    const t0=(this.HILL*this.HS-r.oy)/r.dy, t1=-r.oy/r.dy;
+    if(!isFinite(t0)||!isFinite(t1))return null;
     const at=u=>({x:r.ox+r.dx*u, y:r.oy+r.dy*u, z:r.oz+r.dz*u});
     const below=p=>p.y<=this.groundH(p.x,p.z);
-    let p=at(t);
-    if(below(p))return {x:p.x,y:p.z};
-    const step=0.5, maxT=t+MAP*3;
-    let prev=t;
-    for(t+=step;t<maxT;t+=step){
+    let prev=t0,p=at(t0);
+    if(below(p))return {x:p.x,y:p.z,t:t0};        // started already inside a hill
+    for(let t=t0+.5,last=false;!last;t+=.5){
+      if(t>=t1){t=t1;last=true;}
       p=at(t);
-      if(p.x<-2||p.z<-2||p.x>MAP+2||p.z>MAP+2){
-        if(p.y<-1)return null;               // left the board without touching down
-        prev=t; continue;
-      }
       if(below(p)){
         let lo=prev,hi=t;
-        for(let i=0;i<24;i++){const mid=(lo+hi)/2; if(below(at(mid)))hi=mid; else lo=mid;}
-        const q=at(hi);
-        return {x:q.x,y:q.z};
+        for(let i=0;i<24;i++){const m=(lo+hi)/2; if(below(at(m)))hi=m; else lo=m;}
+        const q=at(hi); return {x:q.x,y:q.z,t:hi};
       }
       prev=t;
     }
-    return null;
+    const q=at(t1); return {x:q.x,y:q.z,t:t1};     // flat ground
   },
   // Hill height in 2D pixels. MUST stay 10: the 2D renderer lifts everything on
   // a hill by elevTile(...)*10 (buildings L6386/L6445, rubble L8664, hit-test
@@ -10178,8 +10201,10 @@ const R3={
   // grid so hills are continuous instead of stepping at every cell.
   buildMesh(){
     const gl=this.gl,N=MAP,H=this.HILL;
-    const ev=(x,y)=>(x<0||y<0||x>=N||y>=N||!G.elev)?0:(G.elev[y*N+x]?1:0);
-    const cornerH=(cx,cy)=>(ev(cx-1,cy-1)+ev(cx,cy-1)+ev(cx-1,cy)+ev(cx,cy))/4*H;
+    // ONE height rule, shared with the picker. Two copies of a formula that
+    // must agree exactly is a silent-drift generator — and the drift would be
+    // between where things are drawn and where clicks land.
+    const cornerH=(cx,cy)=>this.cornerH(cx,cy);
     const verts=new Float32Array((N+1)*(N+1)*6);
     let o=0;
     for(let y=0;y<=N;y++)for(let x=0;x<=N;x++){
@@ -10341,7 +10366,7 @@ document.getElementById('d3Btn').addEventListener('click',toggle3D);
   });
   c.addEventListener('pointermove',e=>{
     if(!drag)return;
-    if(drag.tilt) R3.pitch=Math.max(.12,Math.min(1.50,drag.pitch+(e.clientY-drag.y)*.005));
+    if(drag.tilt) R3.setPitch(drag.pitch+(e.clientY-drag.y)*.005);
     else          R3.yaw=drag.yaw-(e.clientX-drag.x)*.006;
     e.preventDefault();
   });
