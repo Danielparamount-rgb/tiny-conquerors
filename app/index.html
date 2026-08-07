@@ -4401,7 +4401,31 @@ function roofGable(g,x0,y0,w,d,hb,rh,cols){
   poly(g,[C,B,Re],'rgba(46,54,74,.12)');
   return{Rs,Re};
 }
-const TERRA={slope:'#9a5a3e',shade:'#75422c',end:'#8a4f36',o:'rgba(58,30,18,.55)'}; // deep brick tile (ref roofs are darker/browner)
+const TERRA={slope:'#b8613a',shade:'#8f4829',end:'#a65733',o:'rgba(52,20,8,.55)'}; // concept-art pass: brighter orange-red clay tile
+const SLATE={slope:'#5a7ea8',shade:'#43617f',end:'#4e6f93',o:'rgba(16,24,36,.5)'}; // blue slate, the concept art's signature roof
+/* Pyramidal/conical roof cap — four faces meeting at an apex over the centre.
+   The concept art puts one of these on every tower and turret; a flat crenellated
+   top was the biggest silhouette difference. `eave` overhangs the footprint.
+   Draws the two HIDDEN faces first so an overhanging eave still silhouettes right. */
+function coneRoof(g,x0,y0,w,d,hb,rh,cols,eave){
+  const e=eave||0;
+  const A=lift(ip(x0-e,y0-e),hb),B=lift(ip(x0+w+e,y0-e),hb),
+        C=lift(ip(x0+w+e,y0+d+e),hb),D=lift(ip(x0-e,y0+d+e),hb);
+  const apex=lift(ip(x0+w/2,y0+d/2),hb+rh);
+  poly(g,[A,D,apex],cols.end,cols.o);
+  poly(g,[A,B,apex],cols.shade,cols.o);
+  poly(g,[D,C,apex],faceGrad(g,cols.slope,apex.y,C.y,.07,-.09),cols.o);
+  poly(g,[C,B,apex],faceGrad(g,cols.shade,apex.y,C.y,.02,-.1),cols.o);
+  // warm key on the sunlit slope, cool ambient fill on the shaded one
+  poly(g,[D,C,apex],'rgba(255,224,166,.10)');
+  poly(g,[C,B,apex],'rgba(46,54,74,.13)');
+  // lit hip ridge from apex down the sunlit corner + eave shadow
+  g.strokeStyle='rgba(255,240,205,.4)';g.lineWidth=1.3;
+  g.beginPath();g.moveTo(apex.x,apex.y);g.lineTo(D.x,D.y);g.stroke();
+  g.strokeStyle='rgba(0,0,0,.26)';g.lineWidth=1.2;
+  g.beginPath();g.moveTo(D.x,D.y+.6);g.lineTo(C.x,C.y+.6);g.lineTo(B.x,B.y+.6);g.stroke();
+  return apex;
+}
 function archWin(g,P,Q,t0,t1,h0,h1,fill,stroke){
   // small round-arched opening on an iso face (spec: arched windows/doors)
   const bl=facePt(P,Q,t0,h0),br=facePt(P,Q,t1,h0),tr=facePt(P,Q,t1,h1),tl=facePt(P,Q,t0,h1);
@@ -4506,8 +4530,10 @@ function refreshTerrain(){
   // muted dry-grass olives (desaturated, low contrast so units read on top)
   // yellow-olive grass calibrated against the reference frames (f600/f1500):
   // brighter and yellower than the old dry olive, still tightly spaced
-  const GR=['#7e8946','#7f8a44','#7d8847','#818c48','#7e8a45','#7c8745','#828d49','#808b47','#859048','#7a8542'];
-  const GRH=['#858f4c','#86904a','#848e4d','#88934e','#85904b','#838d4b','#89944f','#87924d','#8c964e','#818b48'];
+  // concept-art pass: off the dry yellow-olive and into a saturated meadow green.
+  // Still tightly spaced (no tile checkerboard) and GRH stays within ~6% of GR.
+  const GR=['#6d9a4a','#6e9b48','#6c984b','#709e4c','#6d9a49','#6b9749','#719f4d','#6f9c4b','#73a24c','#699546'];
+  const GRH=['#73a34e','#74a44c','#72a14f','#77a751','#73a34d','#71a04d','#78a951','#75a54f','#7aac51','#6f9e4a'];
   for(let y=0;y<MAP;y++)for(let x=0;x<MAP;x++){
     const k=x+','+y;
     if(G.water[k]||G.ford[k])continue;
@@ -4518,7 +4544,7 @@ function refreshTerrain(){
     const hsp=hash2(x*31+3,y*17+11);
     for(let i=0;i<8;i++){
       const sx=x*TILE+1+((hsp>>>(i*2))%24),sy=y*TILE+1+((hsp>>>(i*2+9))%24);
-      tctx.fillStyle=i%2?'rgba(42,52,26,.18)':'rgba(200,208,156,.15)';
+      tctx.fillStyle=i%2?'rgba(34,56,22,.18)':'rgba(196,214,150,.15)';
       tctx.fillRect(sx,sy,2,1.8);
     }
   }
@@ -4530,8 +4556,8 @@ function refreshTerrain(){
     const gr2=mulberry(777);
     for(let i=0;i<1100;i++){
       ng.fillStyle=gr2()<.52
-        ?'rgba(42,50,24,'+(.04+gr2()*.1).toFixed(3)+')'
-        :'rgba(216,222,166,'+(.03+gr2()*.08).toFixed(3)+')';
+        ?'rgba(34,54,22,'+(.04+gr2()*.1).toFixed(3)+')'
+        :'rgba(206,222,160,'+(.03+gr2()*.08).toFixed(3)+')';
       ng.fillRect(gr2()*96,gr2()*96,1+gr2()*1.6,1+gr2()*1.6);
     }
     grainPat=tctx.createPattern(nc,'repeat');
@@ -4548,9 +4574,9 @@ function refreshTerrain(){
       const mr=TILE*(2.0+rnd()*2.8); // the reference grass patches are FIELDS, not spots
       // faint solid core + heavy dither so the union reads as one ragged field,
       // not a chain of stamped ellipses
-      tctx.fillStyle=dark?'rgba(40,60,24,.11)':'rgba(188,196,118,.08)';
+      tctx.fillStyle=dark?'rgba(32,62,20,.11)':'rgba(180,200,112,.08)';
       tctx.beginPath();tctx.ellipse(mx,my,mr,mr*.55,0,0,7);tctx.fill();
-      tctx.fillStyle=dark?'rgba(26,42,16,.26)':'rgba(210,218,140,.2)';
+      tctx.fillStyle=dark?'rgba(20,44,14,.26)':'rgba(200,216,132,.2)';
       for(let d=0;d<34;d++){
         const t2=Math.sqrt(rnd()),an=rnd()*6.283;
         tctx.fillRect(mx+Math.cos(an)*mr*t2,my+Math.sin(an)*mr*.55*t2,2.4,2);
@@ -4688,10 +4714,14 @@ function refreshTerrain(){
     const[wx,wy]=k.split(',').map(Number);
     const px=wx*TILE,py=wy*TILE,h=hash2(wx*11,wy*7);
     const edge=isLand(wx,wy-1)||isLand(wx,wy+1)||isLand(wx-1,wy)||isLand(wx+1,wy);
-    const grad=tctx.createLinearGradient(px,py,px,py+TILE);
-    if(edge){grad.addColorStop(0,'#41749e');grad.addColorStop(1,'#335f8a');}
-    else{grad.addColorStop(0,'#2c567f');grad.addColorStop(1,'#22456a');} // bluer, deeper water
-    tctx.fillStyle=grad;
+    // concept-art pass: bright azure with pale turquoise shallows.
+    // A per-tile VERTICAL GRADIENT restarts at every tile boundary, which at these
+    // brighter values banded into a visible checkerboard on open water. So the tile
+    // is flat-filled and depth comes from a smooth low-frequency wobble in world
+    // space instead — continuous across tiles, no seams. Don't reintroduce a
+    // per-tile gradient here.
+    const wob=(Math.sin(wx*.37)+Math.sin(wy*.29)+Math.sin((wx+wy)*.19))/3;
+    tctx.fillStyle=shadeCol(edge?'#5aa8d2':'#2f7cae',wob*.035);
     tctx.fillRect(px,py,TILE,TILE);
     // soft depth variation
     tctx.fillStyle=edge?'rgba(130,190,210,.13)':'rgba(8,24,40,.2)';
@@ -4908,8 +4938,9 @@ function getResSpr(type,h){
     g.fillStyle='rgba(18,26,10,.22)';
     g.beginPath();g.ellipse(0,1.5,rr*.8,rr*.34,0,0,7);g.fill();
     if(h%3===0){ // pine — layered fronds with drooping tips
-      const pc=dark?['#16290f','#20381a','#2b4a20','#3c6029','#557a38']
-                   :['#1b3313','#274420','#33552a','#477136','#618f47'];
+      // concept-art pass: conifers are saturated deep green, not olive-black
+      const pc=dark?['#13290c','#1c3d14','#265219','#336b23','#478a32']
+                   :['#173312','#22491a','#2e6021','#3d7c2c','#54993c'];
       // trunk with root flare
       g.fillStyle='#4a3018';
       g.beginPath();g.moveTo(-3.4,1);g.quadraticCurveTo(-1.4,-1.5,-1.5,-8);
@@ -4945,8 +4976,9 @@ function getResSpr(type,h){
       g.quadraticCurveTo(0,-28.6,-2.6,-27);g.closePath();g.fill();
       g.strokeStyle='rgba(12,22,8,.4)';g.lineWidth=.7;g.stroke();
     }else{ // broadleaf — clumped, dappled canopy over a real trunk
-      const oc=dark?['#15280f','#1f3915','#2b4c1d','#3a6128','#4d7a36','#628f45']
-                   :['#1b3212','#28451b','#365c25','#487531','#5b8e41','#729f52']; // deeper forest mass, per reference
+      // concept-art pass: richer, greener canopy mass
+      const oc=dark?['#122a0c','#1d4213','#28581a','#357024','#458830','#589b3e']
+                   :['#17330f','#255018','#316a20','#40852b','#529f38','#66b447'];
       // trunk with root flare and a fork
       g.fillStyle='#54381e';
       g.beginPath();g.moveTo(-4,1);g.quadraticCurveTo(-1.8,-2,-2,-9);
@@ -5351,10 +5383,14 @@ const drawBldArt={
 };
 /* ---------- ISOMETRIC building sprites (supersede the flat set) ---------- */
 const ISPR={};
-const IHT={tc:56,house:36,farm:10,camp:28,barracks:48,range:38,stable:44,siege:42,castle:82,tower:74,wall:24,gate:34,swall:26,sgate:36,market:44,monastery:56,blacksmith:48,dock:40,university:56,wonder:96};
+// NB: mkIsoSpr sizes the sprite canvas from these — a taller roof clips unless
+// its entry grows too. tower/castle raised for the conical roofs.
+const IHT={tc:56,house:36,farm:10,camp:28,barracks:48,range:38,stable:44,siege:42,castle:100,tower:94,wall:24,gate:34,swall:26,sgate:36,market:44,monastery:56,blacksmith:48,dock:40,university:56,wonder:96};
 const O2='rgba(58,42,26,.5)'; // soft warm edge tone — no black outlines
-const STONE={l:'#8e887d',r:'#716f6d',t:'#a39c90',o:O2};   // slate gray, cool shade side
-const CREAMW={l:'#e6dab8',r:'#c9baa5',t:'#dccfae',o:O2};  // whitewashed plaster
+// concept-art pass: pale warm ashlar and genuinely white plaster, so walls read
+// bright against the saturated grass instead of muddying into it
+const STONE={l:'#a8a294',r:'#87837c',t:'#bdb6a6',o:O2};   // pale warm ashlar
+const CREAMW={l:'#f0e7cd',r:'#d5c8ae',t:'#e8dfc0',o:O2};  // whitewashed plaster
 function lerpP(a,b,t){return{x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t};}
 /* --- surface texture + prop helpers (AoE2-style detail) --- */
 function masonry(g,P,Q,h,courses){
@@ -5422,10 +5458,12 @@ function roofLines(g,x0,y0,w,d,hb,rh,n){
   g.strokeStyle='rgba(255,240,205,.45)';g.lineWidth=1.6;
   g.beginPath();g.moveTo(Rs.x,Rs.y);g.lineTo(Re.x,Re.y);g.stroke();
 }
-const HROOF=[ // castle+ house shingles, per-instance (clay/timber/slate)
-  {slope:'#a8674a',shade:'#8a5138',end:'#99593f',o:'rgba(40,16,8,.5)'},
-  {slope:'#8d7355',shade:'#715a41',end:'#7f664b',o:'rgba(30,20,10,.5)'},
-  {slope:'#7d8288',shade:'#61666c',end:'#6f747a',o:'rgba(20,22,26,.5)'}];
+const HROOF=[ // castle+ house shingles, per-instance (clay/timber/BLUE slate)
+  // concept-art pass: the roof mix is the strongest read in the reference —
+  // hot terracotta beside real blue slate, not two browns and a grey
+  {slope:'#c2673f',shade:'#9c4f2e',end:'#b05a35',o:'rgba(48,18,8,.5)'},
+  {slope:'#9a7b57',shade:'#7b6043',end:'#8a6d4d',o:'rgba(30,20,10,.5)'},
+  {slope:'#5a7ea8',shade:'#43617f',end:'#4e6f93',o:'rgba(16,24,36,.5)'}];
 const HTHATCH=[ // dark/feudal thatch — grey-straw like the reference, less golden
   {top:'#bda878',bot:'#96824e',rid:'#cebd8c'},
   {top:'#b09b6a',bot:'#8a7647',rid:'#c1ac7c'},
@@ -5838,7 +5876,11 @@ const ISO_ART={
         poly(g,[{x:E.x-2.4,y:E.y+1},{x:E.x+2.4,y:E.y+1},{x:E.x+2.4,y:E.y-4},{x:E.x-2.4,y:E.y-4}],'#7e7668',O2);}
     poly(g,[facePt(b.C,b.B,.44,20),facePt(b.C,b.B,.54,20),
       facePt(b.C,b.B,.54,32),facePt(b.C,b.B,.44,32)],'#332414');
-    bannerAt(g,ppt.A2.x,ppt.A2.y,p,11);
+    // conical clay roof over the crenellated cap (concept art)
+    const tap=coneRoof(g,.02,.02,.96,.96,49,20,TERRA,.07);
+    g.strokeStyle='#c8a24a';g.lineWidth=1.6;
+    g.beginPath();g.moveTo(tap.x,tap.y+1);g.lineTo(tap.x,tap.y-5);g.stroke();
+    bannerAt(g,tap.x,tap.y-5,p,10);
   },
   castle(g,s,p){
     dirtPad(g,2,.5);
@@ -5853,6 +5895,10 @@ const ISO_ART={
         for(let i=0;i<2;i++){
           const E=lerpP(e1,e2,(i+.35)/2);
           poly(g,[{x:E.x-2,y:E.y+1},{x:E.x+2,y:E.y+1},{x:E.x+2,y:E.y-3.6},{x:E.x-2,y:E.y-3.6}],'#7e7668',O2);}
+      // blue slate spire over each turret (concept art)
+      const ap=coneRoof(g,tx-.03,ty-.03,.66,.66,h+4,17,SLATE,0);
+      g.strokeStyle='#c8a24a';g.lineWidth=1.4;
+      g.beginPath();g.moveTo(ap.x,ap.y+1);g.lineTo(ap.x,ap.y-4.5);g.stroke();
       return t;
     };
     turret(0,0,52);
@@ -6053,8 +6099,7 @@ const ISO_ART={
     masonry(g,b.D,b.C,20,4);
     masonry(g,b.C,b.B,20,4);
     ivyAt(g,b.C,b.B,17,41);ivyAt(g,b.D,b.C,17,97);
-    const rf=roofGable(g,-.08,-.08,2.12,2.12,20,14,
-      {slope:'#7d8288',shade:'#61666c',end:'#6f747a',o:'rgba(26,28,32,.5)'}); // slate
+    const rf=roofGable(g,-.08,-.08,2.12,2.12,20,14,SLATE); // concept-art blue slate
     roofLines(g,-.08,-.08,2.12,2.12,20,14,4);
     // bell gable + cross
     const mx=(rf.Rs.x+rf.Re.x)/2,my=(rf.Rs.y+rf.Re.y)/2;
