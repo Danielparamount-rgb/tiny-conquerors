@@ -9985,11 +9985,41 @@ function m4ortho(l,r,b,t,n,f){
   o[12]=-(r+l)/(r-l); o[13]=-(t+b)/(t-b); o[14]=-(f+n)/(f-n);
   return o;
 }
+function m4inv(m){
+  const o=new Float32Array(16);
+  const a00=m[0],a01=m[1],a02=m[2],a03=m[3],  a10=m[4],a11=m[5],a12=m[6],a13=m[7],
+        a20=m[8],a21=m[9],a22=m[10],a23=m[11],a30=m[12],a31=m[13],a32=m[14],a33=m[15];
+  const b00=a00*a11-a01*a10, b01=a00*a12-a02*a10, b02=a00*a13-a03*a10,
+        b03=a01*a12-a02*a11, b04=a01*a13-a03*a11, b05=a02*a13-a03*a12,
+        b06=a20*a31-a21*a30, b07=a20*a32-a22*a30, b08=a20*a33-a23*a30,
+        b09=a21*a32-a22*a31, b10=a21*a33-a23*a31, b11=a22*a33-a23*a32;
+  let d=b00*b11-b01*b10+b02*b09+b03*b08-b04*b07+b05*b06;
+  if(!d)return null;
+  d=1/d;
+  o[0]=(a11*b11-a12*b10+a13*b09)*d;  o[1]=(a02*b10-a01*b11-a03*b09)*d;
+  o[2]=(a31*b05-a32*b04+a33*b03)*d;  o[3]=(a22*b04-a21*b05-a23*b03)*d;
+  o[4]=(a12*b08-a10*b11-a13*b07)*d;  o[5]=(a00*b11-a02*b08+a03*b07)*d;
+  o[6]=(a32*b02-a30*b05-a33*b01)*d;  o[7]=(a20*b05-a22*b02+a23*b01)*d;
+  o[8]=(a10*b10-a11*b08+a13*b06)*d;  o[9]=(a01*b08-a00*b10-a03*b06)*d;
+  o[10]=(a30*b04-a31*b02+a33*b00)*d; o[11]=(a21*b02-a20*b04-a23*b00)*d;
+  o[12]=(a11*b07-a10*b09-a12*b06)*d; o[13]=(a00*b09-a01*b07+a02*b06)*d;
+  o[14]=(a31*b01-a30*b03-a32*b00)*d; o[15]=(a20*b03-a21*b01+a22*b00)*d;
+  return o;
+}
+function m4xform(m,x,y,z){        // full transform incl. w divide
+  const w=m[3]*x+m[7]*y+m[11]*z+m[15]||1;
+  return {x:(m[0]*x+m[4]*y+m[8]*z+m[12])/w,
+          y:(m[1]*x+m[5]*y+m[9]*z+m[13])/w,
+          z:(m[2]*x+m[6]*y+m[10]*z+m[14])/w};
+}
 function m4look(ex,ey,ez,cx,cy,cz){
   let fx=cx-ex,fy=cy-ey,fz=cz-ez;
   let rl=1/Math.hypot(fx,fy,fz); fx*=rl; fy*=rl; fz*=rl;
-  // right = normalize(cross(f, worldUp)); worldUp = (0,1,0)
-  let sx=fz,sy=0,sz=-fx;                       // cross(f,(0,1,0)) = (fz,0,-fx)
+  // right = normalize(cross(f, worldUp)), worldUp=(0,1,0)  ->  (-f.z, 0, f.x)
+  // NB: this was written (f.z,0,-f.x) at first, i.e. LEFT. The ground axes
+  // looked right only because homeYaw had been set 180° round to compensate,
+  // which cannot compensate world Y — so hills projected downward.
+  let sx=-fz,sy=0,sz=fx;
   rl=1/Math.hypot(sx,sy,sz); sx*=rl; sy*=rl; sz*=rl;
   // up = cross(right, f)
   const ux=sy*fz-sz*fy, uy=sz*fx-sx*fz, uz=sx*fy-sy*fx;
@@ -10010,8 +10040,20 @@ const R3={
      used. Pan and zoom still come from G.cam, so the existing controls, the
      minimap jump and camera clamping keep driving the 3D view unchanged;
      rotation is the only genuinely new axis. */
-  yaw:Math.PI/4, pitch:Math.atan(1/Math.SQRT2), PPT:26*Math.SQRT2,
-  homeYaw:Math.PI/4, homePitch:Math.atan(1/Math.SQRT2),
+  /* HOME orientation, derived from the 2D grid rather than guessed — all three
+     of these were wrong on the first attempt and the errors were only visible
+     by measuring a projected tile step against isoPt:
+     - pitch 30° = asin(IH/IW) = asin(0.5). NOT atan(1/√2)=35.264°. That is the
+       TRUE isometric angle (equal foreshortening on all three axes); this game
+       draws a 2:1 DIMETRIC grid (IW 26 / IH 13), which is 30°. Using 35.264°
+       stretched everything vertically by 2/√3 = 1.1547.
+     - HS converts a 2D "height in pixels" into world tiles such that at the home
+       pitch a 10px hill projects to exactly 10px, matching the 2D renderer.
+       It is a CONSTANT, not a function of the live pitch: height is a real world
+       quantity, so its on-screen size is supposed to change as you tilt. */
+  yaw:Math.PI/4, pitch:Math.PI/6, PPT:26*Math.SQRT2,
+  homeYaw:Math.PI/4, homePitch:Math.PI/6,
+  get HS(){ return 1/(Math.cos(Math.PI/6)*this.PPT); },
   // world target (tile coords) that the 2D camera is currently centred on
   target(){
     const sx=G.cam.x+vw/G.cam.z/2, sy=G.cam.y+vh/G.cam.z/2;
@@ -10026,6 +10068,64 @@ const R3={
     const hw=vw/G.cam.z/(2*this.PPT), hh=vh/G.cam.z/(2*this.PPT);
     const P=m4ortho(-hw,hw,-hh,hh,-MAP*4,MAP*4);
     return m4mul(P,V);
+  },
+  /* ---- picking ------------------------------------------------------------
+     Ground height in WORLD units at a fractional tile position. Must mirror
+     buildMesh exactly or picks drift from what is drawn: same corner average,
+     same HILL, bilinear across the quad. Heights are authored in 2D pixels, so
+     divide by IW to get tiles. */
+  cornerH(cx,cy){
+    const N=MAP,ev=(x,y)=>(x<0||y<0||x>=N||y>=N||!G.elev)?0:(G.elev[y*N+x]?1:0);
+    return (ev(cx-1,cy-1)+ev(cx,cy-1)+ev(cx-1,cy)+ev(cx,cy))/4*this.HILL;
+  },
+  groundH(fx,fz){
+    const x0=Math.floor(fx),z0=Math.floor(fz),tx=fx-x0,tz=fz-z0;
+    const h00=this.cornerH(x0,z0),h10=this.cornerH(x0+1,z0),
+          h01=this.cornerH(x0,z0+1),h11=this.cornerH(x0+1,z0+1);
+    return (h00*(1-tx)*(1-tz)+h10*tx*(1-tz)+h01*(1-tx)*tz+h11*tx*tz)*this.HS;
+  },
+  // screen CSS px -> world ray. Orthographic, so unproject the near and far
+  // NDC points and subtract.
+  ray(sx,sy){
+    const inv=m4inv(this.mvp()); if(!inv)return null;
+    const nx=sx/vw*2-1, ny=1-sy/vh*2;
+    const a=m4xform(inv,nx,ny,-1), b=m4xform(inv,nx,ny,1);
+    let dx=b.x-a.x,dy=b.y-a.y,dz=b.z-a.z;
+    const L=Math.hypot(dx,dy,dz)||1; dx/=L; dy/=L; dz/=L;
+    return {ox:a.x,oy:a.y,oz:a.z,dx,dy,dz};
+  },
+  /* Screen px -> tile coords, by marching the ray against the height field.
+     Returns null if it never meets the ground (possible at extreme tilt when
+     the ray leaves the map before descending). Coarse march then bisect: the
+     terrain is one elevation step tall, so a 0.5-tile stride cannot skip a
+     feature, and 24 bisections put the answer well inside a pixel. */
+  pickGround(sx,sy){
+    const r=this.ray(sx,sy); if(!r||r.dy>=-1e-6)return null;
+    const top=this.HILL*this.HS+.001;
+    let t=(top-r.oy)/r.dy;                  // enter at the highest ground can be
+    if(!isFinite(t))return null;
+    if(t<0)t=0;
+    const at=u=>({x:r.ox+r.dx*u, y:r.oy+r.dy*u, z:r.oz+r.dz*u});
+    const below=p=>p.y<=this.groundH(p.x,p.z);
+    let p=at(t);
+    if(below(p))return {x:p.x,y:p.z};
+    const step=0.5, maxT=t+MAP*3;
+    let prev=t;
+    for(t+=step;t<maxT;t+=step){
+      p=at(t);
+      if(p.x<-2||p.z<-2||p.x>MAP+2||p.z>MAP+2){
+        if(p.y<-1)return null;               // left the board without touching down
+        prev=t; continue;
+      }
+      if(below(p)){
+        let lo=prev,hi=t;
+        for(let i=0;i<24;i++){const mid=(lo+hi)/2; if(below(at(mid)))hi=mid; else lo=mid;}
+        const q=at(hi);
+        return {x:q.x,y:q.z};
+      }
+      prev=t;
+    }
+    return null;
   },
   // Hill height in 2D pixels. MUST stay 10: the 2D renderer lifts everything on
   // a hill by elevTile(...)*10 (buildings L6386/L6445, rubble L8664, hit-test
@@ -10210,7 +10310,7 @@ const R3={
     gl.enableVertexAttribArray(this.loc.aShade);
     gl.vertexAttribPointer(this.loc.aShade,1,gl.FLOAT,false,st,20);
     gl.uniformMatrix4fv(this.loc.uMVP,false,mvp);
-    gl.uniform1f(this.loc.uHScale,1/IW);
+    gl.uniform1f(this.loc.uHScale,this.HS);
     gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.tex);
     gl.uniform1i(this.loc.uTex,0);
     gl.drawElements(gl.TRIANGLES,this.idxCount,this.idxType,0);
