@@ -2029,6 +2029,7 @@ let netStall=0,netStallSeat=-1;
 let netLobby={players:[],cfg:null,host:0};
 let netPlayers=[];            // seat -> {seat,name,civ,team} for the running match
 let netGone=new Set();        // seats that dropped — we stall on them forever otherwise
+let netAiAt=new Map();        // seat -> the turn the computer takes their banner
 let netLeftName='';           // who dropped, for the message when the stall runs out
 function netUrl(){
   const h=location.hostname;
@@ -2049,7 +2050,7 @@ function netReset(){
   netClose();netRoom='';netHost=false;
   netTurn=0;netIn=new Map();netSent=-1;netStall=0;netStallSeat=-1;
   netLobby={players:[],cfg:null,host:0};netPlayers=[];
-  netGone=new Set();netLeftName='';
+  netGone=new Set();netAiAt=new Map();netLeftName='';
 }
 function netConnect(then){
   if(!netAvailable()){mpStatus('Multiplayer needs the web app — open tiny-conquerors.onrender.com');return;}
@@ -2067,9 +2068,12 @@ function netConnect(then){
   };
   s.onclose=()=>{
     netSock=null;
-    if(netMode)netHalt('Connection lost','The relay stopped answering.',
+    if(!netMode)return mpStatus('Disconnected');
+    // If we were the last person in the room anyway, losing the relay costs us
+    // nothing — carry on offline against the computers instead of stopping.
+    if(netAlone())return netGoOffline('The relay is gone; the battle goes on against the computer');
+    netHalt('Connection lost','The relay stopped answering.',
       'Everyone else has stopped too — a lockstep match cannot go on without every player.');
-    else mpStatus('Disconnected');
   };
   s.onmessage=e=>{
     let m;try{m=JSON.parse(e.data);}catch(err){return;}
@@ -2086,10 +2090,12 @@ function netOn(m){
     case 'left':
       netGone.add(m.seat);
       mpStatus(m.name+' left the room');
-      if(netMode){
-        feed(m.name+' has left the battle',true);
-        if(netPlayers.some(p=>p.seat===m.seat))netLeftName=m.name;
-      }
+      if(netMode&&netPlayers.some(p=>p.seat===m.seat))netLeftName=m.name;
+      break;
+    case 'ai':
+      // the relay has named the turn; every peer flips this seat on it
+      netGone.add(m.seat);
+      netAiAt.set(m.seat,m.turn);
       break;
     case 'err':
       mpStatus(m.msg);break;
@@ -2147,19 +2153,57 @@ function netBegin(m){
 /* ---- the turn machinery ---- */
 function netSeatCmds(turn){
   const bag=netIn.get(turn);
-  if(!bag)return null;
   const arr=[];
   for(const p of netPlayers){
-    const c=bag[p.seat];
-    if(!c)return null;          // still waiting on this seat
-    arr[p.seat]=c;
+    if(bag&&bag[p.seat]){arr[p.seat]=bag[p.seat];continue;}
+    // A seat the relay has declared gone will never speak again, and WebSocket
+    // delivery is ordered: everything it DID send reached us before the notice
+    // that it left. So every peer fills the same blanks with the same nothing,
+    // and none of them has to guess.
+    if(netGone.has(p.seat)){arr[p.seat]=[];continue;}
+    return null;                // still genuinely waiting on a live player
   }
   return arr;
 }
 function netWaitingOn(turn){
   const bag=netIn.get(turn)||{};
-  for(const p of netPlayers)if(!bag[p.seat])return p;
+  for(const p of netPlayers)if(!bag[p.seat]&&!netGone.has(p.seat))return p;
   return null;
+}
+/* The computer picks up a dropped player's banner. This runs on an agreed turn
+   on every machine, so the AI's first decision is the same everywhere. */
+function netSeatToAI(seat){
+  if(!G||G.ais[seat])return;
+  G.ais[seat]={wave:0,nextAtk:G.t+90,tick:.1*seat,attacking:false};
+  humanSlots=humanSlots.filter(s=>s!==seat);
+  const who=(netPlayers.find(p=>p.seat===seat)||{}).name||('Player '+(seat+1));
+  feed(who+' has left — the computer takes their banner',true);
+  if(allied(seat,localP))toast(who+' left; the computer fights on for them');
+  refreshPanel();
+}
+// Are we the only person still here? Then the relay has nothing left to relay.
+function netAlone(){
+  for(const p of netPlayers)if(p.seat!==localP&&!netGone.has(p.seat))return false;
+  return true;
+}
+function netGoOffline(reason){
+  if(!netMode)return;
+  // Apply anything we had already ordered but not yet reached, so the last
+  // quarter-second of the player's intent isn't silently thrown away.
+  const mine=[];
+  for(const [turn,bag] of netIn)if(turn>=netTurn&&bag[localP])mine.push([turn,bag[localP]]);
+  netMode=false;netClose();
+  for(let t=netTurn;mine.length&&t<netTurn+NET_LAG+2;t++){
+    const hit=mine.find(x=>x[0]===t);
+    if(hit)for(const c of hit[1])applyCmd(c);
+  }
+  netIn=new Map();
+  // Going offline usually beats the relay's handover turn — netRunTurn will
+  // never come round again to honour it. Nobody is left to disagree with, so
+  // every abandoned seat takes its AI now; otherwise they sit there as dead
+  // towns that never lift a finger.
+  for(let s=0;s<NP;s++)if(s!==localP&&netGone.has(s))netSeatToAI(s);
+  if(reason)feed(reason);
 }
 function netStore(seat,turn,cmds){
   let bag=netIn.get(turn);
@@ -2181,12 +2225,19 @@ function netStepReady(){return !!netSeatCmds(netTurn);}
 function netRunTurn(){
   const arr=netSeatCmds(netTurn);
   if(!arr)return false;
+  // Seat handovers happen BEFORE the turn runs, walked in seat order rather
+  // than Map order — two peers must never disagree about which came first.
+  for(let s=0;s<NP;s++)if(netAiAt.get(s)===netTurn)netSeatToAI(s);
   applyTick(arr);
   netIn.delete(netTurn);
   step(.05);
   netTurn++;
   netTopUp();
   if(netTurn%20===0)netSend({t:'hash',turn:netTurn,h:stateHash()});
+  // Once every other person has gone the relay has nothing left to relay: drop
+  // to a plain offline game against the computers rather than depending on a
+  // connection nobody is on the other end of.
+  if(netAlone())netGoOffline('You fight on alone against the computer');
   return true;
 }
 function netHalt(title,sub,body){
@@ -9560,14 +9611,13 @@ function frame(now){
         if(netStall>2.5&&w&&netStallSeat!==w.seat){
           netStallSeat=w.seat;toast('Waiting for '+w.name+'…');
         }
-        // Someone who has gone will never send another turn. Waiting on them
-        // forever is worse than saying so — a dropped player currently ends the
-        // battle, because handing their town to an AI would have to be a command
-        // every peer agreed on, and there is nobody left to agree with.
-        if(w&&netGone.has(w.seat)&&netStall>4)
-          netHalt(w.name+' left the battle',
-            'A lockstep match needs every player present.',
-            'Their towns cannot be handed to the computer mid-game — every machine would have to agree on the moment, and one of them is gone.');
+        // A dropped seat is handled by the relay's takeover notice, so netWaitingOn
+        // already ignores it. Reaching here still waiting on a gone seat means the
+        // notice never came — the relay itself is in trouble, not the player.
+        if(w&&netGone.has(w.seat)&&netStall>15)
+          netHalt('Lost the relay',
+            w.name+' left, but no handover instruction arrived.',
+            'Without it the computer cannot take their banner on a turn every machine agrees about, so the battle stops here.');
         else if(netStall>45)
           netHalt('Lost contact','Nothing has arrived from '+(w?w.name:'the other players')+' for 45 seconds.',
             'Your connection, or theirs, has gone quiet.');

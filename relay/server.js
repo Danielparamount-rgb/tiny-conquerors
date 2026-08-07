@@ -44,6 +44,12 @@ const MAX_SEATS = 8;
 const MAX_ROOMS = 200;
 const IDLE_MS = 30 * 60 * 1000;      // a room with nobody talking is swept
 const MAX_FRAME = 64 * 1024;         // a turn's commands are tiny; anything huge is a bug or an attack
+/* When somebody drops mid-battle their seat is handed to the computer. Every
+   peer must do that on the SAME turn or the simulations part company, and only
+   the relay knows the socket died — so the relay names the turn. It picks one
+   comfortably beyond anything any peer has sent for, because no peer can have
+   executed past the dropped player's last command yet. */
+const AI_TAKEOVER_DELAY = 20;        // turns (~1s) — invisible, and far beyond NET_LAG
 
 /* Room codes skip O/0/I/1/S/5 — these get read aloud and typed on phones. */
 const ALPHABET = 'ABCDEFGHJKLMNPQRTUVWXYZ23456789';
@@ -98,7 +104,15 @@ function leave(ws) {
   // the host leaving promotes the lowest remaining seat, so a lobby never strands
   if (room.hostSeat === seat) room.hostSeat = room.seats.findIndex(Boolean);
   broadcast(room, { t: 'left', seat, name });
-  broadcast(room, lobbyView(room));
+  if (room.started) {
+    // Name the turn on which the computer picks up their banner. maxTurn is the
+    // furthest ahead ANY peer has sent for, and nobody can have executed past
+    // the leaver's last command, so this turn is still in everyone's future.
+    const turn = (room.maxTurn || 0) + AI_TAKEOVER_DELAY;
+    broadcast(room, { t: 'ai', seat, turn, name });
+  } else {
+    broadcast(room, lobbyView(room));
+  }
   touch(room);
 }
 
@@ -140,7 +154,8 @@ wss.on('connection', (ws) => {
         if (!code) return send(ws, { t: 'err', msg: 'could not allocate a room' });
         const r = {
           code, seats: new Array(MAX_SEATS).fill(null), hostSeat: 0,
-          started: false, seed: 0, cfg: null, hashes: new Map(), seen: Date.now(),
+          started: false, seed: 0, cfg: null, hashes: new Map(),
+          maxTurn: 0, seen: Date.now(),
         };
         rooms.set(code, r);
         ws.pname = cleanName(m.name);
@@ -209,6 +224,7 @@ wss.on('connection', (ws) => {
         // socket rather than from the message.
         if (!room || !room.started) return;
         if (!Number.isInteger(m.turn) || !Array.isArray(m.cmds)) return;
+        if (m.turn > (room.maxTurn || 0)) room.maxTurn = m.turn; // the takeover turn is chosen from this
         broadcast(room, { t: 'cmds', seat: ws.seat, turn: m.turn, cmds: m.cmds }, ws.seat);
         touch(room);
         return;
