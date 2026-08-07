@@ -44,6 +44,9 @@
   /* 3D renderer (rewrite in progress) — sits exactly over #view; only one of the
      two is visible at a time so they can be compared frame for frame. */
   #view3{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:none;}
+  /* text label in a cluster of 34px icon buttons. NB: must out-specify the
+     `#zoomBtns button` rule below, which also sets font-size. */
+  #zoomBtns button#d3Btn{font-size:13px;font-weight:700;letter-spacing:.03em;}
   body.r3d #view{display:none;}
   body.r3d #view3{display:block;}
   #minimap{position:absolute;top:8px;right:8px;width:132px;height:77px;
@@ -1117,8 +1120,17 @@ function newGame(){
   updateFog();
   refreshTerrain();
 }
+/* Render-side version counters. NONE of these are read by step(), stateHash()
+   or saveGame — they are not simulation state. They exist so the 3D renderer
+   can tell what changed without rescanning the world every frame.
+     terrainVer — the terrain canvas was repainted (R3 uses it as ground texture)
+     elevVer    — G.elev was regenerated, so the ground mesh must be rebuilt
+     fogVer     — the fog canvas was repainted
+   Declared HERE rather than beside refreshTerrain because genMap/setMapSize
+   below bump them, and `let` in the temporal dead zone would throw. */
+let terrainVer=0,elevVer=0,fogVer=0;
 function genMap(){
-  miniResDirty=true;
+  miniResDirty=true;elevVer++;
   if(mapSel===1)genMapForest();
   else if(mapSel===2)genMapHallowed();
   else genMapRiver();
@@ -4235,7 +4247,7 @@ const tctx=terrain.getContext('2d');
 function setMapSize(n){
   if(MAP===n)return;
   MAP=n;
-  TREZT=n>64?1:2;
+  TREZT=n>64?1:2;elevVer++;
   terrain.width=MAP*TILE*TREZT;terrain.height=MAP*TILE*TREZT;
   fogC.width=MAP;fogC.height=MAP;
   maskC.width=MAP;maskC.height=MAP;
@@ -4311,6 +4323,7 @@ function renderFogCanvas(){
   maskMCtx.clearRect(0,0,128,128);maskMCtx.drawImage(maskC,0,0,128,128);
   maskSCtx.clearRect(0,0,512,512);maskSCtx.drawImage(maskM,0,0,512,512);
   fogDirty=false;fogWasDirty=true; // mist must re-clip to the new mask at once
+  fogVer++;                        // tells R3 to re-upload fogS as a texture
 }
 const TEAMS=[ // high-chroma AoE2 player colors — the loudest signal on screen
   {main:'#2a56d4',dark:'#16308f',trim:'#7da2f2'},  // blue (you)
@@ -4519,9 +4532,7 @@ function stampCleared(x,y){
   tctx.strokeStyle='#8a6a3a';tctx.lineWidth=.7;
   tctx.beginPath();tctx.ellipse(sx,sy-2,1.4,.8,0,0,7);tctx.stroke();
 }
-// Bumped whenever the terrain canvas is repainted. The 3D renderer uses that
-// canvas as its ground texture, so this is how it knows to re-upload.
-let terrainVer=0;
+// (render-side version counters are declared above genMap — see there)
 function refreshTerrain(){
   if(!G)return;
   terrainVer++;
@@ -9961,7 +9972,10 @@ function begin(){
    2D view fakes them with. Units and buildings are later stages. */
 const R3={
   gl:null, prog:null, tex:null, texVer:-1, mesh:null, meshKey:'', failed:false,
-  HILL:9,                       // hill height in 2D pixels — matches the fake rim shading
+  // Hill height in 2D pixels. MUST stay 10: the 2D renderer lifts everything on
+  // a hill by elevTile(...)*10 (buildings L6386/L6445, rubble L8664, hit-test
+  // L9096). Stage 1 shipped 9, which floated every 3D hill 1px off the 2D one.
+  HILL:10,
   init(){
     if(this.failed)return false;
     if(this.gl)return true;
@@ -9979,8 +9993,10 @@ const R3={
       void main(){
         float sx=((aPos.x-aPos.z)*uIso.x-uCam.x)*uZoom;
         float sy=((aPos.x+aPos.z)*uIso.y-aPos.y-uCam.y)*uZoom;
-        // further south = drawn in front = smaller depth
-        float d=1.0-(aPos.x+aPos.z)/uSpan;
+        // further south = drawn in front = smaller depth.
+        // x2 because NDC z spans [-1,1], not [0,1] — the old form threw away
+        // half the depth buffer for nothing.
+        float d=1.0-2.0*(aPos.x+aPos.z)/uSpan;
         gl_Position=vec4(sx/(uView.x*0.5)-1.0, 1.0-sy/(uView.y*0.5), d, 1.0);
         vUV=aUV; vShade=aShade;
       }`;
@@ -10038,7 +10054,75 @@ const R3={
     gl.bindBuffer(gl.ARRAY_BUFFER,this.vbo);gl.bufferData(gl.ARRAY_BUFFER,verts,gl.STATIC_DRAW);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.ibo);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,I,gl.STATIC_DRAW);
     this.idxCount=idx.length;
-    this.meshKey=N+':'+(G.elevVer||0);
+    this.meshKey=N+':'+elevVer;      // must match the check in draw()
+  },
+  /* Fog overlay. Without this the 3D view reveals the whole map — on Black
+     Forest that hands over the entire tree layout, which is a gameplay
+     difference, not a cosmetic gap. Source is fogS (512², power-of-two).
+     The 2D path's drifting mist layer is NOT ported yet. */
+  initFog(){
+    const gl=this.gl;
+    const vs=`attribute vec2 aCorner;
+      uniform vec2 uCam,uView,uIso; uniform float uZoom,uMap;
+      varying vec2 vUV;
+      void main(){
+        float x=aCorner.x*uMap,y=aCorner.y*uMap;
+        float sx=((x-y)*uIso.x-uCam.x)*uZoom, sy=((x+y)*uIso.y-uCam.y)*uZoom;
+        gl_Position=vec4(sx/(uView.x*0.5)-1.0, 1.0-sy/(uView.y*0.5), 0.0, 1.0);
+        vUV=aCorner;
+      }`;
+    const fs=`precision mediump float;
+      uniform sampler2D uFog; varying vec2 vUV;
+      void main(){ gl_FragColor=texture2D(uFog,vUV); }`;
+    const mk=(t,s)=>{const sh=gl.createShader(t);gl.shaderSource(sh,s);gl.compileShader(sh);
+      if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS)){console.error(gl.getShaderInfoLog(sh));return null;}return sh;};
+    const v=mk(gl.VERTEX_SHADER,vs),f=mk(gl.FRAGMENT_SHADER,fs);
+    if(!v||!f)return false;
+    const p=gl.createProgram();gl.attachShader(p,v);gl.attachShader(p,f);
+    gl.bindAttribLocation(p,0,'aCorner');       // deterministic index, see drawFog
+    gl.linkProgram(p);
+    if(!gl.getProgramParameter(p,gl.LINK_STATUS)){console.error(gl.getProgramInfoLog(p));return false;}
+    this.fogProg=p;
+    this.fogLoc={uCam:gl.getUniformLocation(p,'uCam'),uView:gl.getUniformLocation(p,'uView'),
+      uIso:gl.getUniformLocation(p,'uIso'),uZoom:gl.getUniformLocation(p,'uZoom'),
+      uMap:gl.getUniformLocation(p,'uMap'),uFog:gl.getUniformLocation(p,'uFog')};
+    this.quad=gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER,this.quad);
+    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([0,0, 1,0, 0,1, 1,0, 1,1, 0,1]),gl.STATIC_DRAW);
+    this.fogTex=gl.createTexture();
+    this.fogVerAt=-1;
+    return true;
+  },
+  drawFog(){
+    const gl=this.gl;
+    if(!this.fogProg&&!this.initFog())return;
+    if(fogDirty)renderFogCanvas();     // in 3D nothing else drives this; draw() does in 2D
+    if(this.fogVerAt!==fogVer){
+      gl.bindTexture(gl.TEXTURE_2D,this.fogTex);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false);
+      gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,fogS);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+      this.fogVerAt=fogVer;
+    }
+    gl.useProgram(this.fogProg);
+    gl.disable(gl.DEPTH_TEST); gl.depthMask(false);
+    gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+    gl.bindBuffer(gl.ARRAY_BUFFER,this.quad);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
+    gl.uniform2f(this.fogLoc.uCam,G.cam.x,G.cam.y);
+    gl.uniform2f(this.fogLoc.uView,vw,vh);
+    gl.uniform2f(this.fogLoc.uIso,IW,IH);
+    gl.uniform1f(this.fogLoc.uZoom,G.cam.z);
+    gl.uniform1f(this.fogLoc.uMap,MAP);
+    gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.fogTex);
+    gl.uniform1i(this.fogLoc.uFog,0);
+    gl.drawArrays(gl.TRIANGLES,0,6);
+    gl.disable(gl.BLEND); gl.depthMask(true); gl.enable(gl.DEPTH_TEST);
   },
   upload(){
     const gl=this.gl;
@@ -10060,9 +10144,17 @@ const R3={
     gl.viewport(0,0,c.width,c.height);
     gl.clearColor(.071,.086,.043,1);
     gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
-    if(this.meshKey!==MAP+':'+(G.elevVer||0))this.buildMesh();
+    if(this.meshKey!==MAP+':'+elevVer)this.buildMesh();
     if(this.failed)return;
     if(this.texVer!==terrainVer)this.upload();
+    /* Depth budget split. Ground gets the far half of the window depth range,
+       entities the near half, so no ground fragment can ever occlude an entity
+       — which is exactly the 2D semantics, where the terrain is one flat blit
+       BEFORE every entity. Ground-vs-ground self-occlusion still works, which
+       matters now that hills are real geometry.
+       gl.clear writes window depth 1.0 regardless of depthRange, and ground at
+       the map corner also writes 1.0, so depthFunc MUST stay LEQUAL. */
+    gl.depthRange(0.5,1.0);
     gl.useProgram(this.prog);
     gl.bindBuffer(gl.ARRAY_BUFFER,this.vbo);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.ibo);
@@ -10081,6 +10173,9 @@ const R3={
     gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.tex);
     gl.uniform1i(this.loc.uTex,0);
     gl.drawElements(gl.TRIANGLES,this.idxCount,this.idxType,0);
+    // entities will draw here at depthRange(0.0,0.499) — stage 2b onward
+    gl.depthRange(0.0,1.0);
+    this.drawFog();
   },
 };
 let use3D=false;
