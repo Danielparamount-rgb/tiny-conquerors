@@ -10560,7 +10560,7 @@ const R3={
         vec3 p=vec3(aPos.x*aI0.w+aI0.x, aPos.y*aI1.x+aI0.y, aPos.z*aI0.w+aI0.z);
         gl_Position=uMVP*vec4(p,1.0);
         float lam=max(0.0,dot(normalize(aNrm),uLight));
-        vC=aCol*aI1.y*(0.42+0.78*lam);
+        vC=aCol*aI1.y*(0.60+0.52*lam);
       }`;
     const fs=`precision mediump float; varying vec3 vC;
       void main(){ gl_FragColor=vec4(vC,1.0); }`;
@@ -10640,57 +10640,169 @@ const R3={
      merged mesh rebuilt on change — no instancing needed. It rides the tree
      shader by drawing as a single identity instance. */
   BMASS:{
-    tc        :{w:'#a8a294',r:'gable',rc:'#b8613a',wh:.42},
-    house     :{w:'#f0e7cd',r:'gable',rc:'#c2673f',wh:.46},
+    // wh = the fraction of total height that is WALL. Raised from ~.46 to ~.58
+    // after measuring: at .46 the roof dominated so completely that a pixel
+    // probe aimed at a house wall came back with the roof's brown, and no
+    // amount of masonry detail could show because there was nowhere to put it.
+    tc        :{w:'#a8a294',r:'gable',rc:'#b8613a',wh:.56},
+    house     :{w:'#f0e7cd',r:'gable',rc:'#c2673f',wh:.60},
     farm      :{w:'#7d7245',r:'flat', wh:1},
-    camp      :{w:'#8d7355',r:'gable',rc:'#9a7b57',wh:.52},
-    barracks  :{w:'#f0e7cd',r:'gable',rc:'#b8613a',wh:.46},
-    range     :{w:'#d8c9a8',r:'gable',rc:'#9a7b57',wh:.46},
-    stable    :{w:'#d8c9a8',r:'gable',rc:'#b8613a',wh:.46},
-    siege     :{w:'#c9b48c',r:'gable',rc:'#8d7355',wh:.5},
-    castle    :{w:'#a8a294',r:'cone', rc:'#5a7ea8',wh:.6,turret:true},
-    tower     :{w:'#a8a294',r:'cone', rc:'#b8613a',wh:.66},
+    camp      :{w:'#8d7355',r:'gable',rc:'#9a7b57',wh:.62},
+    barracks  :{w:'#f0e7cd',r:'gable',rc:'#b8613a',wh:.58},
+    range     :{w:'#d8c9a8',r:'gable',rc:'#9a7b57',wh:.58},
+    stable    :{w:'#d8c9a8',r:'gable',rc:'#b8613a',wh:.58},
+    siege     :{w:'#c9b48c',r:'gable',rc:'#8d7355',wh:.60},
+    castle    :{w:'#a8a294',r:'cone', rc:'#5a7ea8',wh:.68,turret:true},
+    tower     :{w:'#a8a294',r:'cone', rc:'#b8613a',wh:.74},
     wall      :{w:'#8d7355',r:'flat', wh:1},
     gate      :{w:'#8d7355',r:'flat', wh:1},
     swall     :{w:'#a8a294',r:'flat', wh:1},
     sgate     :{w:'#a8a294',r:'flat', wh:1},
-    market    :{w:'#f0e7cd',r:'gable',rc:'#9a7b57',wh:.46},
-    monastery :{w:'#f0e7cd',r:'gable',rc:'#5a7ea8',wh:.46},
-    blacksmith:{w:'#a8a294',r:'gable',rc:'#b8613a',wh:.46},
+    market    :{w:'#f0e7cd',r:'gable',rc:'#9a7b57',wh:.58},
+    monastery :{w:'#f0e7cd',r:'gable',rc:'#5a7ea8',wh:.58},
+    blacksmith:{w:'#a8a294',r:'gable',rc:'#b8613a',wh:.58},
     dock      :{w:'#8d7355',r:'flat', wh:1},
-    university:{w:'#f0e7cd',r:'gable',rc:'#5a7ea8',wh:.46},
-    wonder    :{w:'#f0e7cd',r:'dome', rc:'#d9b44a',wh:.5},
+    university:{w:'#f0e7cd',r:'gable',rc:'#5a7ea8',wh:.58},
+    wonder    :{w:'#f0e7cd',r:'dome', rc:'#d9b44a',wh:.58},
   },
   buildBlds(){
     const V=[],I=[];
     const hex=c=>[parseInt(c.slice(1,3),16)/255,parseInt(c.slice(3,5),16)/255,parseInt(c.slice(5,7),16)/255];
     const push=(p,n,c)=>{V.push(p[0],p[1],p[2],n[0],n[1],n[2],c[0],c[1],c[2]);return V.length/9-1;};
+    /* NB the normal is NEGATED. With this file's face winding, (b-a)x(d-a)
+       points INTO the solid. That inverted the lambert term on every wall and
+       roof, and — far worse — made panel()'s +offset push masonry, shingles and
+       timber framing INSIDE the wall where the backing quad hid them. Only the
+       windows showed, because they offset the other way. */
     const quad=(a,b,c,d,col)=>{
       const ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2],vx=d[0]-a[0],vy=d[1]-a[1],vz=d[2]-a[2];
-      let nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;
+      let nx=-(uy*vz-uz*vy),ny=-(uz*vx-ux*vz),nz=-(ux*vy-uy*vx);
       const L=Math.hypot(nx,ny,nz)||1;const n=[nx/L,ny/L,nz/L];
       const i0=push(a,n,col),i1=push(b,n,col),i2=push(c,n,col),i3=push(d,n,col);
       I.push(i0,i1,i2, i0,i2,i3);
     };
     const tri3=(a,b,c,col)=>{
       const ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2],vx=c[0]-a[0],vy=c[1]-a[1],vz=c[2]-a[2];
-      let nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;
+      let nx=-(uy*vz-uz*vy),ny=-(uz*vx-ux*vz),nz=-(ux*vy-uy*vx);
       const L=Math.hypot(nx,ny,nz)||1;const n=[nx/L,ny/L,nz/L];
       I.push(push(a,n,col),push(b,n,col),push(c,n,col));
     };
-    const box=(x0,z0,x1,z1,y0,y1,col)=>{
-      quad([x0,y0,z0],[x1,y0,z0],[x1,y1,z0],[x0,y1,z0],col);
-      quad([x1,y0,z1],[x0,y0,z1],[x0,y1,z1],[x1,y1,z1],col);
-      quad([x1,y0,z0],[x1,y0,z1],[x1,y1,z1],[x1,y1,z0],col);
-      quad([x0,y0,z1],[x0,y0,z0],[x0,y1,z0],[x0,y1,z1],col);
-      quad([x0,y1,z0],[x1,y1,z0],[x1,y1,z1],[x0,y1,z1],col);
+    /* ---- surface detail -----------------------------------------------------
+       Everything below works by RELIEF, not texture: lay a dark base quad, then
+       float the stones / shingles / planks a hair proud of it. The gaps between
+       them reveal the base, which is the mortar line and the shingle shadow.
+       That is what makes it read as masonry rather than a tinted flat wall, and
+       it needs no UVs, no atlas and no shader change. Windows and doors go the
+       other way — recessed INTO the wall — so they catch a real shadow edge. */
+    const add=(p,d,s)=>[p[0]+d[0]*s,p[1]+d[1]*s,p[2]+d[2]*s];
+    // a face is an origin plus a right and an up vector; pt(u,v) walks it
+    const fpt=(A,R,U,u,v)=>[A[0]+R[0]*u+U[0]*v, A[1]+R[1]*u+U[1]*v, A[2]+R[2]*u+U[2]*v];
+    // outward face normal — negated for the same reason as quad() above
+    const fnorm=(R,U)=>{let nx=-(R[1]*U[2]-R[2]*U[1]),ny=-(R[2]*U[0]-R[0]*U[2]),nz=-(R[0]*U[1]-R[1]*U[0]);
+      const L=Math.hypot(nx,ny,nz)||1;return [nx/L,ny/L,nz/L];};
+    const panel=(A,R,U,u0,v0,u1,v1,off,col)=>{
+      const N=fnorm(R,U);
+      quad(add(fpt(A,R,U,u0,v0),N,off),add(fpt(A,R,U,u1,v0),N,off),
+           add(fpt(A,R,U,u1,v1),N,off),add(fpt(A,R,U,u0,v1),N,off),col);
     };
-    const gable=(x0,z0,x1,z1,y0,y1,col)=>{      // ridge runs along x
-      const zm=(z0+z1)/2;
-      quad([x0,y0,z0],[x1,y0,z0],[x1,y1,zm],[x0,y1,zm],col);
-      quad([x1,y0,z1],[x0,y0,z1],[x0,y1,zm],[x1,y1,zm],col);
-      tri3([x0,y0,z0],[x0,y1,zm],[x0,y0,z1],col);
-      tri3([x1,y0,z1],[x1,y1,zm],[x1,y0,z0],col);
+    const shade=(c,f)=>[Math.max(0,Math.min(1,c[0]*f)),Math.max(0,Math.min(1,c[1]*f)),
+                        Math.max(0,Math.min(1,c[2]*f))];
+    /* Relief depth. 0.008 was ~0.6 SCREEN px at normal zoom — geometrically
+       present, visually nothing. A wall face is ~29px wide on screen at z=1, so
+       joints need ~2px to read, which is why the insets below are in the 0.03
+       range and not the 0.008 they started at. */
+    const REL=0.022;
+    /* One wall face. style: 'stone' = staggered masonry courses, 'plaster' =
+       smooth render with dark timber framing, 'plank' = vertical boarding. */
+    const wall=(A,R,U,col,style,seed,openings)=>{
+      panel(A,R,U,0,0,1,1,0,shade(col,0.55));            // mortar / backing
+      const H=Math.hypot(U[0],U[1],U[2]),W=Math.hypot(R[0],R[1],R[2]);
+      if(style==='plank'){
+        const n=Math.max(3,Math.round(W/0.13));
+        for(let i=0;i<n;i++){
+          const t=(hash2(seed+i*17,3)%5)/5;
+          panel(A,R,U,i/n+0.030,0.02,(i+1)/n-0.030,0.98,REL,shade(col,0.86+t*0.30));
+        }
+      }else if(style==='plaster'){
+        panel(A,R,U,0.02,0.01,0.98,0.99,REL,col);
+        const beam=shade(col,0.42);                       // timber framing
+        panel(A,R,U,0,0,1,0.055,REL*1.6,beam);            // sill beam
+        panel(A,R,U,0,0.945,1,1,REL*1.6,beam);            // head beam
+        const posts=Math.max(2,Math.round(W/0.42));
+        for(let i=0;i<=posts;i++){
+          const u=i/posts;
+          panel(A,R,U,Math.max(0,u-0.022),0,Math.min(1,u+0.022),1,REL*1.6,beam);
+        }
+        // one diagonal brace per bay, alternating direction — reads as half-timber
+        for(let i=0;i<posts;i++){
+          const u0=i/posts+0.03,u1=(i+1)/posts-0.03;
+          const dir=(hash2(seed+i*29,7)%2)?1:-1;
+          for(let s=0;s<5;s++){
+            const t=s/5,tn=(s+1)/5;
+            const ua=u0+(u1-u0)*(dir>0?t:1-t),ub=u0+(u1-u0)*(dir>0?tn:1-tn);
+            panel(A,R,U,Math.min(ua,ub),0.10+t*0.72,Math.max(ua,ub),0.10+tn*0.72,REL*1.5,beam);
+          }
+        }
+      }else{
+        const courses=Math.max(2,Math.round(H/0.115));
+        for(let r=0;r<courses;r++){
+          const v0=r/courses,v1=(r+1)/courses;
+          const stones=Math.max(2,Math.round(W/0.20));
+          const stag=(r%2)?0.5/stones:0;
+          for(let s=-1;s<=stones;s++){
+            const u0=s/stones+stag,u1=(s+1)/stones+stag;
+            const a=Math.max(0,u0),b=Math.min(1,u1);
+            if(b-a<0.02)continue;
+            const h=hash2(seed+r*131+s*7,r*29+s*13);
+            const f=0.80+(h%7)*0.075;
+            const mossy=(r===0&&h%6===0);
+            panel(A,R,U,a+0.026,v0+0.050,b-0.026,v1-0.050,REL,
+                  mossy?[col[0]*0.62,col[1]*0.86,col[2]*0.55]:shade(col,f));
+          }
+        }
+      }
+      // recessed openings: {u,v,w,h,arch}
+      if(openings)for(const o of openings){
+        const dark=[0.09,0.07,0.06];
+        panel(A,R,U,o.u-o.w/2,o.v,o.u+o.w/2,o.v+o.h,-REL*1.1,dark);
+        const fr=shade(col,0.72);
+        panel(A,R,U,o.u-o.w/2-0.018,o.v-0.012,o.u+o.w/2+0.018,o.v,REL*1.2,fr);      // sill
+        panel(A,R,U,o.u-o.w/2-0.018,o.v+o.h,o.u+o.w/2+0.018,o.v+o.h+0.014,REL*1.2,fr); // lintel
+      }
+    };
+    const box=(x0,z0,x1,z1,y0,y1,col,style,seed,win)=>{
+      const h=y1-y0,dx=x1-x0,dz=z1-z0;
+      const faces=[
+        [[x0,y0,z0],[dx,0,0],[0,h,0]],
+        [[x1,y0,z1],[-dx,0,0],[0,h,0]],
+        [[x1,y0,z0],[0,0,dz],[0,h,0]],
+        [[x0,y0,z1],[0,0,-dz],[0,h,0]],
+      ];
+      faces.forEach((f,i)=>wall(f[0],f[1],f[2],col,style,seed+i*911,win?win[i]:null));
+      quad([x0,y1,z0],[x1,y1,z0],[x1,y1,z1],[x0,y1,z1],shade(col,0.94));
+    };
+    /* Gable roof with real shingle rows. Ridge runs along x; each row overlaps
+       the one below and floats proud of a dark backing, so the rows self-shadow. */
+    const gable=(x0,z0,x1,z1,y0,y1,col,seed)=>{
+      const zm=(z0+z1)/2,dx=x1-x0;
+      const rows=Math.max(5,Math.round((y1-y0)/0.048));   // finer courses
+      for(const side of [0,1]){
+        const zEdge=side?z1:z0;
+        const A=side?[x1,y0,z1]:[x0,y0,z0], R=side?[-dx,0,0]:[dx,0,0];
+        const U=[0,y1-y0,side?zm-z1:zm-z0];
+        panel(A,R,U,0,0,1,1,0,shade(col,0.5));
+        for(let r=0;r<rows;r++){
+          // small overlap only — a big one buries the shadow line each row casts
+          const v0=r/rows,v1=(r+1)/rows+0.18/rows;
+          const f=0.82+((r%2)?0.22:0)+((hash2(seed+r*53,side)%5)*0.035);
+          panel(A,R,U,0.020,v0,0.980,Math.min(1,v1),REL*(1+0.5*(r%2)),shade(col,f));
+        }
+      }
+      tri3([x0,y0,z0],[x0,y1,zm],[x0,y0,z1],shade(col,0.8));
+      tri3([x1,y0,z1],[x1,y1,zm],[x1,y0,z0],shade(col,0.8));
+      // ridge cap
+      quad([x0,y1,zm-0.035],[x1,y1,zm-0.035],[x1,y1+0.02,zm+0.035],[x0,y1+0.02,zm+0.035],
+           shade(col,1.12));
     };
     const cone=(cx,cz,r,y0,y1,col,seg)=>{
       seg=seg||8;
@@ -10727,17 +10839,36 @@ const R3={
       const H=(IHT[b.type]||18)*this.HS*done;
       const wallC=hex(b.built?M.w:'#9a8560');
       const wh=g+H*(M.r==='flat'?1:M.wh);
-      box(x0,z0,x1,z1,g,wh,wallC);
+      // wall treatment follows the palette: pale ashlar -> masonry, cream/buff
+      // -> half-timbered plaster, anything else -> boarding
+      const style=b.built?(M.w==='#a8a294'?'stone':(M.w==='#f0e7cd'||M.w==='#d8c9a8'||M.w==='#c9b48c')?'plaster':'plank'):'plank';
+      // openings, per face [S,N,E,W]. Door on the south face only.
+      let win=null;
+      if(b.built&&M.r!=='flat'&&H>0.28){
+        const per=s>=2?3:2;
+        win=[];
+        for(let f=0;f<4;f++){
+          const a=[];
+          for(let i=0;i<per;i++){
+            const u=(i+0.5)/per;
+            if(f===0&&Math.abs(u-0.5)<0.08)continue;   // leave room for the door
+            a.push({u,v:0.42,w:0.13,h:0.24});
+          }
+          if(f===0)a.push({u:0.5,v:0,w:0.18,h:0.50});   // door, floor to lintel
+          win.push(a);
+        }
+      }
+      box(x0,z0,x1,z1,g,wh,wallC,style,b.id*7919,win);
       if(b.built&&M.r!=='flat'){
         const rc=hex(M.rc);
-        if(M.r==='gable')gable(x0-inset*.6,z0-inset*.6,x1+inset*.6,z1+inset*.6,wh,g+H,rc);
+        if(M.r==='gable')gable(x0-inset*.6,z0-inset*.6,x1+inset*.6,z1+inset*.6,wh,g+H,rc,b.id*131);
         else if(M.r==='cone')cone((x0+x1)/2,(z0+z1)/2,(x1-x0)*.62,wh,g+H,rc);
         else dome((x0+x1)/2,(z0+z1)/2,(x1-x0)*.44,wh,g+H,rc);
         if(M.turret){                       // castle: four spired corner turrets
           const tr=s*.19;
           for(const [ox,oz] of [[x0,z0],[x1,z0],[x0,z1],[x1,z1]]){
             const ty0=g,ty1=g+H*.86;
-            box(ox-tr,oz-tr,ox+tr,oz+tr,ty0,ty1,hex(M.w));
+            box(ox-tr,oz-tr,ox+tr,oz+tr,ty0,ty1,hex(M.w),'stone',b.id*31+ox*13,null);
             cone(ox,oz,tr*1.25,ty1,ty1+H*.34,hex(M.rc));
           }
         }
