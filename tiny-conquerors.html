@@ -6445,9 +6445,13 @@ function drawBld(b){
   }
   const stage=b.built?0:Math.min(2,Math.floor(3*b.prog/BLDS[b.type].bt));
   const sp=getBldSpr(b.type,b.p,b.built,stage,hash2(b.tx,b.ty)%3);
-  // buildings draw 13% larger than their footprint art, anchored at the south
-  // corner so they gain presence (like the reference) without shifting their base
-  const BS=d.thin||d.farm?1:1.13;
+  /* buildings draw 58% larger than their footprint art (Daniel asked for +40%
+     on top of the old 1.13), anchored at the south corner so they gain
+     presence without shifting their base. VISUAL ONLY — footprints, placement
+     and pathing are untouched. Walls and farms stay footprint-true: they tile
+     edge-to-edge and scaled copies would overlap their neighbours.
+     If you change this, change the roof-click box and unitOccluded with it. */
+  const BS=d.thin||d.farm?1:1.58;
   if(BS===1)ctx.drawImage(sp.c,pt.x-sp.ox,pt.y-sp.oy,sp.w,sp.h);
   else{
     const southY=pt.y+2*b.size*IH;
@@ -7862,9 +7866,11 @@ function unitOccluded(u,px,py){
     if(hgt<30)continue;                       // walls and farms are too low to hide anyone
     const fp=isoE(b.tx+b.size,b.ty+b.size);   // building sprite's lowest corner
     if(fp.y<=py+2)continue;                   // painted before the unit — can't cover it
-    if(fp.y-py>hgt+b.size*13+6)continue;      // unit is above the sprite's top
+    // sprites draw at 1.58 from the south anchor, so they reach higher and
+    // wider than the footprint art these bounds were first tuned against
+    if(fp.y-py>(hgt+b.size*13)*1.58+6)continue;  // unit is above the sprite's top
     const cx=isoE(b.tx+b.size/2,b.ty+b.size/2).x;
-    if(Math.abs(cx-px)<b.size*26+14)return true;
+    if(Math.abs(cx-px)<b.size*26*1.58+14)return true;
   }
   const ux=Math.floor(u.x),uy=Math.floor(u.y);
   for(let dy=-3;dy<=4;dy++)for(let dx=-3;dx<=4;dx++){
@@ -7887,7 +7893,7 @@ function drawGhosts(){
       ghostG=ghostC.getContext('2d');}
     ghostG.setTransform(1,0,0,1,0,0);
     ghostG.clearRect(0,0,110,124);
-    ghostG.translate(55,88);ghostG.scale(1.18,1.18);ghostG.lineCap='round';
+    ghostG.translate(55,88);ghostG.scale(1.24,1.24);ghostG.lineCap='round';
     const old=ctx;ctx=ghostG;
     try{drawUnitBody(u,G.t*9+u.id*1.71,0,TEAMS[u.p]);}
     finally{ctx=old;}
@@ -7918,7 +7924,8 @@ function drawUnit(u){
   ctx.fillStyle='rgba(24,27,36,.2)';
   ctx.beginPath();ctx.ellipse(px+(big?3:2),py+4.3,big?9.5:6.5,big?3.4:2.5,.14,0,7);ctx.fill();
   ctx.save();ctx.translate(px,py);
-  ctx.scale(1.18,1.18); // rigs orient, bob, and lunge themselves — AoE2 upright walk
+  ctx.scale(1.24,1.24); // rigs orient, bob, and lunge themselves — AoE2 upright walk
+                        // (1.18 +5% per Daniel; corpse+ghost scales must match)
   ctx.lineCap='round';
   drawUnitBody(u,t,sw,TEAMS[u.p]);
   ctx.restore();
@@ -8580,7 +8587,7 @@ function drawCorpse(c){
     ctx.save();ctx.translate(cp.x,cp.y);
     ctx.rotate(c.fall*1.32*ease);        // pivot at the feet, fall to one side
     ctx.translate(0,ease*2.2);           // sink as it goes down
-    ctx.scale(1.18,1.18*(1-.3*ease));    // same scale drawUnit uses, flattening
+    ctx.scale(1.24,1.24*(1-.3*ease));    // same scale drawUnit uses, flattening
     ctx.lineCap='round';ctx.lineJoin='round';
     const fake={type:c.type,p:c.p,state:'idle',cd:0,carry:0,gatherT:0,
       face:c.face||1,hdg:c.hdg,spd:0,vx:0,vy:0,gaitPh:0,id:0,gar:[]};
@@ -9277,16 +9284,22 @@ function handleTap(cx,cy,mouse,right){
            0.7 made the volume twice as wide as 2D and the A/B harness caught it
            immediately: clicking open ground beside a town hall issued `gar`
            instead of `move`. */
-        const cxT=b.tx+b.size/2,cyT=b.ty+b.size/2,hx=b.size*.35;
-        const t=rayBox(R,cxT-hx,g*R3.HS,cyT-hx,cxT+hx,(g+ht)*R3.HS,cyT+hx);
+        // 3D massing is scaled 1.4x for non-flat buildings — the pick volume
+        // tracks the drawn geometry (the 0.35 identity still holds under it)
+        const M3=R3.BMASS[b.type],vs3=(M3&&M3.r!=='flat')?1.4:1;
+        const cxT=b.tx+b.size/2,cyT=b.ty+b.size/2,hx=b.size*.35*vs3;
+        const t=rayBox(R,cxT-hx,g*R3.HS,cyT-hx,cxT+hx,(g+ht*vs3)*R3.HS,cyT+hx);
         if(t!==null&&t<bt){bt=t;hitB=b;}}
     }else{
       for(const b of G.blds){
         if(!allied(b.p,localP)&&!b.seen)continue;
         const pc=isoPt(b.tx+b.size/2,b.ty+b.size/2);
         pc.y-=elevTile(b.tx+b.size/2,b.ty+b.size/2)*10;
-        const ht=(IHT[b.type]||18)*(b.built?1:.35);
-        if(Math.abs(wx-pc.x)<b.size*IW*.7&&wy>pc.y-ht-IH&&wy<pc.y+b.size*IH*.8){hitB=b;break;}}
+        // sprites draw at BS 1.58 from the south anchor — the click box must
+        // cover the art the player actually sees, or tall roofs go dead
+        const bs2=(BLDS[b.type].thin||BLDS[b.type].farm)?1:1.58;
+        const ht=(IHT[b.type]||18)*(b.built?1:.35)*bs2;
+        if(Math.abs(wx-pc.x)<b.size*IW*.7*bs2&&wy>pc.y-ht-IH&&wy<pc.y+b.size*IH*.8){hitB=b;break;}}
     }
   }
   const selUnits=G.sel.map(id=>G.units.find(u=>u.id===id)).filter(u=>u&&u.p===localP);
@@ -10807,12 +10820,14 @@ const R3={
       const d=UNITS[u.type]||{};
       let r=d.animal?0.20:d.ship?0.50:(d.siege||u.type==='ram')?0.34:d.cav?0.30:0.22;
       if(u.type==='elephant')r=0.48; else if(u.type==='warwagon')r=0.38;
-      A.push(u.x, this.groundH(u.x,u.y)+0.012, u.y, r, 1,1,0);
+      A.push(u.x, this.groundH(u.x,u.y)+0.012, u.y, r*1.05, 1,1,0);
     }
     for(const b of G.blds){
       if(!allied(b.p,localP)&&!b.seen)continue;
+      const M=this.BMASS[b.type];
+      const vs=(M&&M.r!=='flat')?1.4:1;         // shadow tracks the scaled massing
       const cx=b.tx+b.size/2,cz=b.ty+b.size/2;
-      A.push(cx, this.groundH(cx,cz)+0.010, cz, b.size*0.60, 1,1,0);
+      A.push(cx, this.groundH(cx,cz)+0.010, cz, b.size*0.60*vs, 1,1,0);
     }
     if(!A.length)return;
     gl.useProgram(this.treeProg);
@@ -11056,11 +11071,18 @@ const R3={
       bmarks.push([I.length,V.length/9]);
       const M=this.BMASS[b.type]||this.BMASS.house;
       const s=b.size,inset=s*0.10;
-      const x0=b.tx+inset,x1=b.tx+s-inset,z0=b.ty+inset,z1=b.ty+s-inset;
+      /* VISUAL 1.4x on everything that isn't a flat tiler (walls/farms/docks
+         tile edge-to-edge and would overlap their neighbours). Scaled about
+         the footprint centre — placement, pathing and the sim never see it.
+         The roof-click pick volume in handleTap carries the same 1.4. */
+      const vs=M.r==='flat'?1:1.4;
+      const hw=(s/2-inset)*vs;
+      const cxm=b.tx+s/2,czm=b.ty+s/2;
+      const x0=cxm-hw,x1=cxm+hw,z0=czm-hw,z1=czm+hw;
       const g=this.groundH(b.tx+s/2,b.ty+s/2);
       // under construction: short and scaffold-brown, growing with prog
       const done=b.built?1:(0.22+0.55*(b.prog||0));
-      const H=(IHT[b.type]||18)*this.HS*done;
+      const H=(IHT[b.type]||18)*this.HS*done*vs;
       const wallC=hex(b.built?M.w:'#9a8560');
       const wh=g+H*(M.r==='flat'?1:M.wh);
       // wall treatment follows the palette: pale ashlar -> masonry, cream/buff
@@ -11777,7 +11799,7 @@ const R3={
          is the DRAWN mesh. They disagree on slope edges by design, and a unit
          must stand on the ground the renderer actually drew. */
       A[a].push(u.x, this.groundH(u.x,u.y), u.y, (u.hdg||0),
-                ph, 1, atk, amp, r, g2, b2);
+                ph, 1.05, atk, amp, r, g2, b2);   // +5% unit scale, per Daniel
     }
     gl.useProgram(this.uProg);
     gl.uniformMatrix4fv(this.uLoc.uMVP,false,mvp);
@@ -11846,18 +11868,21 @@ const R3={
       }
     };
     const GOLD=[0.89,0.70,0.24],WHITE=[0.92,0.92,0.90];
+    // ring radius follows the scaled massing, or big buildings swallow it
+    const bR=b=>{const M=this.BMASS[b.type];
+      return b.size*0.62*((M&&M.r!=='flat')?1.4:1);};
     // selection
     for(const id of (G.sel||[])){
       const u=G.units.find(x=>x.id===id);
-      if(u){ring(u.x,u.y,0.34,0.045,GOLD);continue;}
+      if(u){ring(u.x,u.y,0.36,0.045,GOLD);continue;}
       const b=G.blds.find(x=>x.id===id);
-      if(b)ring(b.tx+b.size/2,b.ty+b.size/2,b.size*0.62,0.055,GOLD);
+      if(b)ring(b.tx+b.size/2,b.ty+b.size/2,bR(b),0.055,GOLD);
     }
     if(G.inspect&&G.inspect.id!==undefined){
       const u=G.units.find(x=>x.id===G.inspect.id);
-      if(u)ring(u.x,u.y,0.34,0.04,WHITE);
+      if(u)ring(u.x,u.y,0.36,0.04,WHITE);
       else{const b=G.blds.find(x=>x.id===G.inspect.id);
-        if(b)ring(b.tx+b.size/2,b.ty+b.size/2,b.size*0.62,0.05,WHITE);}
+        if(b)ring(b.tx+b.size/2,b.ty+b.size/2,bR(b),0.05,WHITE);}
     }
     if(G.inspect&&G.inspect.res){
       const r=G.res[G.inspect.res];
