@@ -28,12 +28,13 @@
     border-bottom:2px solid #191713;
     box-shadow:0 2px 8px rgba(0,0,0,.5), inset 0 1px 0 rgba(201,162,39,.4), inset 0 -1px 0 rgba(201,162,39,.28);
     font-variant-numeric:tabular-nums;font-size:13px;flex-wrap:wrap;}
-  .res{display:flex;align-items:center;gap:4px;
-    background:linear-gradient(#14110c,#221c12);
-    border:1px solid #6a5a35;border-radius:2px;padding:1px 7px 1px 4px;min-width:56px;
-    color:#f2ede2;text-shadow:0 1px 1px #000;
-    box-shadow:inset 0 1px 3px rgba(0,0,0,.7), 0 1px 0 rgba(201,162,39,.12);}
-  .res svg{width:14px;height:14px;flex:0 0 auto;filter:drop-shadow(0 1px 1px rgba(0,0,0,.5));}
+  .res{display:flex;align-items:center;gap:5px;
+    background:linear-gradient(#191410,#2a2115 60%,#1c1710);
+    border:1px solid #8a6a1a;border-radius:9px;padding:2px 9px 2px 5px;min-width:62px;
+    color:#f7f0dd;font-weight:700;text-shadow:0 1px 1px #000;
+    box-shadow:inset 0 1px 3px rgba(0,0,0,.7), inset 0 0 0 1px rgba(201,162,39,.28),
+      0 1px 2px rgba(0,0,0,.4);}
+  .res svg{width:17px;height:17px;flex:0 0 auto;filter:drop-shadow(0 1px 1px rgba(0,0,0,.6));}
   #ageLbl{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
     font-family:Georgia,"Palatino Linotype",serif;letter-spacing:.1em;
     font-size:13.5px;color:#e5c95c;white-space:nowrap;text-shadow:0 1px 2px #000;}
@@ -51,6 +52,16 @@
   /* ---------- canvas ---------- */
   #viewwrap{flex:1 1 auto;position:relative;overflow:hidden;background:#12160b;}
   #view{position:absolute;inset:0;width:100%;height:100%;touch-action:none;}
+  /* carved frame around the battlefield — pure overlay, steals no pixels and
+     no input (pointer-events none, sits under the HUD overlays at z 3+) */
+  #mapframe{position:absolute;inset:0;pointer-events:none;z-index:2;
+    box-shadow:inset 0 0 0 3px #17130d, inset 0 0 0 4.5px rgba(201,162,39,.55),
+      inset 0 0 22px rgba(0,0,0,.5);
+    background:
+      radial-gradient(circle at 9px 9px,rgba(226,168,84,.95) 2.2px,rgba(0,0,0,0) 3.6px),
+      radial-gradient(circle at calc(100% - 9px) 9px,rgba(226,168,84,.95) 2.2px,rgba(0,0,0,0) 3.6px),
+      radial-gradient(circle at 9px calc(100% - 9px),rgba(226,168,84,.95) 2.2px,rgba(0,0,0,0) 3.6px),
+      radial-gradient(circle at calc(100% - 9px) calc(100% - 9px),rgba(226,168,84,.95) 2.2px,rgba(0,0,0,0) 3.6px);}
   /* 3D renderer (rewrite in progress) — sits exactly over #view; only one of the
      two is visible at a time so they can be compared frame for frame. */
   #view3{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:none;}
@@ -134,7 +145,8 @@
     border:1px solid rgba(199,141,66,.55);border-radius:4px;
     box-shadow:inset 0 1px 0 rgba(255,220,160,.1);}
   #cardName{font-family:Georgia,serif;font-size:11.5px;color:#f0d878;letter-spacing:.05em;text-shadow:0 1px 2px #000;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  #cardPort{width:54px;height:54px;border-radius:2px;}
+  #cardPort{width:54px;height:54px;border-radius:5px;
+    box-shadow:0 0 0 1.5px #100c07, 0 0 0 2.5px rgba(214,162,74,.8), 0 2px 5px rgba(0,0,0,.5);}
   .hpbar{width:62px;height:7px;background:#120d07;border:1px solid #000;border-radius:2px;overflow:hidden;}
   .hpbar i{display:block;height:100%;width:0;background:linear-gradient(#7fce5a,#3f7d26);}
   #hpTxt{font-size:9px;color:#efe2bd;font-variant-numeric:tabular-nums;}
@@ -152,11 +164,12 @@
     background:radial-gradient(circle at 35% 30%,#5c4526,#241a10);
     border:1px solid #c9a227;box-shadow:0 1px 2px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,230,180,.2);}
   #btnRow{grid-area:cmd;display:grid;grid-template-columns:repeat(5,46px);grid-auto-rows:46px;gap:4px;align-content:start;max-height:152px;overflow-y:auto;padding:2px;width:266px;scrollbar-width:thin;}
-  .cmd{position:relative;padding:0;border-radius:3px;overflow:hidden;color:var(--parch);
-    background:linear-gradient(#5a554c,#2e2b25);border:1px solid #15100b;
-    outline:1px solid rgba(199,141,66,.7);outline-offset:-2px;
-    box-shadow:0 1px 2px rgba(0,0,0,.5),
-      inset 1px 1px 0 rgba(255,255,255,.16), inset -1px -1px 0 rgba(0,0,0,.55);
+  .cmd{position:relative;padding:0;border-radius:6px;overflow:hidden;color:var(--parch);
+    background:linear-gradient(#5a554c,#2e2b25);border:1px solid #100c07;
+    outline:1px solid rgba(214,162,74,.85);outline-offset:-3px;
+    box-shadow:0 2px 3px rgba(0,0,0,.55),
+      inset 0 0 0 2px rgba(20,14,8,.9),
+      inset 1px 3px 0 rgba(255,236,190,.18), inset -1px -2px 0 rgba(0,0,0,.6);
     transition:transform .05s ease, outline-color .08s ease;}
   .cmd:hover:not(:disabled){outline-color:#f0d878;}
   .cmd:active:not(:disabled){transform:translateY(1px);
@@ -166,7 +179,7 @@
   .cmd img{display:block;width:100%;height:100%;object-fit:cover;}
   .cmd i{display:block;font-style:normal;font-size:21px;line-height:44px;
     filter:drop-shadow(0 1px 1px rgba(0,0,0,.5));}
-  .cmd b{position:absolute;left:0;right:0;bottom:0;font-size:7.5px;font-weight:600;line-height:1.15;padding:5px 1px 2px;color:#efe2bd;background:linear-gradient(transparent,rgba(0,0,0,.78) 55%);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .cmd b{position:absolute;left:0;right:0;bottom:0;font-size:8px;font-weight:700;line-height:1.15;padding:7px 1px 2.5px;color:#f5ecd4;letter-spacing:.015em;background:linear-gradient(transparent,rgba(8,5,2,.86) 58%);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 1px #000;}
   .cmd .cost{position:absolute;top:1px;left:2px;right:2px;text-align:right;font-size:7px;color:#f2d267;text-shadow:0 1px 1px #000;pointer-events:none;}
   .cmd:disabled{opacity:1;filter:grayscale(.7) brightness(.5);pointer-events:auto;}
   .cmd.txt,.cmd.go,.cmd.warn{grid-column:1/-1;height:32px;font-size:11px;background:linear-gradient(#4a453c,#28251f);border-color:#120d07;}
@@ -279,6 +292,7 @@
   <div id="viewwrap">
     <canvas id="view"></canvas>
     <canvas id="view3"></canvas>
+    <div id="mapframe"></div>
     <canvas id="minimap" width="200" height="116"></canvas>
     <div id="zoomBtns">
       <button id="zin" aria-label="Zoom in">+</button>
@@ -318,6 +332,14 @@
 
 <div class="overlay" id="startOverlay">
   <div class="scroll">
+    <svg viewBox="0 0 64 26" style="width:56px;height:23px;display:block;margin:0 auto -2px" aria-hidden="true">
+      <path d="M6 22 L4 7 L16 14 L26 3 L32 12 L38 3 L48 14 L60 7 L58 22 Z"
+        fill="#c9a227" stroke="#6b4e12" stroke-width="1.6" stroke-linejoin="round"/>
+      <rect x="6" y="20" width="52" height="4" rx="1.5" fill="#a8811c" stroke="#6b4e12" stroke-width="1.2"/>
+      <circle cx="17" cy="15.5" r="1.7" fill="#b54038"/>
+      <circle cx="32" cy="14.5" r="1.9" fill="#3b6fb5"/>
+      <circle cx="47" cy="15.5" r="1.7" fill="#4f7d3a"/>
+    </svg>
     <h1>Tiny <span>Conquerors</span></h1>
     <p class="sub">A pocket-sized age of kings</p>
     <p class="goal"><b>Goal:</b> gather food, wood and gold, advance through four Ages, raise an army, and destroy the enemy <b>Town Hall</b> before they destroy yours.</p>
@@ -7775,10 +7797,29 @@ function portraitFor(kind,type,p){
   if(PORTRAITS[key])return PORTRAITS[key];
   const S=88,c=document.createElement('canvas');c.width=c.height=S;
   const g=c.getContext('2d');
-  const bg=g.createLinearGradient(0,0,0,S);
-  bg.addColorStop(0,'#4c545b');bg.addColorStop(1,'#22262a');
-  g.fillStyle=bg;g.fillRect(0,0,S,S);
-  g.fillStyle='rgba(0,0,0,.28)';g.fillRect(0,S*.72,S,S*.28);
+  /* Painted card backdrops (mobile-game reference art): buildings sit in a
+     little landscape — hazy sky down to a grass ground band — while units get
+     a warm smoky studio dark so team colours carry the tile. One function
+     feeds every button and card in the game, so this is the whole UI's look. */
+  if(kind==='b'||kind==='res'){
+    const bg=g.createLinearGradient(0,0,0,S);
+    bg.addColorStop(0,'#7d98ac');bg.addColorStop(.42,'#b3b492');
+    bg.addColorStop(.58,'#8f9a5c');bg.addColorStop(1,'#55663a');
+    g.fillStyle=bg;g.fillRect(0,0,S,S);
+    g.fillStyle='rgba(255,244,200,.20)';                      // low sun haze
+    g.beginPath();g.ellipse(S*.32,S*.30,S*.34,S*.16,0,0,7);g.fill();
+    g.fillStyle='rgba(28,36,18,.30)';                         // ground shadow
+    g.beginPath();g.ellipse(S/2,S*.86,S*.42,S*.10,0,0,7);g.fill();
+  }else{
+    const bg=g.createRadialGradient(S*.38,S*.30,6,S/2,S*.55,S*.85);
+    bg.addColorStop(0,'#6b6154');bg.addColorStop(.6,'#453c30');bg.addColorStop(1,'#241f18');
+    g.fillStyle=bg;g.fillRect(0,0,S,S);
+    g.fillStyle='rgba(0,0,0,.30)';g.fillRect(0,S*.74,S,S*.26);
+  }
+  // corner vignette so every tile reads as a framed painting
+  const vg=g.createRadialGradient(S/2,S/2,S*.34,S/2,S/2,S*.72);
+  vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(10,8,4,.38)');
+  g.fillStyle=vg;g.fillRect(0,0,S,S);
   if(kind==='u'){
     const fake={type,p,state:'idle',cd:0,carry:0,gatherT:0,face:1};
     const big=!!UNITS[type].cav||type==='ram'||type==='elephant'||!!UNITS[type].siege;
@@ -12280,7 +12321,7 @@ requestAnimationFrame(frame);
 
 <script>
 (function(){
-  var BUILD = 'tq-v38';
+  var BUILD = 'tq-v39';
   addEventListener('load', function(){
     var ov = document.getElementById('startOverlay');
     if (!ov) return;
