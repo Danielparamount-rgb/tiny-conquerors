@@ -10582,17 +10582,22 @@ const R3={
     const vs=`
       attribute vec3 aPos; attribute vec3 aNrm; attribute vec3 aCol;
       attribute vec4 aI0;      // tileX, baseY, tileZ, scaleXZ
-      attribute vec2 aI1;      // scaleY, shade
+      attribute vec3 aI1;      // scaleY, shade, yaw
       uniform mat4 uMVP; uniform vec3 uLight;
       varying vec3 vC;
       void main(){
-        vec3 p=vec3(aPos.x*aI0.w+aI0.x, aPos.y*aI1.x+aI0.y, aPos.z*aI0.w+aI0.z);
+        // per-instance yaw. Without it every pine's 7-gon silhouette lined up
+        // and a forest read as one tree copy-pasted 8,000 times.
+        float cr=cos(aI1.z), sr=sin(aI1.z);
+        vec3 rp=vec3(aPos.x*cr-aPos.z*sr, aPos.y, aPos.x*sr+aPos.z*cr);
+        vec3 rn=vec3(aNrm.x*cr-aNrm.z*sr, aNrm.y, aNrm.x*sr+aNrm.z*cr);
+        vec3 p=vec3(rp.x*aI0.w+aI0.x, rp.y*aI1.x+aI0.y, rp.z*aI0.w+aI0.z);
         gl_Position=uMVP*vec4(p,1.0);
-        float lam=max(0.0,dot(normalize(aNrm),uLight));
+        float lam=max(0.0,dot(normalize(rn),uLight));
         vC=aCol*aI1.y*(0.60+0.52*lam);
       }`;
-    const fs=`precision mediump float; varying vec3 vC;
-      void main(){ gl_FragColor=vec4(vC,1.0); }`;
+    const fs=`precision mediump float; varying vec3 vC; uniform float uAlpha;
+      void main(){ gl_FragColor=vec4(vC,uAlpha); }`;
     const mk=(t,s)=>{const sh=gl.createShader(t);gl.shaderSource(sh,s);gl.compileShader(sh);
       if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS)){console.error(gl.getShaderInfoLog(sh));return null;}return sh;};
     const v=mk(gl.VERTEX_SHADER,vs),f=mk(gl.FRAGMENT_SHADER,fs);
@@ -10602,8 +10607,10 @@ const R3={
     gl.linkProgram(p);
     if(!gl.getProgramParameter(p,gl.LINK_STATUS)){console.error(gl.getProgramInfoLog(p));this.noTrees=true;return false;}
     this.treeProg=p;
-    this.treeLoc={uMVP:gl.getUniformLocation(p,'uMVP'),uLight:gl.getUniformLocation(p,'uLight')};
+    this.treeLoc={uMVP:gl.getUniformLocation(p,'uMVP'),uLight:gl.getUniformLocation(p,'uLight'),
+      uAlpha:gl.getUniformLocation(p,'uAlpha')};
     this.buildTreeMeshes();
+    this.buildShadowMesh();
     this.ivbo=[gl.createBuffer(),gl.createBuffer()];
     this.iCount=[0,0];this.iAll=[0,0];this.treeKey='';this.cullKey='';
     return true;
@@ -10621,8 +10628,11 @@ const R3={
       const sp=(h%3===0)?0:1;
       const rr=10+(h%4)*1.7;
       const hp=(sp?30:34)+(h%4)*2.5;                 // sprite-space height in px
+      // per-instance yaw from a second hash so it does not correlate with the
+      // species/size hash — 0..2π in 32 steps is plenty to kill the clone look
+      const rot=(hash2(r.x*57,r.y*91)%32)*0.19635;
       A[sp].push(r.x+.5, this.groundH(r.x+.5,r.y+.5), r.y+.5, rr/IW,
-                 hp*this.HS/this.treeH[sp], h>=5?0.80:1.0);
+                 hp*this.HS/this.treeH[sp], h>=5?0.80:1.0, rot);
     }
     /* Keep the FULL set on the CPU and size the GPU buffer to match; the visible
        subset is packed into it each time the camera moves (see cullTrees). */
@@ -10631,8 +10641,8 @@ const R3={
     for(let s=0;s<2;s++){
       gl.bindBuffer(gl.ARRAY_BUFFER,this.ivbo[s]);
       gl.bufferData(gl.ARRAY_BUFFER,this.treeAll[s],gl.DYNAMIC_DRAW);
-      this.iCount[s]=A[s].length/6;
-      this.iAll[s]=A[s].length/6;
+      this.iCount[s]=A[s].length/7;
+      this.iAll[s]=A[s].length/7;
     }
     this.treeKey=MAP+':'+elevVer+':'+resGen+':'+resVer;
     this.cullKey='';                       // force a re-cull against the new set
@@ -10651,37 +10661,40 @@ const R3={
   cullTrees(){
     if(!this.treeAll)return;
     const B=this.basis();
+    // fogVer is in the key so newly explored ground re-culls exactly when the
+    // fog canvas updates — the trees appear in the same frame the fog lifts.
     const key=this.yaw+','+this.pitch+','+G.cam.x+','+G.cam.y+','+G.cam.z+','+vw+','+vh
-             +','+this.treeKey+','+this.dbg.cull;
+             +','+this.treeKey+','+this.dbg.cull+','+fogVer;
     if(key===this.cullKey)return;
     this.cullKey=key;
     const gl=this.gl;
-    if(!this.dbg.cull){                     // A/B switch: draw everything
-      for(let s=0;s<2;s++){
-        gl.bindBuffer(gl.ARRAY_BUFFER,this.ivbo[s]);
-        gl.bufferSubData(gl.ARRAY_BUFFER,0,this.treeAll[s]);
-        this.iCount[s]=this.iAll[s];
-      }
-      return;
-    }
     const M=2.5;
     const hw=vw/G.cam.z/(2*this.PPT)+M, hh=vh/G.cam.z/(2*this.PPT)+M;
+    const vis=G.vis,fr=this.dbg.cull;      // dbg.cull=0 now skips ONLY the frustum test
     for(let s=0;s<2;s++){
       const src=this.treeAll[s],dst=this.treeVis[s];
       let o=0;
-      for(let i=0;i<src.length;i+=6){
-        const wx=src[i]-B.tx, wy=src[i+1], wz=src[i+2]-B.tz;
-        const sx=wx*B.rx+wz*B.rz;
-        if(sx<-hw||sx>hw)continue;
-        const sy=wx*B.ux+wy*B.uy+wz*B.uz;
-        if(sy<-hh||sy>hh)continue;
+      for(let i=0;i<src.length;i+=7){
+        /* Explored gate. 2D never draws a resource on an unexplored tile, and
+           the unexplored fog is alpha 208 — NOT opaque — so without this the
+           entire Black Forest layout leaked faintly through the dark. That is
+           scouting information the player has not earned. */
+        const tX=(src[i]-.5)|0, tZ=(src[i+2]-.5)|0;
+        if(!vis[tZ*MAP+tX])continue;
+        if(fr){
+          const wx=src[i]-B.tx, wy=src[i+1], wz=src[i+2]-B.tz;
+          const sx=wx*B.rx+wz*B.rz;
+          if(sx<-hw||sx>hw)continue;
+          const sy=wx*B.ux+wy*B.uy+wz*B.uz;
+          if(sy<-hh||sy>hh)continue;
+        }
         dst[o]=src[i];dst[o+1]=src[i+1];dst[o+2]=src[i+2];
-        dst[o+3]=src[i+3];dst[o+4]=src[i+4];dst[o+5]=src[i+5];
-        o+=6;
+        dst[o+3]=src[i+3];dst[o+4]=src[i+4];dst[o+5]=src[i+5];dst[o+6]=src[i+6];
+        o+=7;
       }
       gl.bindBuffer(gl.ARRAY_BUFFER,this.ivbo[s]);
       gl.bufferSubData(gl.ARRAY_BUFFER,0,dst.subarray(0,o));
-      this.iCount[s]=o/6;
+      this.iCount[s]=o/7;
     }
   },
   drawTrees(mvp){
@@ -10694,6 +10707,7 @@ const R3={
     gl.useProgram(this.treeProg);
     gl.uniformMatrix4fv(this.treeLoc.uMVP,false,mvp);
     gl.uniform3f(this.treeLoc.uLight,-0.46,0.80,-0.38);   // key light from the NW
+    gl.uniform1f(this.treeLoc.uAlpha,1.0);
     gl.bindBuffer(gl.ARRAY_BUFFER,this.tvbo);
     for(let i=0;i<3;i++){gl.enableVertexAttribArray(i);
       gl.vertexAttribPointer(i,3,gl.FLOAT,false,36,i*12);ex.vertexAttribDivisorANGLE(i,0);}
@@ -10701,9 +10715,9 @@ const R3={
     for(let s=0;s<2;s++){
       if(!this.iCount[s])continue;
       gl.bindBuffer(gl.ARRAY_BUFFER,this.ivbo[s]);
-      gl.enableVertexAttribArray(3);gl.vertexAttribPointer(3,4,gl.FLOAT,false,24,0);
+      gl.enableVertexAttribArray(3);gl.vertexAttribPointer(3,4,gl.FLOAT,false,28,0);
       ex.vertexAttribDivisorANGLE(3,1);
-      gl.enableVertexAttribArray(4);gl.vertexAttribPointer(4,2,gl.FLOAT,false,24,16);
+      gl.enableVertexAttribArray(4);gl.vertexAttribPointer(4,3,gl.FLOAT,false,28,16);
       ex.vertexAttribDivisorANGLE(4,1);
       ex.drawElementsInstancedANGLE(gl.TRIANGLES,this.treeCnt[s],gl.UNSIGNED_SHORT,
         this.treeOff[s]*2,this.iCount[s]);
@@ -10712,6 +10726,69 @@ const R3={
     // ground pass read one vertex for the whole terrain next frame.
     ex.vertexAttribDivisorANGLE(3,0);ex.vertexAttribDivisorANGLE(4,0);
     gl.disableVertexAttribArray(3);gl.disableVertexAttribArray(4);
+  },
+  /* ---- cast shadows --------------------------------------------------------
+     A dark disc under every unit and building, drawn instanced through the
+     tree shader with uAlpha — the cheapest thing that stops entities floating
+     on uniformly lit ground. The disc is baked with a SE offset (light is from
+     the NW, matching both uLight and the 2D art's sprite shadows), and the
+     offset is in MESH space, so it scales with the instance radius the way a
+     longer shadow under a bigger thing should. Trees are deliberately NOT
+     here: refreshTerrain already darkens the forest floor under every wood
+     tile, and 8,000 blended discs would be real mobile fill-rate for a hint
+     the texture already provides. */
+  buildShadowMesh(){
+    const V=[],I=[],c=[0.07,0.06,0.035],seg=16;
+    const push=(x,z)=>{V.push(x+0.11,0.0,z+0.11, 0,1,0, c[0],c[1],c[2]);return V.length/9-1;};
+    const c0=push(0,0);
+    for(let i=0;i<=seg;i++){const a=i/seg*6.283;push(Math.cos(a),Math.sin(a));}
+    for(let i=0;i<seg;i++)I.push(c0,c0+1+i,c0+2+i);
+    const gl=this.gl;
+    this.shvbo=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,this.shvbo);
+    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(V),gl.STATIC_DRAW);
+    this.shibo=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.shibo);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(I),gl.STATIC_DRAW);
+    this.shCount=I.length;
+    this.shIvbo=gl.createBuffer();
+  },
+  drawShadows(mvp){
+    if(this.noTrees)return;
+    if(!this.treeProg&&!this.initTrees())return;
+    const gl=this.gl,ex=this.iext;
+    const A=[];
+    for(const u of G.units){
+      if(!allied(u.p,localP)&&!tileVis(u.x,u.y))continue;
+      const d=UNITS[u.type]||{};
+      let r=d.animal?0.20:d.ship?0.50:(d.siege||u.type==='ram')?0.34:d.cav?0.30:0.22;
+      if(u.type==='elephant')r=0.48; else if(u.type==='warwagon')r=0.38;
+      A.push(u.x, this.groundH(u.x,u.y)+0.012, u.y, r, 1,1,0);
+    }
+    for(const b of G.blds){
+      if(!allied(b.p,localP)&&!b.seen)continue;
+      const cx=b.tx+b.size/2,cz=b.ty+b.size/2;
+      A.push(cx, this.groundH(cx,cz)+0.010, cz, b.size*0.60, 1,1,0);
+    }
+    if(!A.length)return;
+    gl.useProgram(this.treeProg);
+    gl.uniformMatrix4fv(this.treeLoc.uMVP,false,mvp);
+    gl.uniform3f(this.treeLoc.uLight,0.0,1.0,0.0);  // flat term — the disc IS the shadow
+    gl.uniform1f(this.treeLoc.uAlpha,0.34);
+    gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+    gl.depthMask(false);                            // darken the ground, never occlude it
+    gl.bindBuffer(gl.ARRAY_BUFFER,this.shvbo);
+    for(let i=0;i<3;i++){gl.enableVertexAttribArray(i);
+      gl.vertexAttribPointer(i,3,gl.FLOAT,false,36,i*12);ex.vertexAttribDivisorANGLE(i,0);}
+    gl.bindBuffer(gl.ARRAY_BUFFER,this.shIvbo);
+    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(A),gl.DYNAMIC_DRAW);
+    gl.enableVertexAttribArray(3);gl.vertexAttribPointer(3,4,gl.FLOAT,false,28,0);
+    ex.vertexAttribDivisorANGLE(3,1);
+    gl.enableVertexAttribArray(4);gl.vertexAttribPointer(4,3,gl.FLOAT,false,28,16);
+    ex.vertexAttribDivisorANGLE(4,1);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.shibo);
+    ex.drawElementsInstancedANGLE(gl.TRIANGLES,this.shCount,gl.UNSIGNED_SHORT,0,A.length/7);
+    ex.vertexAttribDivisorANGLE(3,0);ex.vertexAttribDivisorANGLE(4,0);
+    gl.disableVertexAttribArray(3);gl.disableVertexAttribArray(4);
+    gl.depthMask(true);gl.disable(gl.BLEND);
   },
   /* ---- buildings as real geometry -----------------------------------------
      A massing table rather than 20 hand-modelled meshes: every building is a
@@ -10800,7 +10877,12 @@ const R3={
     const wall=(A,R,U,col,style,seed,openings)=>{
       panel(A,R,U,0,0,1,1,0,shade(col,0.55));            // mortar / backing
       const H=Math.hypot(U[0],U[1],U[2]),W=Math.hypot(R[0],R[1],R[2]);
-      if(style==='plank'){
+      if(style==='solid'){
+        // one clean face — banners and other blocks that must read as pure
+        // colour. The default stone branch put moss on the bottom course of
+        // every team banner (undefined seed -> hash2(NaN) -> 0 -> mossy).
+        panel(A,R,U,0,0,1,1,REL,col);
+      }else if(style==='plank'){
         const n=Math.max(3,Math.round(W/0.13));
         for(let i=0;i<n;i++){
           const t=(hash2(seed+i*17,3)%5)/5;
@@ -10959,7 +11041,7 @@ const R3={
         const tc2=teamColor(b.p);
         const tcv=hex(tc2.length===7?tc2:'#3b7bd4');
         const cx=(x0+x1)/2,cz=(z0+z1)/2,bw=s*.07;
-        box(cx-bw,cz-bw,cx+bw,cz+bw,g+H,g+H+H*.22,tcv);
+        box(cx-bw,cz-bw,cx+bw,cz+bw,g+H,g+H+H*.22,tcv,'solid',b.id,null);
       }
       n++;
     }
@@ -10967,17 +11049,22 @@ const R3={
     if(!this.bvbo){this.bvbo=gl.createBuffer();this.bibo=gl.createBuffer();
       this.bIdent=gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER,this.bIdent);
-      gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([0,0,0,1, 1,1]),gl.STATIC_DRAW);}
+      // identity instance for the tree shader: pos 0, scale 1, shade 1, yaw 0.
+      // 7 floats — MUST match the tree instance stride or buildings shear.
+      gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([0,0,0,1, 1,1,0]),gl.STATIC_DRAW);}
     gl.bindBuffer(gl.ARRAY_BUFFER,this.bvbo);
     gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(V),gl.DYNAMIC_DRAW);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.bibo);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(I),gl.DYNAMIC_DRAW);
     this.bCount=I.length;this.bldN=n;this.bldKey=this.bldSig();
   },
-  // cheap per-frame signature: buildings are tens, not thousands
+  // cheap per-frame signature: buildings are tens, not thousands.
+  // b.seen is in the hash because buildBlds FILTERS on it — without the term,
+  // scouting an enemy building changed nothing here and the building stayed
+  // invisible in 3D until some unrelated construction forced a rebuild.
   bldSig(){
     let h=G.blds.length*2654435761;
-    for(const b of G.blds)h=(h^(b.id*31+(b.built?7:(b.prog*20)|0)+b.p*3))>>>0;
+    for(const b of G.blds)h=(h^(b.id*31+(b.built?7:(b.prog*20)|0)+b.p*3+(b.seen?13:0)))>>>0;
     return h+':'+MAP+':'+elevVer;
   },
   drawBlds(mvp){
@@ -10989,13 +11076,14 @@ const R3={
     gl.useProgram(this.treeProg);
     gl.uniformMatrix4fv(this.treeLoc.uMVP,false,mvp);
     gl.uniform3f(this.treeLoc.uLight,-0.46,0.80,-0.38);
+    gl.uniform1f(this.treeLoc.uAlpha,1.0);
     gl.bindBuffer(gl.ARRAY_BUFFER,this.bvbo);
     for(let i=0;i<3;i++){gl.enableVertexAttribArray(i);
       gl.vertexAttribPointer(i,3,gl.FLOAT,false,36,i*12);ex.vertexAttribDivisorANGLE(i,0);}
     gl.bindBuffer(gl.ARRAY_BUFFER,this.bIdent);
-    gl.enableVertexAttribArray(3);gl.vertexAttribPointer(3,4,gl.FLOAT,false,24,0);
+    gl.enableVertexAttribArray(3);gl.vertexAttribPointer(3,4,gl.FLOAT,false,28,0);
     ex.vertexAttribDivisorANGLE(3,1);
-    gl.enableVertexAttribArray(4);gl.vertexAttribPointer(4,2,gl.FLOAT,false,24,16);
+    gl.enableVertexAttribArray(4);gl.vertexAttribPointer(4,3,gl.FLOAT,false,28,16);
     ex.vertexAttribDivisorANGLE(4,1);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.bibo);
     ex.drawElementsInstancedANGLE(gl.TRIANGLES,this.bCount,gl.UNSIGNED_SHORT,0,1);
@@ -11011,13 +11099,34 @@ const R3={
      because units move every frame, which is ~44 bytes x unit count.
      Team colour rides a per-vertex flag, so the tabard and the horse caparison
      take the player colour while skin, timber and steel do not. */
-  U_MAN:0,U_CAV:1,U_SIEGE:2,U_SHIP:3,U_BEAST:4,
+  /* 22 archetypes, one instanced draw call each (only those with instances
+     present actually draw — a typical scene runs 6-10 calls). The flag-based
+     fallback exists so a future unit type added to UNITS renders as SOMETHING
+     sensible before anyone thinks about its mesh. */
+  ARCHN:22,
+  UARCH:{
+    villager:4, militia:0, spearman:1, archer:2, skirmisher:1, scout:6, knight:6,
+    ram:10, petard:0, scorpion:13, mangonel:12, treb:11, bombard:14, handcannon:3,
+    monk:5, missionary:6, longbow:2, axeman:0, berserker:0, mangudai:7, teuton:0,
+    woad:0, cataphract:6, mameluke:7, huskarl:0, chukonu:2, elephant:8, janissary:3,
+    samurai:0, jaguar:0, eagle:0, plumed:2, warwagon:9, conquistador:7, tarkan:6,
+    fishing:15, cog:16, transport:16, galley:17, fireship:17, demo:16, longboat:17,
+    turtle:18, cannongalleon:17, sheep:19, deer:20, boar:21,
+  },
+  /* attack-swing damping per archetype: 1 = full 51° chop (melee, treb throw,
+     mangonel fling), small = recoil kick (guns, bolt throwers), 0 = the part
+     scheme has nothing sensible to swing (monks, ships, most beasts). */
+  ATKF:[1,1,.7,.35,1,0, .9,.7,.8,0, 1,1,1,.3,.3, 0,0,0,.25, 0,0,0],
   unitArch(t){
+    if(this.UARCH[t]!==undefined)return this.UARCH[t];
     const d=UNITS[t]||{};
-    if(d.animal)return 4;
-    if(d.ship)return 3;
-    if(d.siege||t==='ram'||t==='treb'||t==='bombard'||t==='scorpion'||t==='mangonel')return 2;
-    if(d.cav)return 1;
+    if(d.animal)return 21;
+    if(d.ship)return 17;
+    if(d.siege)return 12;
+    if(d.cav)return d.ranged?7:6;
+    if(d.monk)return 5;
+    if(d.gun)return 3;
+    if(d.ranged)return 2;
     return 0;
   },
   buildUnitMeshes(){
@@ -11044,64 +11153,265 @@ const R3={
       q([x0,y0,z1],[x1,y0,z1],[x1,y0,z0],[x0,y0,z0],col,part,team);
     };
     const SKIN=hex('#e0b78e'),CLOTH=hex('#8a7a5e'),STEEL=hex('#b9bec4'),
-          WOOD=hex('#6b4a2a'),DARK=hex('#3a2d1e'),HIDE=hex('#7d6a4e'),CANV=hex('#e6dcc2');
+          WOOD=hex('#6b4a2a'),DARK=hex('#3a2d1e'),HIDE=hex('#7d6a4e'),CANV=hex('#e6dcc2'),
+          IRON=hex('#6b7078'),TUSK=hex('#e8e2d2'),WOOL=hex('#e3dcc6'),TAN=hex('#b08a5c'),
+          GREY=hex('#8a8578'),BOARC=hex('#523d29'),DECK=hex('#8a6a42');
     const mark=()=>off.push(I.length);
     const seal=i=>cnt.push(I.length-off[i]);
-    // ---- 0 MAN: hip 0.26, shoulder 0.46 ----
+    /* Part scheme (fixed by the shader — reread it before adding parts):
+       2/3 legs/wheels swing ±0.55·s about pivot hip; 4/5 arms/oars ±0.32·s
+       about pivot shoulder; 6 = weapon arm, −0.32·s and the attack swing;
+       0/1 static (1 exists so heads/necks can be excluded from future work).
+       All units face +x; hdg rotates the whole instance. */
+    // shared human body: legs, team torso, head, off-arm. Weapon side is per-type.
+    const man=(shield)=>{
+      bx(-.04,0,-.10,.04,.28,-.02,DARK,2);          // left leg
+      bx(-.04,0,.02,.04,.28,.10,DARK,3);            // right leg
+      bx(-.085,.27,-.11,.085,.50,.11,CLOTH,0,1);    // torso — team tabard
+      bx(-.06,.50,-.06,.06,.64,.06,SKIN,1);         // head
+      bx(-.05,.30,-.165,.05,.49,-.10,CLOTH,4,1);    // off arm
+      if(shield)bx(-.005,.28,-.225,.055,.47,-.16,CLOTH,4,1);  // round-ish shield, team face
+      bx(-.05,.30,.10,.05,.49,.165,CLOTH,6,1);      // weapon arm — swings WITH the weapon
+    };
+    // ---- 0 SWORDSMAN (militia line, UU infantry, petard) — hip .27 shoulder .47
     mark();
-    bx(-.035,0,-.10,.035,.27,-.02,DARK,2);        // left leg
-    bx(-.035,0,.02,.035,.27,.10,DARK,3);          // right leg
-    bx(-.075,.26,-.10,.075,.48,.10,CLOTH,0,1);    // torso — team tabard
-    bx(-.055,.48,-.055,.055,.61,.055,SKIN,1);     // head
-    bx(-.045,.28,-.155,.045,.47,-.09,CLOTH,4,1);  // left arm
-    bx(-.045,.28,.09,.045,.47,.155,CLOTH,5,1);    // right arm (weapon side)
-    bx(-.02,.30,.115,.30,.345,.145,STEEL,6);      // weapon, held forward
-    seal(0);
-    piv.push([.26,.46]);
-    // ---- 1 CAVALRY: rider legs are static, horse legs swing ----
+    man(true);
+    bx(-.065,.585,-.065,.065,.67,.065,STEEL,1);     // helm
+    bx(-.012,.44,.115,.012,.72,.145,STEEL,6);       // blade, upright at rest
+    bx(-.035,.42,.105,.035,.45,.155,WOOD,6);        // crossguard
+    seal(0);piv.push([.27,.47]);
+    // ---- 1 SPEARMAN (spear/skirmisher) — kettle hat, tall pike
     mark();
-    bx(-.05,0,-.14,.02,.24,-.08,DARK,2);          // fore/hind legs, paired
-    bx(-.05,0,.08,.02,.24,.14,DARK,3);
-    bx(.16,0,-.14,.23,.24,-.08,DARK,3);
-    bx(.16,0,.08,.23,.24,.14,DARK,2);
-    bx(-.10,.22,-.11,.28,.44,.11,HIDE,0,1);       // barrel + caparison
-    bx(.26,.34,-.06,.36,.56,.06,HIDE,1);          // neck
-    bx(.32,.48,-.055,.46,.60,.055,HIDE,1);        // head
-    bx(-.055,.42,-.09,.055,.62,.09,CLOTH,0,1);    // rider torso
-    bx(-.04,.62,-.04,.04,.74,.04,SKIN,1);         // rider head
-    bx(-.03,.44,.09,.03,.60,.14,CLOTH,5,1);       // rider arm
-    bx(-.01,.46,.11,.26,.485,.135,STEEL,6);       // lance
-    seal(1);
-    piv.push([.24,.52]);
-    // ---- 2 SIEGE: cart, wheels spin with the walk phase ----
+    man(true);
+    bx(-.075,.60,-.075,.075,.635,.075,STEEL,1);     // kettle brim
+    bx(-.012,.30,.118,.012,.98,.142,WOOD,6);        // shaft
+    bx(-.02,.96,.112,.02,1.06,.148,STEEL,6);        // spearhead
+    seal(1);piv.push([.27,.47]);
+    // ---- 2 BOWMAN (archer line) — bow held in the swing arm, quiver on the back
     mark();
-    bx(-.24,.10,-.16,.24,.30,.16,WOOD,0);         // chassis
-    bx(-.20,.30,-.05,.30,.36,.05,WOOD,6);         // beam / arm
-    bx(-.26,0,-.20,-.10,.22,-.14,DARK,2);         // wheels as blocks
-    bx(-.26,0,.14,-.10,.22,.20,DARK,3);
-    bx(.10,0,-.20,.26,.22,-.14,DARK,3);
-    bx(.10,0,.14,.26,.22,.20,DARK,2);
-    bx(-.05,.34,-.05,.05,.46,.05,CLOTH,1,1);      // crew
-    seal(2);
-    piv.push([.11,.30]);
-    // ---- 3 SHIP ----
+    man(false);
+    bx(-.105,.34,-.03,-.062,.55,.03,WOOD,0);        // quiver
+    bx(.115,.30,.122,.135,.44,.142,WOOD,6);         // bow: three slats fake the curve
+    bx(.125,.44,.122,.145,.55,.142,WOOD,6);
+    bx(.115,.55,.122,.135,.69,.142,WOOD,6);
+    bx(.108,.31,.128,.114,.68,.136,CANV,6);         // string
+    seal(2);piv.push([.27,.47]);
+    // ---- 3 GUNNER (hand cannoneer, janissary) — iron tube held level
     mark();
-    bx(-.40,0,-.15,.40,.16,.15,WOOD,0);           // hull
-    bx(-.30,.16,-.11,.34,.22,.11,WOOD,0);         // deck
-    bx(-.02,.22,-.02,.02,.62,.02,WOOD,1);         // mast
-    bx(-.012,.30,-.20,.012,.60,.20,CANV,6,1);     // sail — team colour
-    seal(3);
-    piv.push([.16,.30]);
-    // ---- 4 BEAST ----
+    man(false);
+    bx(-.065,.585,-.065,.065,.66,.065,IRON,1);      // iron cap
+    bx(-.05,.42,.112,.02,.475,.148,WOOD,6);         // stock
+    bx(.02,.44,.115,.30,.495,.145,IRON,6);          // barrel
+    seal(3);piv.push([.27,.47]);
+    // ---- 4 VILLAGER — axe/tool over the shoulder
     mark();
-    bx(-.16,.14,-.09,.18,.32,.09,HIDE,0);         // barrel
-    bx(-.13,0,-.09,-.07,.16,-.03,DARK,2);
-    bx(-.13,0,.03,-.07,.16,.09,DARK,3);
-    bx(.11,0,-.09,.17,.16,-.03,DARK,3);
-    bx(.11,0,.03,.17,.16,.09,DARK,2);
-    bx(.17,.20,-.055,.28,.32,.055,HIDE,1);        // head
-    seal(4);
-    piv.push([.15,.26]);
+    man(false);
+    bx(-.012,.32,.118,.012,.64,.142,WOOD,6);        // haft
+    bx(-.035,.60,.11,.035,.65,.15,STEEL,6);         // axe head
+    seal(4);piv.push([.27,.47]);
+    // ---- 5 MONK — full robe, team sash, no weapon
+    mark();
+    bx(-.09,.02,-.10,.09,.52,.10,CLOTH,0);          // robe, floor length
+    bx(-.093,.22,-.035,.093,.32,.035,CLOTH,0,1);    // team sash
+    bx(-.055,.52,-.055,.055,.66,.055,SKIN,1);       // head
+    bx(-.07,.60,-.065,.07,.67,.065,CLOTH,1);        // hood back
+    bx(-.045,.30,-.145,.045,.46,-.095,CLOTH,4);     // sleeves
+    bx(-.045,.30,.095,.045,.46,.145,CLOTH,5);
+    seal(5);piv.push([.26,.44]);
+    // shared horse: diagonal leg pairs, hide barrel, team caparison, neck+head
+    const horse=()=>{
+      bx(.14,0,-.10,.20,.28,-.04,DARK,2);
+      bx(.14,0,.04,.20,.28,.10,DARK,3);
+      bx(-.20,0,-.10,-.14,.28,-.04,DARK,3);
+      bx(-.20,0,.04,-.14,.28,.10,DARK,2);
+      bx(-.24,.26,-.11,.22,.48,.11,HIDE,0);         // barrel
+      bx(-.25,.31,-.12,.23,.44,.12,CLOTH,0,1);      // caparison drape — team
+      bx(-.31,.32,-.02,-.24,.46,.02,DARK,0);        // tail
+      bx(.18,.42,-.05,.30,.64,.05,HIDE,1);          // neck
+      bx(.28,.54,-.045,.42,.64,.045,HIDE,1);        // head
+      bx(.40,.54,-.035,.455,.60,.035,DARK,1);       // muzzle
+      bx(-.02,.34,-.135,.06,.48,-.105,CLOTH,0,1);   // rider legs against the flanks
+      bx(-.02,.34,.105,.06,.48,.135,CLOTH,0,1);
+      bx(-.05,.48,-.075,.07,.68,.075,CLOTH,0,1);    // rider torso
+      bx(-.03,.68,-.045,.05,.80,.045,SKIN,1);       // rider head
+    };
+    // ---- 6 CAVALRY (scout/knight line, UU cavalry) — couched lance
+    mark();
+    horse();
+    bx(-.035,.755,-.05,.055,.815,.05,STEEL,1);      // helm
+    bx(-.06,.57,.105,.50,.595,.13,WOOD,6);          // lance
+    bx(.50,.562,.10,.585,.60,.135,STEEL,6);         // point
+    seal(6);piv.push([.26,.55]);
+    // ---- 7 CAVALRY ARCHER (mangudai, conquistador, mameluke) — bow at the knee
+    mark();
+    horse();
+    bx(.10,.50,.115,.13,.62,.135,WOOD,6);           // compact bow, three slats
+    bx(.115,.62,.115,.14,.72,.135,WOOD,6);
+    bx(.10,.72,.115,.125,.82,.135,WOOD,6);
+    bx(.105,.51,.121,.111,.81,.129,CANV,6);         // string
+    seal(7);piv.push([.26,.55]);
+    // ---- 8 ELEPHANT — grey mass, trunk, tusks, team howdah
+    mark();
+    bx(-.26,0,-.14,-.14,.32,-.04,GREY,2);
+    bx(-.26,0,.04,-.14,.32,.14,GREY,3);
+    bx(.12,0,-.14,.24,.32,-.04,GREY,3);
+    bx(.12,0,.04,.24,.32,.14,GREY,2);
+    bx(-.30,.30,-.17,.28,.64,.17,GREY,0);           // body
+    bx(.26,.44,-.11,.44,.64,.11,GREY,1);            // head
+    bx(.42,.14,-.035,.50,.48,.035,GREY,1);          // trunk
+    bx(.42,.32,-.095,.56,.355,-.058,TUSK,1);        // tusks
+    bx(.42,.32,.058,.56,.355,.095,TUSK,1);
+    bx(.25,.50,-.21,.33,.63,-.165,GREY,1);          // ears
+    bx(.25,.50,.165,.33,.63,.21,GREY,1);
+    bx(-.14,.62,-.12,.10,.78,.12,CLOTH,0,1);        // howdah — team
+    bx(-.045,.78,-.04,.035,.88,.04,SKIN,1);         // mahout
+    seal(8);piv.push([.30,.60]);
+    // ---- 9 WAR WAGON — armoured team cabin, draught horse
+    mark();
+    bx(-.30,0,-.19,-.12,.24,-.13,DARK,2);
+    bx(-.30,0,.13,-.12,.24,.19,DARK,3);
+    bx(.02,0,-.19,.20,.24,-.13,DARK,3);
+    bx(.02,0,.13,.20,.24,.19,DARK,2);
+    bx(-.34,.20,-.16,.26,.34,.16,WOOD,0);           // bed
+    bx(-.32,.34,-.15,.24,.58,.15,CLOTH,0,1);        // armoured cabin — team panels
+    bx(-.35,.58,-.17,.27,.65,.17,WOOD,0);           // roof
+    bx(.24,.40,-.06,.255,.52,.06,DARK,0);           // arrow slit
+    bx(.30,.24,-.08,.48,.44,.08,HIDE,0);            // draught horse
+    bx(.44,.40,-.04,.54,.58,.04,HIDE,1);            // its neck+head
+    bx(.34,0,-.075,.40,.26,-.025,DARK,2);
+    bx(.34,0,.025,.40,.26,.075,DARK,3);
+    seal(9);piv.push([.14,.40]);
+    // ---- 10 RAM — hide-skinned shed, the log itself batters (part 6)
+    mark();
+    bx(-.30,0,-.20,-.16,.22,-.14,DARK,2);
+    bx(-.30,0,.14,-.16,.22,.20,DARK,3);
+    bx(.14,0,-.20,.28,.22,-.14,DARK,3);
+    bx(.14,0,.14,.28,.22,.20,DARK,2);
+    bx(-.32,.22,-.20,.32,.42,-.13,HIDE,0);          // hide skirts
+    bx(-.32,.22,.13,.32,.42,.20,HIDE,0);
+    bx(-.34,.42,-.15,.34,.50,.15,WOOD,0);           // roof plank
+    bx(-.38,.26,-.045,.44,.345,.045,DARK,6);        // the log
+    bx(.44,.25,-.05,.51,.355,.05,IRON,6);           // iron head
+    seal(10);piv.push([.12,.30]);
+    // ---- 11 TREBUCHET — arm cocked upright, hurls forward on attack
+    mark();
+    bx(-.34,0,-.18,.34,.07,-.10,WOOD,0);            // skids
+    bx(-.34,0,.10,.34,.07,.18,WOOD,0);
+    bx(-.30,.07,-.14,.30,.15,.14,WOOD,0);           // base
+    bx(-.05,.15,-.145,.05,.585,-.085,WOOD,0);       // A-frame
+    bx(-.05,.15,.085,.05,.585,.145,WOOD,0);
+    bx(-.04,.53,-.10,.04,.60,.10,DARK,0);           // axle
+    bx(-.028,.30,-.028,.028,1.06,.028,WOOD,6);      // throwing arm
+    bx(-.105,.22,-.09,.105,.40,.09,IRON,6);         // counterweight
+    bx(-.055,1.03,-.045,.055,1.11,.045,CANV,6);     // sling pouch
+    seal(11);piv.push([.12,.565]);
+    // ---- 12 MANGONEL — bowl arm flings from a low pivot
+    mark();
+    bx(-.10,0,-.17,.06,.20,-.11,DARK,2);
+    bx(-.10,0,.11,.06,.20,.17,DARK,3);
+    bx(-.22,.10,-.15,.22,.20,.15,WOOD,0);           // chassis
+    bx(-.16,.20,-.145,.16,.36,-.095,WOOD,0);        // frame sides
+    bx(-.16,.20,.095,.16,.36,.145,WOOD,0);
+    bx(-.03,.14,-.028,.03,.62,.028,WOOD,6);         // arm
+    bx(-.08,.60,-.075,.08,.68,.075,DARK,6);         // bowl
+    seal(12);piv.push([.12,.24]);
+    // ---- 13 SCORPION — crossbow bed, bolt dips on release
+    mark();
+    bx(-.06,0,-.17,.10,.20,-.11,DARK,2);
+    bx(-.06,0,.11,.10,.20,.17,DARK,3);
+    bx(-.26,.12,-.10,.26,.21,.10,WOOD,0);           // bed
+    bx(.14,.21,-.23,.23,.27,-.02,WOOD,0);           // bow arms, flared
+    bx(.14,.21,.02,.23,.27,.23,WOOD,0);
+    bx(-.12,.215,-.016,.32,.245,.016,DARK,6);       // bolt
+    seal(13);piv.push([.12,.23]);
+    // ---- 14 BOMBARD — barrel kicks at the trunnion on fire
+    mark();
+    bx(-.22,0,-.17,-.06,.20,-.11,DARK,2);
+    bx(-.22,0,.11,-.06,.20,.17,DARK,3);
+    bx(.04,0,-.17,.20,.20,-.11,DARK,3);
+    bx(.04,0,.11,.20,.20,.17,DARK,2);
+    bx(-.20,.12,-.12,.20,.24,.12,WOOD,0);           // carriage
+    bx(-.14,.26,-.058,.34,.35,.058,IRON,6);         // barrel
+    bx(.34,.245,-.065,.385,.365,.065,DARK,6);       // muzzle ring
+    seal(14);piv.push([.12,.30]);
+    // ---- 15 FISHING BOAT — open hull, fisher with a rod
+    mark();
+    bx(-.28,-.03,-.12,.28,.13,.12,WOOD,0);          // hull, sitting in the water
+    bx(-.22,.11,-.08,.22,.14,.08,DARK,0);           // open interior
+    bx(.26,.10,-.03,.32,.24,.03,WOOD,0);            // bow post
+    bx(-.32,.10,-.03,-.26,.22,.03,WOOD,0);
+    bx(-.06,.13,-.05,.06,.32,.05,CLOTH,0,1);        // fisher — team shirt
+    bx(-.04,.32,-.035,.04,.42,.035,SKIN,1);
+    bx(.0,.22,.03,.34,.245,.05,WOOD,6);             // rod
+    seal(15);piv.push([.10,.24]);
+    // ---- 16 ROUND SHIP (cog / transport / demo) — tubby trader
+    mark();
+    bx(-.34,-.04,-.17,.34,.17,.17,WOOD,0);          // fat hull
+    bx(-.36,.17,-.19,.36,.25,.19,WOOD,0);           // bulwark
+    bx(-.30,.235,-.14,.30,.255,.14,DECK,0);         // deck
+    bx(.10,.25,-.09,.24,.37,.05,WOOD,0);            // cargo
+    bx(-.22,.25,-.02,-.10,.34,.10,DARK,0);
+    bx(-.03,.25,-.03,.03,.80,.03,WOOD,1);           // mast
+    bx(-.02,.44,-.17,.02,.74,.17,CANV,0,1);         // team sail, static
+    seal(16);piv.push([.12,.30]);
+    // ---- 17 WARSHIP (galley line) — ram prow, shield row, oars that row
+    mark();
+    bx(-.44,-.03,-.13,.40,.15,.13,WOOD,0);          // long hull
+    bx(.40,.0,-.05,.53,.09,.05,IRON,0);             // ram
+    bx(-.42,.15,-.10,-.27,.31,.10,WOOD,0);          // stern castle
+    bx(-.26,.15,-.155,.24,.235,-.125,CLOTH,0,1);    // shield rows — team
+    bx(-.26,.15,.125,.24,.235,.155,CLOTH,0,1);
+    bx(-.03,.15,-.03,.03,.88,.03,WOOD,1);           // mast
+    bx(-.02,.42,-.24,.02,.82,.24,CANV,0,1);         // big team sail
+    bx(-.20,.07,-.31,.16,.10,-.14,WOOD,4);          // port oar bank — rows
+    bx(-.20,.07,.14,.16,.10,.31,WOOD,5);            // starboard bank
+    seal(17);piv.push([.12,.24]);
+    // ---- 18 TURTLE SHIP — iron carapace, spiked ridge, dragon prow
+    mark();
+    bx(-.36,-.02,-.15,.36,.13,.15,WOOD,0);
+    bx(-.34,.13,-.14,.34,.25,.14,IRON,0);           // carapace
+    bx(-.28,.25,-.11,.28,.33,.11,IRON,0);
+    bx(-.16,.33,-.022,-.10,.40,.022,DARK,0);        // spine spikes
+    bx(-.02,.33,-.022,.04,.40,.022,DARK,0);
+    bx(.12,.33,-.022,.18,.40,.022,DARK,0);
+    bx(.36,.10,-.05,.49,.23,.05,hex('#b8923a'),1);  // dragon head
+    seal(18);piv.push([.12,.26]);
+    // ---- 19 SHEEP — wool box on stub legs
+    mark();
+    bx(-.12,0,-.08,-.07,.13,-.03,DARK,2);
+    bx(-.12,0,.03,-.07,.13,.08,DARK,3);
+    bx(.05,0,-.08,.10,.13,-.03,DARK,3);
+    bx(.05,0,.03,.10,.13,.08,DARK,2);
+    bx(-.15,.11,-.095,.13,.30,.095,WOOL,0);         // fleece
+    bx(.11,.17,-.045,.21,.27,.045,DARK,1);          // face
+    seal(19);piv.push([.12,.22]);
+    // ---- 20 DEER — slim, long-legged, antlered
+    mark();
+    bx(-.13,0,-.065,-.09,.24,-.025,TAN,2);
+    bx(-.13,0,.025,-.09,.24,.065,TAN,3);
+    bx(.07,0,-.065,.11,.24,-.025,TAN,3);
+    bx(.07,0,.025,.11,.24,.065,TAN,2);
+    bx(-.17,.22,-.08,.14,.40,.08,TAN,0);            // body
+    bx(-.20,.32,-.02,-.16,.42,.02,WOOL,0);          // tail flash
+    bx(.10,.36,-.04,.19,.56,.04,TAN,1);             // neck
+    bx(.15,.54,-.035,.28,.62,.035,TAN,1);           // head
+    bx(.16,.62,-.052,.185,.78,-.032,TUSK,1);        // antlers
+    bx(.16,.62,.032,.185,.78,.052,TUSK,1);
+    bx(.13,.72,-.06,.21,.745,.06,TUSK,1);           // crossbar prongs
+    seal(20);piv.push([.22,.36]);
+    // ---- 21 BOAR — low, wide, tusked
+    mark();
+    bx(-.15,0,-.085,-.09,.11,-.035,DARK,2);
+    bx(-.15,0,.035,-.09,.11,.085,DARK,3);
+    bx(.07,0,-.085,.13,.11,-.035,DARK,3);
+    bx(.07,0,.035,.13,.11,.085,DARK,2);
+    bx(-.19,.09,-.105,.17,.28,.105,BOARC,0);        // body
+    bx(-.15,.28,-.025,.11,.325,.025,DARK,0);        // bristle ridge
+    bx(.15,.10,-.075,.30,.26,.075,BOARC,1);         // head
+    bx(.30,.13,-.038,.355,.185,.038,DARK,1);        // snout
+    bx(.29,.175,-.065,.35,.20,-.048,TUSK,1);        // tusks
+    bx(.29,.175,.048,.35,.20,.065,TUSK,1);
+    seal(21);piv.push([.12,.22]);
     const gl=this.gl;
     this.uvbo=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,this.uvbo);
     gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(V),gl.STATIC_DRAW);
@@ -11163,15 +11473,15 @@ const R3={
     this.uLoc={uMVP:gl.getUniformLocation(p,'uMVP'),uLight:gl.getUniformLocation(p,'uLight'),
       uPiv:gl.getUniformLocation(p,'uPiv')};
     this.buildUnitMeshes();
-    this.uIvbo=[0,1,2,3,4].map(()=>gl.createBuffer());
-    this.uArr=[[],[],[],[],[]];
+    this.uIvbo=Array.from({length:this.ARCHN},()=>gl.createBuffer());
+    this.uArr=Array.from({length:this.ARCHN},()=>[]);
     return true;
   },
   drawUnits(mvp){
     if(this.noUnits)return;
     if(!this.uProg&&!this.initUnits())return;
     const gl=this.gl,ex=this.iext;
-    const A=this.uArr;for(let i=0;i<5;i++)A[i].length=0;
+    const A=this.uArr;for(let i=0;i<this.ARCHN;i++)A[i].length=0;
     const t=G.t||0;
     for(const u of G.units){
       if(!allied(u.p,localP)&&!tileVis(u.x,u.y))continue;
@@ -11182,12 +11492,15 @@ const R3={
       const moving=(u.spd||0)>0.05;
       const ph=moving?(t*7.5+u.id*1.7):(t*0.9+u.id*1.7);
       const amp=moving?1:0.12;
-      const atk=(u.st==='attack')?Math.max(0,Math.sin(t*7.0+u.id)):0;
-      const d=UNITS[u.type]||{};
-      const sc=(d.animal?0.9:d.ship?1.5:d.siege?1.15:1)*(u.type==='elephant'?1.5:1);
-      // aI0 = x, baseY, z, yaw | aI1 = phase, scale, attack, swingAmp | aI2 = team rgb
-      A[a].push(u.x, elevF(u.x,u.y)*10*this.HS, u.y, (u.hdg||0),
-                ph, sc, atk, amp, r, g2, b2);
+      /* u.state, NOT u.st — the sim has no field called st, so this term was
+         permanently zero and no unit ever swung a weapon in 3D. ATKF scales
+         the 51° chop down to a recoil kick for guns and off for ships/monks. */
+      const atk=(u.state==='attack')?Math.max(0,Math.sin(t*7.0+u.id))*this.ATKF[a]:0;
+      /* groundH, not elevF: elevF is the SIM's smooth-walking height, groundH
+         is the DRAWN mesh. They disagree on slope edges by design, and a unit
+         must stand on the ground the renderer actually drew. */
+      A[a].push(u.x, this.groundH(u.x,u.y), u.y, (u.hdg||0),
+                ph, 1, atk, amp, r, g2, b2);
     }
     gl.useProgram(this.uProg);
     gl.uniformMatrix4fv(this.uLoc.uMVP,false,mvp);
@@ -11199,7 +11512,7 @@ const R3={
       ex.vertexAttribDivisorANGLE(i,0);
     }
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.uibo);
-    for(let a=0;a<5;a++){
+    for(let a=0;a<this.ARCHN;a++){
       const arr=A[a];if(!arr.length)continue;
       gl.bindBuffer(gl.ARRAY_BUFFER,this.uIvbo[a]);
       gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(arr),gl.DYNAMIC_DRAW);
@@ -11284,13 +11597,22 @@ const R3={
       const s=q.kind==='stone'?0.055:q.kind==='ball'?0.04:0.028;
       bx(x,y,z,s,s,s,col);
     }
-    // corpses — a low flattened form that fades with the existing timer
+    // corpses — a low flattened form, footprint sized to what fell there: a
+    // dead horse is not the same lump as a dead villager, a wreck is longer
+    // still. Indexed by archetype (0-5 men, 6-7 cav, 8 elephant, 9 wagon,
+    // 10-14 siege, 15-18 ships, 19-21 beasts).
+    const CD=[[.13,.09],[.13,.09],[.13,.09],[.13,.09],[.13,.09],[.13,.09],
+              [.26,.12],[.26,.12],[.40,.20],[.30,.16],
+              [.28,.17],[.28,.17],[.24,.15],[.24,.13],[.24,.14],
+              [.30,.13],[.36,.18],[.44,.14],[.38,.16],
+              [.14,.10],[.19,.10],[.19,.12]];
     for(const c of (G.corpses||[])){
       const f=Math.max(0,Math.min(1,c.t/c.max));
       if(f<=0.02)continue;
       const g=this.groundH(c.x,c.y);
       const k=0.30+0.45*f;                    // darkens as it decays
-      bx(c.x,g+0.035,c.y,0.13,0.035,0.09,[k*0.34,k*0.30,k*0.26]);
+      const dim=CD[this.unitArch(c.type)]||CD[0];
+      bx(c.x,g+0.035,c.y,dim[0],0.035,dim[1],[k*0.34,k*0.30,k*0.26]);
     }
     const gl=this.gl;
     if(!this.fxvbo){this.fxvbo=gl.createBuffer();this.fxibo=gl.createBuffer();}
@@ -11309,13 +11631,14 @@ const R3={
     gl.useProgram(this.treeProg);
     gl.uniformMatrix4fv(this.treeLoc.uMVP,false,mvp);
     gl.uniform3f(this.treeLoc.uLight,-0.46,0.80,-0.38);
+    gl.uniform1f(this.treeLoc.uAlpha,1.0);
     gl.bindBuffer(gl.ARRAY_BUFFER,this.fxvbo);
     for(let i=0;i<3;i++){gl.enableVertexAttribArray(i);
       gl.vertexAttribPointer(i,3,gl.FLOAT,false,36,i*12);ex.vertexAttribDivisorANGLE(i,0);}
     gl.bindBuffer(gl.ARRAY_BUFFER,this.bIdent);
-    gl.enableVertexAttribArray(3);gl.vertexAttribPointer(3,4,gl.FLOAT,false,24,0);
+    gl.enableVertexAttribArray(3);gl.vertexAttribPointer(3,4,gl.FLOAT,false,28,0);
     ex.vertexAttribDivisorANGLE(3,1);
-    gl.enableVertexAttribArray(4);gl.vertexAttribPointer(4,2,gl.FLOAT,false,24,16);
+    gl.enableVertexAttribArray(4);gl.vertexAttribPointer(4,3,gl.FLOAT,false,28,16);
     ex.vertexAttribDivisorANGLE(4,1);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.fxibo);
     ex.drawElementsInstancedANGLE(gl.TRIANGLES,this.fxCount,gl.UNSIGNED_SHORT,0,1);
@@ -11460,6 +11783,7 @@ const R3={
        the same body nearer the camera — removing back faces cannot change a
        pixel. Buildings are NOT in the mask: their relief panels are single-sided
        quads floated proud of a backing, so culling them would punch holes. */
+    this.drawShadows(mvp);       // after the ground, before anything that stands on it
     const FC=this.dbg.face;
     if(FC&1){gl.enable(gl.CULL_FACE);gl.cullFace(gl.FRONT);}
     this.drawTrees(mvp);
@@ -11542,7 +11866,32 @@ function frame(now){
   }
   updateTop();
   updateOverlays();
-  if(use3D)R3.draw();else draw();
+  syncSelRect();
+  // drawMini lives at the tail of the 2D draw(), which never runs in 3D — the
+  // minimap froze the moment you toggled. It only touches mctx, so call it
+  // directly; it is how you navigate, frozen is not an option.
+  if(use3D){R3.draw();drawMini();}else draw();
+}
+/* The box-select rubber band is painted by the 2D draw(), which is hidden in
+   3D — the drag worked but showed nothing. A fixed-position div tracks selBox
+   in client coords (which is what selBox stores) whenever the 3D view is up. */
+let selRectEl=null;
+function syncSelRect(){
+  const show=use3D&&selBox;
+  if(!selRectEl){
+    if(!show)return;
+    selRectEl=document.createElement('div');
+    selRectEl.style.cssText='position:fixed;border:1.5px dashed rgba(255,224,130,.95);'
+      +'background:rgba(255,224,130,.08);pointer-events:none;z-index:5;display:none;';
+    document.body.appendChild(selRectEl);
+  }
+  if(show){
+    selRectEl.style.display='block';
+    selRectEl.style.left=Math.min(selBox.x0,selBox.x1)+'px';
+    selRectEl.style.top=Math.min(selBox.y0,selBox.y1)+'px';
+    selRectEl.style.width=Math.abs(selBox.x1-selBox.x0)+'px';
+    selRectEl.style.height=Math.abs(selBox.y1-selBox.y0)+'px';
+  }else selRectEl.style.display='none';
 }
 // dock the minimap + zoom buttons into the panel on wide screens, overlay on phones
 const miniDock=document.getElementById('miniDock'),mmq=matchMedia('(min-width:760px)');
