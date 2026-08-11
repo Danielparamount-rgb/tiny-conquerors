@@ -150,10 +150,45 @@ function leave(ws) {
 }
 
 /* --------------------------------- HTTP --------------------------------- */
+/* Report mailbox: the game's benchmark mode POSTs a JSON blob here and a
+   developer reads it back with GET /reports. Same philosophy as the rest of
+   the relay — it stores opaque blobs and knows nothing about their contents.
+   Memory only; a redeploy empties the box, which is fine for a mailbox. */
+const REPORT_CAP = 30, REPORT_MAX = 32 * 1024;
+const reports = [];
+const CORS = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-methods': 'GET, POST, OPTIONS',
+  'access-control-allow-headers': 'content-type',
+};
 const server = http.createServer((req, res) => {
   if (req.url === '/healthz') {
     res.writeHead(200, { 'content-type': 'text/plain' });
     return res.end('ok');
+  }
+  if (req.url === '/report' || req.url === '/reports') {
+    if (req.method === 'OPTIONS') { res.writeHead(204, CORS); return res.end(); }
+    if (req.method === 'POST' && req.url === '/report') {
+      let body = '', dead = false;
+      req.on('data', c => {
+        if (dead) return;
+        body += c;
+        if (body.length > REPORT_MAX) { dead = true; res.writeHead(413, CORS); res.end(); req.destroy(); }
+      });
+      req.on('end', () => {
+        if (dead) return;
+        reports.push({ at: new Date().toISOString(), body: String(body).slice(0, REPORT_MAX) });
+        while (reports.length > REPORT_CAP) reports.shift();
+        res.writeHead(200, { ...CORS, 'content-type': 'text/plain' });
+        res.end('ok');
+      });
+      return;
+    }
+    if (req.method === 'GET' && req.url === '/reports') {
+      res.writeHead(200, { ...CORS, 'content-type': 'application/json' });
+      return res.end(JSON.stringify(reports));
+    }
+    res.writeHead(405, CORS); return res.end();
   }
   res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
   res.end(

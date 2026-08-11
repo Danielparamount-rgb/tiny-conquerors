@@ -12142,4 +12142,128 @@ resize();
 placeMini();
 updateContBtn();
 requestAnimationFrame(frame);
+
+/* ================= device benchmark — open /?bench=1 =======================
+   Answers the one question a desktop cannot: what does this game cost on THE
+   PHONE IN YOUR HAND. Runs two scenes (a normal start and a revealed 8-player
+   Black Forest, the known worst case), measures sim step / 2D draw / 3D draw
+   (with a readPixels sync so the GPU is in the number, same method as every
+   desktop figure in HANDOFF.md) plus the real displayed fps in both renderers,
+   then shows the card AND posts it to the relay's report mailbox so the
+   numbers can be read from the workshop without retyping them.
+   Opt-in by URL, so it can never touch a normal game. */
+(function(){
+  if(!/[?&]bench=1\b/.test(location.search))return;
+  const card=document.createElement('div');
+  card.style.cssText='position:fixed;inset:0;z-index:30;background:rgba(10,8,4,.93);'
+    +'display:flex;align-items:center;justify-content:center;padding:14px;';
+  const inner=document.createElement('div');
+  inner.style.cssText='max-width:430px;width:100%;background:linear-gradient(#f2e6c4,#e0cf9f);'
+    +'color:#2a1f12;border-radius:12px;border:3px solid #5a554b;padding:18px;'
+    +'font:13px/1.5 "Segoe UI",system-ui,sans-serif;white-space:pre-wrap;';
+  card.appendChild(inner);
+  const say=t=>{inner.textContent=t;};
+  const now=()=>performance.now();
+  const med=a=>{const s=[...a].sort((x,y)=>x-y);return +s[s.length>>1].toFixed(2);};
+  // two-frame settle, but never a hang: a backgrounded tab gets no rAF at all
+  const raf2=()=>Promise.race([
+    new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))),
+    new Promise(r=>setTimeout(r,700))]);
+  const syncPx=gl=>{const b=new Uint8Array(4);gl.readPixels(0,0,1,1,gl.RGBA,gl.UNSIGNED_BYTE,b);};
+  // displayed frame rate over ~2s; hidden tabs get no rAF, so time out to 0
+  const fpsSample=ms=>new Promise(res=>{
+    let n=0,start=0,dead=false;
+    const to=setTimeout(()=>{dead=true;res(0);},ms+2500);
+    const cb=t=>{if(dead)return;
+      if(!start)start=t;else n++;
+      if(t-start>=ms){clearTimeout(to);res(Math.round(n*1000/(t-start)));return;}
+      requestAnimationFrame(cb);};
+    requestAnimationFrame(cb);
+  });
+  async function phase(label,setup){
+    say('Benchmarking — '+label+'\n\nSetting the scene…');
+    setup();
+    await raf2();
+    const stepT=[];for(let i=0;i<40;i++){const t0=now();step(0.05);stepT.push(now()-t0);}
+    if(use3D)toggle3D();
+    await raf2();
+    const d2=[];for(let i=0;i<12;i++){const t0=now();draw();d2.push(now()-t0);}
+    say('Benchmarking — '+label+'\n\nMeasuring the classic view…');
+    const fps2=await fpsSample(1800);
+    toggle3D();
+    if(!use3D)return null;                     // no WebGL on this device
+    await raf2();
+    const gl=R3.gl,d3=[];
+    for(let i=0;i<12;i++){const t0=now();R3.draw();syncPx(gl);d3.push(now()-t0);}
+    say('Benchmarking — '+label+'\n\nMeasuring the 3D view…');
+    const fps3=await fpsSample(1800);
+    toggle3D();
+    return {scene:label,stepMs:med(stepT),draw2Ms:med(d2),draw3Ms:med(d3),
+      fps2D:fps2||'n/a',fps3D:fps3||'n/a',units:G.units.length,blds:G.blds.length,
+      trees:R3.iAll?R3.iAll[0]+R3.iAll[1]:0,map:MAP};
+  }
+  const relayHttp=()=>(location.hostname==='localhost'||location.hostname==='127.0.0.1')
+    ?'http://localhost:8080':'https://tiny-conquerors-relay.onrender.com';
+  async function run(){
+    document.getElementById('startOverlay').style.display='none';
+    document.body.appendChild(card);
+    say('Benchmarking this device\n\nAbout 20 seconds — keep the screen on.');
+    mission=null;if(typeof resetNet==='function')resetNet();
+    if(!R3.init()){say('This device has no WebGL — there is no 3D to profile.');return;}
+    const gl=R3.gl;
+    let renderer='?';
+    try{const ext=gl.getExtension('WEBGL_debug_renderer_info');
+      renderer=ext?gl.getParameter(ext.UNMASKED_RENDERER_WEBGL):String(gl.getParameter(gl.RENDERER));}catch(e){}
+    // the build stamp div exists on the PWA build; test pages just say local.
+    // Anchored match — a loose /build / here once matched "build a Monastery"
+    // in the how-to text and mailed the entire start screen as the version.
+    const stampEl=document.getElementById('startOverlay').lastElementChild;
+    const stampTx=stampEl?stampEl.textContent.trim():'';
+    const report={kind:'bench',
+      build:/^build tq-v\d+$/.test(stampTx)?stampTx:'local',
+      ua:navigator.userAgent,dpr:devicePixelRatio,
+      screen:screen.width+'x'+screen.height,view:vw+'x'+vh,
+      gl2:!!R3.gl2,renderer,aniso:R3.anisoMax||0,phases:[]};
+    const p1=await phase('a normal start (2 players, River)',()=>{
+      diffSel=1;civSel=0;turboSel=0;teamSel=0;mapSel=0;playersSel=2;
+      pendingSeed=4242;newGame();
+      for(let i=0;i<60;i++)step(0.05);
+    });
+    if(p1)report.phases.push(p1);
+    const p2=await phase('the worst case (8 players, Black Forest, revealed)',()=>{
+      diffSel=1;civSel=0;turboSel=0;teamSel=1;mapSel=1;playersSel=8;
+      pendingSeed=31337;newGame();
+      for(let i=0;i<300;i++)step(0.05);
+      G.vis.fill(2);fogDirty=true;renderFogCanvas();
+      const p=isoPt(MAP/2,MAP/2);
+      G.cam.z=1;G.cam.x=p.x-vw/G.cam.z/2;G.cam.y=p.y-vh/G.cam.z/2;
+    });
+    if(p2)report.phases.push(p2);
+    let sent='not sent';
+    try{
+      const r=await fetch(relayHttp()+'/report',{method:'POST',body:JSON.stringify(report)});
+      sent=r.ok?'sent to the workshop ✓':'upload failed ('+r.status+') — screenshot this';
+    }catch(e){sent='upload failed — screenshot this';}
+    const L=[],f=x=>typeof x==='number'?x+'ms':x;
+    L.push('Device profile — '+renderer);
+    L.push((report.gl2?'WebGL2':'WebGL1')+' · '+report.view+' css px · dpr '+report.dpr);
+    L.push('');
+    for(const p of report.phases){
+      L.push('■ '+p.scene);
+      L.push('   sim step '+f(p.stepMs)+' · '+p.units+' units · '+p.trees+' trees');
+      L.push('   2D draw '+f(p.draw2Ms)+'  →  '+p.fps2D+' fps on screen');
+      L.push('   3D draw '+f(p.draw3Ms)+'  →  '+p.fps3D+' fps on screen');
+      L.push('');
+    }
+    L.push(sent);
+    say(L.join('\n'));
+    const btn=document.createElement('button');
+    btn.textContent='Done — back to the game';
+    btn.style.cssText='margin-top:12px;width:100%;padding:11px;border-radius:9px;font-size:15px;'
+      +'border:2px solid #120d07;background:linear-gradient(#66492a,#2c2013);color:#e8d9b0;';
+    btn.onclick=()=>location.replace(location.pathname);
+    inner.appendChild(btn);
+  }
+  addEventListener('load',()=>setTimeout(run,500));
+})();
 </script>
