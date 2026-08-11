@@ -10812,7 +10812,9 @@ const R3={
     range     :{w:'#d8c9a8',r:'gable',rc:'#9a7b57',wh:.58},
     stable    :{w:'#d8c9a8',r:'gable',rc:'#b8613a',wh:.58},
     siege     :{w:'#c9b48c',r:'gable',rc:'#8d7355',wh:.60},
-    castle    :{w:'#a8a294',r:'cone', rc:'#5a7ea8',wh:.68,turret:true},
+    // 'crown' = flat top ringed with a crenellated parapet — the fortress read.
+    // The 2D castle is crenellated walls + four spired turrets; cone was wrong.
+    castle    :{w:'#a8a294',r:'crown',rc:'#5a7ea8',wh:.82,turret:true},
     tower     :{w:'#a8a294',r:'cone', rc:'#b8613a',wh:.74},
     wall      :{w:'#8d7355',r:'flat', wh:1},
     gate      :{w:'#8d7355',r:'flat', wh:1},
@@ -10926,10 +10928,19 @@ const R3={
           }
         }
       }
-      // recessed openings: {u,v,w,h,arch}
+      // recessed openings: {u,v,w,h,door}
       if(openings)for(const o of openings){
         const dark=[0.09,0.07,0.06];
         panel(A,R,U,o.u-o.w/2,o.v,o.u+o.w/2,o.v+o.h,-REL*1.1,dark);
+        if(o.door){
+          // a plank door LEAF inside the recess — deeper than the wall face,
+          // shallower than the dark reveal, so it reads as a real closed door
+          const dw=[0.36,0.24,0.12];
+          panel(A,R,U,o.u-o.w/2+.012,o.v,o.u+o.w/2-.012,o.v+o.h-.012,-REL*0.5,dw);
+          panel(A,R,U,o.u-.011,o.v+.004,o.u+.011,o.v+o.h-.016,-REL*0.34,shade(dw,0.55)); // centre seam
+          panel(A,R,U,o.u-o.w/2+.016,o.v+o.h*.58,o.u+o.w/2-.016,o.v+o.h*.66,-REL*0.34,shade(dw,0.5)); // iron band
+          panel(A,R,U,o.u-o.w/2+.016,o.v+o.h*.16,o.u+o.w/2-.016,o.v+o.h*.24,-REL*0.34,shade(dw,0.5));
+        }
         const fr=shade(col,0.72);
         panel(A,R,U,o.u-o.w/2-0.018,o.v-0.012,o.u+o.w/2+0.018,o.v,REL*1.2,fr);      // sill
         panel(A,R,U,o.u-o.w/2-0.018,o.v+o.h,o.u+o.w/2+0.018,o.v+o.h+0.014,REL*1.2,fr); // lintel
@@ -10993,8 +11004,10 @@ const R3={
       }
     };
     let n=0;
+    const bmarks=[];        // [index-count, vertex-count] before each building
     for(const b of G.blds){
       if(!allied(b.p,localP)&&!b.seen)continue;
+      bmarks.push([I.length,V.length/9]);
       const M=this.BMASS[b.type]||this.BMASS.house;
       const s=b.size,inset=s*0.10;
       const x0=b.tx+inset,x1=b.tx+s-inset,z0=b.ty+inset,z1=b.ty+s-inset;
@@ -11007,41 +11020,131 @@ const R3={
       // wall treatment follows the palette: pale ashlar -> masonry, cream/buff
       // -> half-timbered plaster, anything else -> boarding
       const style=b.built?(M.w==='#a8a294'?'stone':(M.w==='#f0e7cd'||M.w==='#d8c9a8'||M.w==='#c9b48c')?'plaster':'plank'):'plank';
-      // openings, per face [S,N,E,W]. Door on the south face only.
+      /* openings per face — box() builds faces in order [z0, z1, +x, −x], and
+         at the HOME camera (yaw 45°) the two faces you actually see are z1 and
+         +x. The door was on face 0 and therefore always hidden behind the
+         building; it lives on face 1 now. Castles get arrow slits, not
+         windows. */
       let win=null;
       if(b.built&&M.r!=='flat'&&H>0.28){
         const per=s>=2?3:2;
+        const slit=b.type==='castle';
         win=[];
         for(let f=0;f<4;f++){
           const a=[];
           for(let i=0;i<per;i++){
             const u=(i+0.5)/per;
-            if(f===0&&Math.abs(u-0.5)<0.08)continue;   // leave room for the door
-            a.push({u,v:0.42,w:0.13,h:0.24});
+            if(f===1&&Math.abs(u-0.5)<0.08)continue;   // leave room for the door
+            a.push(slit?{u,v:0.36,w:0.05,h:0.32}:{u,v:0.42,w:0.13,h:0.24});
           }
-          if(f===0)a.push({u:0.5,v:0,w:0.18,h:0.50});   // door, floor to lintel
+          if(f===1)a.push({u:0.5,v:0,w:0.18,h:0.50,door:1});   // door, floor to lintel
           win.push(a);
         }
       }
       box(x0,z0,x1,z1,g,wh,wallC,style,b.id*7919,win);
+      const tcS=teamColor(b.p),tcv=hex(tcS&&tcS.length===7?tcS:'#3b7bd4');
+      const midx=(x0+x1)/2,midz=(z0+z1)/2;
+      /* ---- per-type extras: the details that make each building itself ---- */
+      if(b.built){
+        if(style==='stone'&&!BLDS[b.type].thin){
+          // quoins — alternating corner stones on real stone buildings
+          for(const [qx,qz] of [[x0,z0],[x1,z0],[x0,z1],[x1,z1]])
+            for(let k=0;k<4;k++){
+              const w2=.045*(k%2?0.78:1.05),qh=(wh-g)/4;
+              box(qx-w2,qz-w2,qx+w2,qz+w2,g+qh*(k+.12),g+qh*(k+.88),
+                  shade(wallC,0.92+(k%2)*0.16),'solid',b.id+k,null);
+            }
+        }
+        if(b.type==='swall'||b.type==='sgate'){
+          // stone walls carry merlons — the fortified read from any distance
+          const mh=H*.30,pw=Math.min(.07,(x1-x0)*.18);
+          for(const t of [0.18,0.5,0.82]){
+            const mx=x0+(x1-x0)*t,mz=z0+(z1-z0)*t;
+            box(mx-pw,mz-pw,mx+pw,mz+pw,wh,wh+mh,shade(wallC,1.05),'solid',b.id+t*10,null);
+          }
+        }else if(b.type==='wall'){
+          // palisade: sharpened stake tips along the top
+          for(const t of [0.22,0.5,0.78]){
+            const mx=x0+(x1-x0)*t,mz=z0+(z1-z0)*t,r2=.055,tipY=wh+H*.22;
+            tri3([mx-r2,wh,mz-r2],[mx+r2,wh,mz-r2],[mx,tipY,mz],wallC);
+            tri3([mx+r2,wh,mz-r2],[mx+r2,wh,mz+r2],[mx,tipY,mz],wallC);
+            tri3([mx+r2,wh,mz+r2],[mx-r2,wh,mz+r2],[mx,tipY,mz],wallC);
+            tri3([mx-r2,wh,mz+r2],[mx-r2,wh,mz-r2],[mx,tipY,mz],wallC);
+          }
+        }else if(b.type==='farm'){
+          // crop rows: a golden field with furrows, laid on the top face
+          const crop=hex('#96864a');
+          const At=[x0,wh+.004,z0],Rt=[x1-x0,0,0],Ut=[0,0,z1-z0];
+          panel(At,Rt,Ut,0.03,0.03,0.97,0.97,0,crop);
+          for(let i=0;i<4;i++)
+            panel(At,Rt,Ut,0.10+i*0.23,0.05,0.148+i*0.23,0.95,.006,shade(crop,0.6));
+        }else if(b.type==='market'){
+          // striped awning over the door face — the bazaar read
+          const A1=[x1,g,z1],R1=[x0-x1,0,0],U1=[0,wh-g,0];
+          for(let i=0;i<5;i++)
+            panel(A1,R1,U1,.28+i*.09,.58,.335+i*.09,.94,REL*1.5,(i%2)?tcv:hex('#e6dcc2'));
+        }else if(b.type==='tc'){
+          // yard props: a barrel and a crate by the door
+          box(x0+.08,z1-.22,x0+.22,z1-.08,g,g+.16,hex('#7a5a32'),'solid',b.id,null);
+          box(x0+.065,z1-.235,x0+.235,z1-.065,g+.055,g+.082,hex('#3a2d1e'),'solid',b.id,null);
+          box(x1-.32,z1-.14,x1-.12,z1+.0,g,g+.13,hex('#8a6a42'),'solid',b.id,null);
+        }else if(b.type==='camp'){
+          // the log pile that says lumber
+          box(x0+.06,z1-.34,x0+.66,z1-.21,g,g+.11,hex('#6b4a2a'),'solid',b.id,null);
+          box(x0+.06,z1-.19,x0+.66,z1-.06,g,g+.11,hex('#5e4023'),'solid',b.id,null);
+          box(x0+.14,z1-.27,x0+.58,z1-.13,g+.11,g+.21,hex('#7a5631'),'solid',b.id,null);
+        }else if(b.type==='blacksmith'){
+          // anvil on a stump, and the forge glow in a window
+          box(x1-.24,z1-.22,x1-.12,z1-.10,g,g+.09,hex('#6b4a2a'),'solid',b.id,null);
+          box(x1-.27,z1-.23,x1-.09,z1-.09,g+.09,g+.15,hex('#4c5157'),'solid',b.id,null);
+          const A0=[x1,g,z1],R0=[x0-x1,0,0],U0=[0,wh-g,0];
+          panel(A0,R0,U0,.70,.12,.86,.38,REL*1.4,[0.95,0.5,0.13]);
+          panel(A0,R0,U0,.73,.17,.83,.32,REL*1.55,[1.0,0.8,0.32]);
+        }
+      }
       if(b.built&&M.r!=='flat'){
         const rc=hex(M.rc);
         if(M.r==='gable')gable(x0-inset*.6,z0-inset*.6,x1+inset*.6,z1+inset*.6,wh,g+H,rc,b.id*131);
-        else if(M.r==='cone')cone((x0+x1)/2,(z0+z1)/2,(x1-x0)*.62,wh,g+H,rc);
-        else dome((x0+x1)/2,(z0+z1)/2,(x1-x0)*.44,wh,g+H,rc);
+        else if(M.r==='cone')cone(midx,midz,(x1-x0)*.62,wh,g+H,rc);
+        else if(M.r==='dome')dome(midx,midz,(x1-x0)*.44,wh,g+H,rc);
+        else if(M.r==='crown'){
+          /* crenellated parapet: a proud lip ringed with merlons. The corner
+             merlon is drawn once by the x-edges; the z-edges skip endpoints or
+             two identical boxes would z-fight at every corner. */
+          const lip=.030,mh=H*.13,pw=.05;
+          box(x0-lip,z0-lip,x1+lip,z1+lip,wh,wh+H*.045,shade(wallC,1.06),'solid',b.id,null);
+          const mer=(ax,az,bx2,bz,skipEnds)=>{
+            const L=Math.hypot(bx2-ax,bz-az),n2=Math.max(2,Math.round(L/0.30));
+            for(let i=skipEnds?1:0;i<=(skipEnds?n2-1:n2);i++){
+              const t=i/n2;
+              const mx=ax+(bx2-ax)*t,mz=az+(bz-az)*t;
+              box(mx-pw,mz-pw,mx+pw,mz+pw,wh+H*.045,wh+H*.045+mh,shade(wallC,1.03),'solid',b.id+i,null);
+            }
+          };
+          mer(x0-lip,z0-lip,x1+lip,z0-lip,false);
+          mer(x0-lip,z1+lip,x1+lip,z1+lip,false);
+          mer(x0-lip,z0-lip,x0-lip,z1+lip,true);
+          mer(x1+lip,z0-lip,x1+lip,z1+lip,true);
+        }
         if(M.turret){                       // castle: four spired corner turrets
           const tr=s*.19;
           for(const [ox,oz] of [[x0,z0],[x1,z0],[x0,z1],[x1,z1]]){
-            const ty0=g,ty1=g+H*.86;
+            const ty0=g,ty1=g+H*.92;
             box(ox-tr,oz-tr,ox+tr,oz+tr,ty0,ty1,hex(M.w),'stone',b.id*31+ox*13,null);
             cone(ox,oz,tr*1.25,ty1,ty1+H*.34,hex(M.rc));
           }
         }
+        if(b.type==='monastery'){
+          // a cross on the gable end — reads before the blue roof does
+          const cxx=x1+inset*.45;
+          box(cxx-.016,midz-.016,cxx+.016,midz+.016,g+H*.98,g+H+H*.26,hex('#e8e2d2'),'solid',b.id,null);
+          box(cxx-.055,midz-.014,cxx+.055,midz+.014,g+H+H*.15,g+H+H*.20,hex('#e8e2d2'),'solid',b.id,null);
+        }
         // team-colour banner block, the loudest ownership signal on screen
-        const tc2=teamColor(b.p);
-        const tcv=hex(tc2.length===7?tc2:'#3b7bd4');
-        const cx=(x0+x1)/2,cz=(z0+z1)/2,bw=s*.07;
-        box(cx-bw,cz-bw,cx+bw,cz+bw,g+H,g+H+H*.22,tcv,'solid',b.id,null);
+        const bw=s*.07;
+        box(midx-bw,midz-bw,midx+bw,midz+bw,g+H,g+H+H*.22,tcv,'solid',b.id,null);
+        if(b.type==='wonder')  // gold finial above the banner
+          box(midx-.03,midz-.03,midx+.03,midz+.03,g+H+H*.22,g+H+H*.34,hex('#d9b44a'),'solid',b.id,null);
       }
       n++;
     }
@@ -11054,9 +11157,26 @@ const R3={
       gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([0,0,0,1, 1,1,0]),gl.STATIC_DRAW);}
     gl.bindBuffer(gl.ARRAY_BUFFER,this.bvbo);
     gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(V),gl.DYNAMIC_DRAW);
+    /* A big late-game town overflows 16-bit indices (65,535 verts is ~90
+       detailed buildings) — and Uint16 WRAPS silently, which draws garbage
+       triangles across the whole town. Promote to 32-bit indices when the
+       device has them (core in WebGL2, extension almost everywhere else);
+       failing that, drop whole trailing buildings rather than corrupt. */
+    const VC=V.length/9;
+    let IA,itype=gl.UNSIGNED_SHORT;
+    if(VC>65535){
+      if(this.gl2||gl.getExtension('OES_element_index_uint')){
+        IA=new Uint32Array(I);itype=gl.UNSIGNED_INT;
+      }else{
+        let cut=0;
+        for(let k=bmarks.length-1;k>=0;k--)if(bmarks[k][1]<=65535){cut=bmarks[k][0];break;}
+        IA=new Uint16Array(I.slice(0,cut));
+        console.warn('R3: town too detailed for this device — trailing buildings dropped');
+      }
+    }else IA=new Uint16Array(I);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.bibo);
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(I),gl.DYNAMIC_DRAW);
-    this.bCount=I.length;this.bldN=n;this.bldKey=this.bldSig();
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,IA,gl.DYNAMIC_DRAW);
+    this.bCount=IA.length;this.bIdxType=itype;this.bldN=n;this.bldKey=this.bldSig();
   },
   // cheap per-frame signature: buildings are tens, not thousands.
   // b.seen is in the hash because buildBlds FILTERS on it — without the term,
@@ -11086,7 +11206,7 @@ const R3={
     gl.enableVertexAttribArray(4);gl.vertexAttribPointer(4,3,gl.FLOAT,false,28,16);
     ex.vertexAttribDivisorANGLE(4,1);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.bibo);
-    ex.drawElementsInstancedANGLE(gl.TRIANGLES,this.bCount,gl.UNSIGNED_SHORT,0,1);
+    ex.drawElementsInstancedANGLE(gl.TRIANGLES,this.bCount,this.bIdxType||gl.UNSIGNED_SHORT,0,1);
     ex.vertexAttribDivisorANGLE(3,0);ex.vertexAttribDivisorANGLE(4,0);
     gl.disableVertexAttribArray(3);gl.disableVertexAttribArray(4);
   },
@@ -11155,85 +11275,159 @@ const R3={
     const SKIN=hex('#e0b78e'),CLOTH=hex('#8a7a5e'),STEEL=hex('#b9bec4'),
           WOOD=hex('#6b4a2a'),DARK=hex('#3a2d1e'),HIDE=hex('#7d6a4e'),CANV=hex('#e6dcc2'),
           IRON=hex('#6b7078'),TUSK=hex('#e8e2d2'),WOOL=hex('#e3dcc6'),TAN=hex('#b08a5c'),
-          GREY=hex('#8a8578'),BOARC=hex('#523d29'),DECK=hex('#8a6a42');
+          GREY=hex('#8a8578'),BOARC=hex('#523d29'),DECK=hex('#8a6a42'),
+          EYE=hex('#1c1410'),HAIR=hex('#3d2a18'),LEATH=hex('#4a331c'),
+          GOLDC=hex('#c9a227'),STRAW=hex('#c9b46a'),BOOT=hex('#2a1f14');
+    // team-tinted detail rides the mix channel: aCol BLACK + mix m = team×m
+    // (a darkened fold), aCol WHITE + mix m = team lifted toward white (a
+    // highlight band). BLACK/WHITE below exist only for that trick.
+    const BLACK=[0,0,0],WHITE=[1,1,1];
     const mark=()=>off.push(I.length);
     const seal=i=>cnt.push(I.length-off[i]);
     /* Part scheme (fixed by the shader — reread it before adding parts):
        2/3 legs/wheels swing ±0.55·s about pivot hip; 4/5 arms/oars ±0.32·s
        about pivot shoulder; 6 = weapon arm, −0.32·s and the attack swing;
        0/1 static (1 exists so heads/necks can be excluded from future work).
-       All units face +x; hdg rotates the whole instance. */
-    // shared human body: legs, team torso, head, off-arm. Weapon side is per-type.
-    const man=(shield)=>{
+       All units face +x; hdg rotates the whole instance.
+       Detail quads follow the BUILDING rule — relief, not texture: small boxes
+       floated just proud of the parent face, tagged with the parent's part so
+       they swing together. Eyes/hands sit ~.006 proud; closer vanishes. */
+    // shared human body: booted legs, team tabard with folds+belt, head with a
+    // face, off-arm+hand. Weapon arm/hand here too — weapon itself is per-type.
+    // hat: 0 bare hair, 1 none (a helmet will cover it), 2 straw brim.
+    const man=(shield,hat,beard)=>{
       bx(-.04,0,-.10,.04,.28,-.02,DARK,2);          // left leg
+      bx(-.048,0,-.108,.048,.10,-.012,BOOT,2);      // boot
       bx(-.04,0,.02,.04,.28,.10,DARK,3);            // right leg
+      bx(-.048,0,.012,.048,.10,.108,BOOT,3);
       bx(-.085,.27,-.11,.085,.50,.11,CLOTH,0,1);    // torso — team tabard
+      bx(-.087,.252,-.114,.087,.285,.114,BLACK,0,.66); // hem flare, darkened team
+      bx(.085,.315,-.052,.092,.478,-.024,BLACK,0,.78); // tunic folds, front face
+      bx(.085,.315,.016,.092,.478,.044,BLACK,0,.78);
+      bx(-.092,.315,-.02,-.085,.478,.02,BLACK,0,.78);  // one on the back
+      bx(-.089,.286,-.112,.089,.314,.112,LEATH,0);  // belt
+      bx(.087,.29,-.014,.096,.31,.014,GOLDC,0);     // buckle
       bx(-.06,.50,-.06,.06,.64,.06,SKIN,1);         // head
+      bx(.058,.566,-.034,.066,.588,-.012,EYE,1);    // eyes — the face reads
+      bx(.058,.566,.012,.066,.588,.034,EYE,1);
+      if(hat===0)bx(-.066,.582,-.066,.032,.658,.066,HAIR,1);      // bare head: hair cap
+      else if(hat===2){bx(-.09,.60,-.09,.09,.622,.09,STRAW,1);    // straw brim
+        bx(-.05,.622,-.05,.05,.672,.05,STRAW,1);}                 // crown
+      if(beard)bx(.056,.49,-.028,.068,.548,.028,HAIR,1);
       bx(-.05,.30,-.165,.05,.49,-.10,CLOTH,4,1);    // off arm
-      if(shield)bx(-.005,.28,-.225,.055,.47,-.16,CLOTH,4,1);  // round-ish shield, team face
+      bx(-.038,.258,-.156,.038,.302,-.108,SKIN,4);  // hand
+      if(shield){
+        bx(-.005,.28,-.225,.055,.47,-.16,CLOTH,4,1);   // shield, team face
+        bx(.012,.345,-.232,.038,.405,-.222,GOLDC,4);   // boss
+        bx(-.005,.28,-.23,.055,.30,-.158,BLACK,4,.62); // rim, darkened team
+        bx(-.005,.45,-.23,.055,.47,-.158,BLACK,4,.62);
+      }
       bx(-.05,.30,.10,.05,.49,.165,CLOTH,6,1);      // weapon arm — swings WITH the weapon
+      bx(-.038,.258,.108,.038,.302,.156,SKIN,6);    // weapon hand
     };
     // ---- 0 SWORDSMAN (militia line, UU infantry, petard) — hip .27 shoulder .47
     mark();
-    man(true);
+    man(true,1,true);
     bx(-.065,.585,-.065,.065,.67,.065,STEEL,1);     // helm
+    bx(-.02,.655,-.02,.02,.70,.02,BLACK,1,.8);      // team plume stub
+    bx(.062,.585,-.012,.07,.645,.012,STEEL,1);      // nasal bar
+    bx(-.078,.462,-.115,.02,.502,-.078,STEEL,4);    // pauldrons over the arm tops
+    bx(-.078,.462,.078,.02,.502,.115,STEEL,6);
     bx(-.012,.44,.115,.012,.72,.145,STEEL,6);       // blade, upright at rest
+    bx(-.004,.44,.121,.004,.70,.139,WHITE,6,.0);    // fuller line — pale steel ridge
     bx(-.035,.42,.105,.035,.45,.155,WOOD,6);        // crossguard
+    bx(-.02,.395,.118,.02,.42,.142,GOLDC,6);        // pommel
     seal(0);piv.push([.27,.47]);
     // ---- 1 SPEARMAN (spear/skirmisher) — kettle hat, tall pike
     mark();
-    man(true);
+    man(true,1,true);
     bx(-.075,.60,-.075,.075,.635,.075,STEEL,1);     // kettle brim
+    bx(-.045,.635,-.045,.045,.675,.045,STEEL,1);    // crown
     bx(-.012,.30,.118,.012,.98,.142,WOOD,6);        // shaft
+    bx(-.014,.60,.116,.014,.64,.144,LEATH,6);       // grip wrap
     bx(-.02,.96,.112,.02,1.06,.148,STEEL,6);        // spearhead
     seal(1);piv.push([.27,.47]);
     // ---- 2 BOWMAN (archer line) — bow held in the swing arm, quiver on the back
     mark();
-    man(false);
+    man(false,0,false);
     bx(-.105,.34,-.03,-.062,.55,.03,WOOD,0);        // quiver
+    bx(-.10,.55,-.026,-.066,.60,.026,CANV,0);       // fletching poking out
+    bx(-.02,.30,-.113,.02,.50,-.106,LEATH,0);       // shoulder strap across the back
     bx(.115,.30,.122,.135,.44,.142,WOOD,6);         // bow: three slats fake the curve
     bx(.125,.44,.122,.145,.55,.142,WOOD,6);
     bx(.115,.55,.122,.135,.69,.142,WOOD,6);
+    bx(.127,.47,.118,.143,.52,.146,LEATH,6);        // wrapped grip
     bx(.108,.31,.128,.114,.68,.136,CANV,6);         // string
     seal(2);piv.push([.27,.47]);
     // ---- 3 GUNNER (hand cannoneer, janissary) — iron tube held level
     mark();
-    man(false);
+    man(false,1,false);
     bx(-.065,.585,-.065,.065,.66,.065,IRON,1);      // iron cap
     bx(-.05,.42,.112,.02,.475,.148,WOOD,6);         // stock
     bx(.02,.44,.115,.30,.495,.145,IRON,6);          // barrel
+    bx(.28,.432,.11,.305,.503,.15,DARK,6);          // muzzle band
+    bx(.02,.478,.122,.05,.508,.138,STEEL,6);        // pan + sight nub
     seal(3);piv.push([.27,.47]);
-    // ---- 4 VILLAGER — axe/tool over the shoulder
+    // ---- 4 VILLAGER — straw hat, axe/tool over the shoulder
     mark();
-    man(false);
+    man(false,2,false);
     bx(-.012,.32,.118,.012,.64,.142,WOOD,6);        // haft
     bx(-.035,.60,.11,.035,.65,.15,STEEL,6);         // axe head
     seal(4);piv.push([.27,.47]);
-    // ---- 5 MONK — full robe, team sash, no weapon
+    // ---- 5 MONK — full robe, team sash, tonsure, no weapon
     mark();
     bx(-.09,.02,-.10,.09,.52,.10,CLOTH,0);          // robe, floor length
+    bx(.088,.06,-.045,.094,.50,-.02,BLACK,0,.14);   // robe folds — near-neutral dark
+    bx(.088,.06,.02,.094,.50,.045,BLACK,0,.14);
     bx(-.093,.22,-.035,.093,.32,.035,CLOTH,0,1);    // team sash
+    bx(-.095,.205,-.037,.095,.225,.037,STRAW,0);    // rope belt under it
     bx(-.055,.52,-.055,.055,.66,.055,SKIN,1);       // head
+    bx(.054,.578,-.032,.062,.60,-.012,EYE,1);       // eyes
+    bx(.054,.578,.012,.062,.60,.032,EYE,1);
+    bx(-.06,.615,-.06,-.048,.652,.06,HAIR,1);       // tonsure ring — bald crown
+    bx(.048,.615,-.06,.06,.652,.06,HAIR,1);
+    bx(-.048,.615,-.06,.048,.652,-.048,HAIR,1);
+    bx(-.048,.615,.048,.048,.652,.06,HAIR,1);
     bx(-.07,.60,-.065,.07,.67,.065,CLOTH,1);        // hood back
     bx(-.045,.30,-.145,.045,.46,-.095,CLOTH,4);     // sleeves
     bx(-.045,.30,.095,.045,.46,.145,CLOTH,5);
+    bx(-.036,.262,-.14,.036,.302,-.10,SKIN,4);      // hands
+    bx(-.036,.262,.10,.036,.302,.14,SKIN,5);
     seal(5);piv.push([.26,.44]);
     // shared horse: diagonal leg pairs, hide barrel, team caparison, neck+head
     const horse=()=>{
       bx(.14,0,-.10,.20,.28,-.04,DARK,2);
+      bx(.14,0,-.106,.20,.07,-.034,BOOT,2);         // hooves
       bx(.14,0,.04,.20,.28,.10,DARK,3);
+      bx(.14,0,.034,.20,.07,.106,BOOT,3);
       bx(-.20,0,-.10,-.14,.28,-.04,DARK,3);
+      bx(-.20,0,-.106,-.14,.07,-.034,BOOT,3);
       bx(-.20,0,.04,-.14,.28,.10,DARK,2);
+      bx(-.20,0,.034,-.14,.07,.106,BOOT,2);
       bx(-.24,.26,-.11,.22,.48,.11,HIDE,0);         // barrel
       bx(-.25,.31,-.12,.23,.44,.12,CLOTH,0,1);      // caparison drape — team
+      bx(-.255,.295,-.124,.235,.315,.124,WHITE,0,.85); // trim band, lifted team
+      bx(-.255,.425,-.124,.235,.443,.124,BLACK,0,.68); // upper band, darkened team
+      bx(-.07,.465,-.088,.10,.492,.088,LEATH,0);    // saddle pad
       bx(-.31,.32,-.02,-.24,.46,.02,DARK,0);        // tail
       bx(.18,.42,-.05,.30,.64,.05,HIDE,1);          // neck
+      bx(.17,.63,-.02,.295,.675,.02,HAIR,1);        // mane ridge
       bx(.28,.54,-.045,.42,.64,.045,HIDE,1);        // head
+      bx(.335,.588,-.049,.357,.606,-.043,EYE,1);    // eyes
+      bx(.335,.588,.043,.357,.606,.049,EYE,1);
+      bx(.384,.532,-.048,.402,.608,.048,LEATH,1);   // bridle strap
       bx(.40,.54,-.035,.455,.60,.035,DARK,1);       // muzzle
+      bx(.30,.62,-.038,.34,.66,-.022,HIDE,1);       // ears
+      bx(.30,.62,.022,.34,.66,.038,HIDE,1);
       bx(-.02,.34,-.135,.06,.48,-.105,CLOTH,0,1);   // rider legs against the flanks
       bx(-.02,.34,.105,.06,.48,.135,CLOTH,0,1);
       bx(-.05,.48,-.075,.07,.68,.075,CLOTH,0,1);    // rider torso
+      bx(-.052,.485,-.077,.07,.515,.077,BLACK,0,.66); // rider hem band
+      bx(.068,.52,-.045,.075,.665,-.02,BLACK,0,.78);  // rider tunic folds
+      bx(.068,.52,.02,.075,.665,.045,BLACK,0,.78);
       bx(-.03,.68,-.045,.05,.80,.045,SKIN,1);       // rider head
+      bx(.048,.732,-.028,.056,.752,-.01,EYE,1);     // rider eyes
+      bx(.048,.732,.01,.056,.752,.028,EYE,1);
     };
     // ---- 6 CAVALRY (scout/knight line, UU cavalry) — couched lance
     mark();
@@ -11258,12 +11452,18 @@ const R3={
     bx(.12,0,.04,.24,.32,.14,GREY,2);
     bx(-.30,.30,-.17,.28,.64,.17,GREY,0);           // body
     bx(.26,.44,-.11,.44,.64,.11,GREY,1);            // head
+    bx(.415,.565,-.095,.437,.585,-.088,EYE,1);      // eyes
+    bx(.415,.565,.088,.437,.585,.095,EYE,1);
     bx(.42,.14,-.035,.50,.48,.035,GREY,1);          // trunk
+    bx(.435,.13,-.028,.502,.20,.028,hex('#78716a'),1); // trunk tip, darker
     bx(.42,.32,-.095,.56,.355,-.058,TUSK,1);        // tusks
     bx(.42,.32,.058,.56,.355,.095,TUSK,1);
     bx(.25,.50,-.21,.33,.63,-.165,GREY,1);          // ears
+    bx(.262,.515,-.205,.318,.615,-.17,hex('#9c948a'),1); // inner ear, lighter
     bx(.25,.50,.165,.33,.63,.21,GREY,1);
+    bx(.262,.515,.17,.318,.615,.205,hex('#9c948a'),1);
     bx(-.14,.62,-.12,.10,.78,.12,CLOTH,0,1);        // howdah — team
+    bx(-.145,.61,-.125,.105,.64,.125,WHITE,0,.85);  // howdah trim band
     bx(-.045,.78,-.04,.035,.88,.04,SKIN,1);         // mahout
     seal(8);piv.push([.30,.60]);
     // ---- 9 WAR WAGON — armoured team cabin, draught horse
@@ -11347,22 +11547,37 @@ const R3={
     // ---- 16 ROUND SHIP (cog / transport / demo) — tubby trader
     mark();
     bx(-.34,-.04,-.17,.34,.17,.17,WOOD,0);          // fat hull
+    bx(-.32,.035,-.174,.32,.052,.174,DARK,0);       // plank seams
+    bx(-.33,.10,-.174,.33,.117,.174,DARK,0);
     bx(-.36,.17,-.19,.36,.25,.19,WOOD,0);           // bulwark
+    bx(-.36,.208,-.194,.36,.222,.194,DECK,0);       // rubbing strake
     bx(-.30,.235,-.14,.30,.255,.14,DECK,0);         // deck
     bx(.10,.25,-.09,.24,.37,.05,WOOD,0);            // cargo
+    bx(.10,.30,-.094,.24,.318,.054,DARK,0);         // crate strap
     bx(-.22,.25,-.02,-.10,.34,.10,DARK,0);
     bx(-.03,.25,-.03,.03,.80,.03,WOOD,1);           // mast
     bx(-.02,.44,-.17,.02,.74,.17,CANV,0,1);         // team sail, static
+    bx(-.026,.53,-.175,.026,.556,.175,BLACK,0,.72); // sail battens
+    bx(-.026,.64,-.175,.026,.666,.175,BLACK,0,.72);
     seal(16);piv.push([.12,.30]);
     // ---- 17 WARSHIP (galley line) — ram prow, shield row, oars that row
     mark();
     bx(-.44,-.03,-.13,.40,.15,.13,WOOD,0);          // long hull
+    bx(-.42,.045,-.134,.38,.062,.134,DARK,0);       // plank seams
+    bx(-.43,.10,-.134,.39,.117,.134,DARK,0);
     bx(.40,.0,-.05,.53,.09,.05,IRON,0);             // ram
     bx(-.42,.15,-.10,-.27,.31,.10,WOOD,0);          // stern castle
+    bx(-.42,.30,-.104,-.27,.315,.104,DECK,0);       // castle rail
     bx(-.26,.15,-.155,.24,.235,-.125,CLOTH,0,1);    // shield rows — team
     bx(-.26,.15,.125,.24,.235,.155,CLOTH,0,1);
+    for(let i=0;i<4;i++){                            // shield bosses down each row
+      bx(-.21+i*.13,.175,-.158,-.17+i*.13,.215,-.152,GOLDC,0);
+      bx(-.21+i*.13,.175,.152,-.17+i*.13,.215,.158,GOLDC,0);
+    }
     bx(-.03,.15,-.03,.03,.88,.03,WOOD,1);           // mast
     bx(-.02,.42,-.24,.02,.82,.24,CANV,0,1);         // big team sail
+    bx(-.026,.51,-.245,.026,.538,.245,BLACK,0,.72); // sail battens
+    bx(-.026,.66,-.245,.026,.688,.245,BLACK,0,.72);
     bx(-.20,.07,-.31,.16,.10,-.14,WOOD,4);          // port oar bank — rows
     bx(-.20,.07,.14,.16,.10,.31,WOOD,5);            // starboard bank
     seal(17);piv.push([.12,.24]);
@@ -11383,7 +11598,10 @@ const R3={
     bx(.05,0,-.08,.10,.13,-.03,DARK,3);
     bx(.05,0,.03,.10,.13,.08,DARK,2);
     bx(-.15,.11,-.095,.13,.30,.095,WOOL,0);         // fleece
+    bx(-.13,.29,-.075,.11,.315,.075,hex('#d3cab2'),0); // wool crown, slightly shaded
     bx(.11,.17,-.045,.21,.27,.045,DARK,1);          // face
+    bx(.205,.225,-.028,.213,.245,-.012,WOOL,1);     // eyes — pale on the dark face
+    bx(.205,.225,.012,.213,.245,.028,WOOL,1);
     seal(19);piv.push([.12,.22]);
     // ---- 20 DEER — slim, long-legged, antlered
     mark();
@@ -11395,6 +11613,9 @@ const R3={
     bx(-.20,.32,-.02,-.16,.42,.02,WOOL,0);          // tail flash
     bx(.10,.36,-.04,.19,.56,.04,TAN,1);             // neck
     bx(.15,.54,-.035,.28,.62,.035,TAN,1);           // head
+    bx(.235,.575,-.039,.253,.593,-.033,EYE,1);      // eyes
+    bx(.235,.575,.033,.253,.593,.039,EYE,1);
+    bx(.265,.555,-.02,.285,.578,.02,DARK,1);        // nose
     bx(.16,.62,-.052,.185,.78,-.032,TUSK,1);        // antlers
     bx(.16,.62,.032,.185,.78,.052,TUSK,1);
     bx(.13,.72,-.06,.21,.745,.06,TUSK,1);           // crossbar prongs
@@ -11408,7 +11629,10 @@ const R3={
     bx(-.19,.09,-.105,.17,.28,.105,BOARC,0);        // body
     bx(-.15,.28,-.025,.11,.325,.025,DARK,0);        // bristle ridge
     bx(.15,.10,-.075,.30,.26,.075,BOARC,1);         // head
+    bx(.255,.21,-.062,.272,.228,-.052,EYE,1);       // small mean eyes
+    bx(.255,.21,.052,.272,.228,.062,EYE,1);
     bx(.30,.13,-.038,.355,.185,.038,DARK,1);        // snout
+    bx(.352,.148,-.024,.36,.168,.024,BOARC,1);      // snout disc
     bx(.29,.175,-.065,.35,.20,-.048,TUSK,1);        // tusks
     bx(.29,.175,.048,.35,.20,.065,TUSK,1);
     seal(21);piv.push([.12,.22]);
@@ -11455,7 +11679,14 @@ const R3={
         vec3 w=vec3(p.x*c-p.z*si, p.y, p.x*si+p.z*c);
         vec3 wn=vec3(n.x*c-n.z*si, n.y, n.x*si+n.z*c);
         gl_Position=uMVP*vec4(w.x+aI0.x, w.y+aI0.y, w.z+aI0.z, 1.0);
-        vec3 base=(aPT.y>0.5)?aI2:aCol;
+        /* aPT.y is a MIX toward team colour, not a boolean. 0 = vertex colour,
+           1 = pure team — the old flag values behave identically — and the
+           fractions in between are what let cloth have detail: a fold quad
+           with aCol black and mix .72 renders at 72% team brightness, one
+           with aCol white and mix .85 is a team highlight. Without this every
+           team surface was one flat panel, because the shader threw the vertex
+           colour away wholesale. */
+        vec3 base=mix(aCol,aI2,clamp(aPT.y,0.0,1.0));
         float lam=max(0.0,dot(normalize(wn),uLight));
         vC=base*(0.60+0.52*lam);
       }`;
