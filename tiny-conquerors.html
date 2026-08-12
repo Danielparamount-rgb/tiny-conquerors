@@ -42,6 +42,9 @@
   /* ---------- canvas ---------- */
   #viewwrap{flex:1 1 auto;position:relative;overflow:hidden;background:#12160b;}
   #view{position:absolute;inset:0;width:100%;height:100%;touch-action:none;}
+  /* weather glass: rain and snow fall on a transparent canvas OVER whichever
+     renderer is live — one implementation for both. No input, under the HUD. */
+  #wx{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2;}
   /* carved frame around the battlefield — pure overlay, steals no pixels and
      no input (pointer-events none, sits under the HUD overlays at z 3+) */
   #mapframe{position:absolute;inset:0;pointer-events:none;z-index:2;
@@ -287,6 +290,7 @@
   <div id="viewwrap">
     <canvas id="view"></canvas>
     <canvas id="view3"></canvas>
+    <canvas id="wx"></canvas>
     <div id="mapframe"></div>
     <canvas id="minimap" width="200" height="116"></canvas>
     <div id="zoomBtns">
@@ -12667,6 +12671,93 @@ function frame(now){
   // minimap froze the moment you toggled. It only touches mctx, so call it
   // directly; it is how you navigate, frozen is not an option.
   if(use3D){R3.draw();drawMini();}else draw();
+  drawWeather();          // on the glass, over whichever renderer just drew
+}
+/* ================= weather ==================================================
+   Rain and snow on the glass. The SCHEDULE is deterministic from the match
+   seed and the game clock — two lockstep peers watch the same storm arrive —
+   but nothing here ever writes to G, so the sim and the state hash are
+   untouched. Each match has a climate (about a third are cold: snow instead
+   of rain), weather comes in ~2-minute episodes with a soft ramp at both
+   ends, and heavy rain occasionally throws lightning. Motion runs on the
+   wall clock so drops keep falling while the game is paused.
+   window.__wx = {kind:'rain'|'snow', inten:0..1} overrides for testing. */
+const wxC=document.getElementById('wx'),wxCtx=wxC.getContext('2d');
+let wxWasClear=true;
+function weatherNow(){
+  if(window.__wx)return window.__wx;
+  if(!G||typeof gameSeed==='undefined')return {kind:'rain',inten:0};
+  const kind=hash2(gameSeed,7)%3===0?'snow':'rain';
+  const EP=120;                                  // episode length, seconds
+  const w=Math.floor(G.t/EP);
+  const on=hash2(gameSeed*13,w*29)%10<3;         // ~30% of episodes have weather
+  if(!on)return {kind,inten:0};
+  const tt=G.t-w*EP;
+  const ramp=Math.min(1,tt/18,(EP-tt)/18);       // ease in and out over 18s
+  const heavy=.55+((hash2(gameSeed*7,w*11)%40)/100);   // .55...95 per episode
+  return {kind,inten:Math.max(0,ramp)*heavy};
+}
+function drawWeather(){
+  const wx=weatherNow();
+  if(wx.inten<=0.01){
+    if(!wxWasClear){wxCtx.clearRect(0,0,wxC.width,wxC.height);wxWasClear=true;}
+    return;
+  }
+  wxWasClear=false;
+  if(wxC.width!==vw||wxC.height!==vh){wxC.width=vw;wxC.height=vh;}
+  const g=wxCtx,t=performance.now()*.001,inten=wx.inten;
+  g.clearRect(0,0,vw,vh);
+  if(wx.kind==='rain'){
+    // overcast wash — the light drops before the rain reads
+    g.fillStyle='rgba(30,38,52,'+(0.10*inten).toFixed(3)+')';
+    g.fillRect(0,0,vw,vh);
+    const n=Math.round(150*inten);
+    g.strokeStyle='rgba(190,210,230,.30)';g.lineWidth=1;
+    g.beginPath();
+    for(let i=0;i<n;i++){
+      const h=hash2(i*73,i*131);
+      const spd=560+(h%180),len=11+(h>>>4)%8;
+      const x=((h%1700)+(t*90))%(vw+40)-20;      // slight sideways drive
+      const y=((h>>>7)%1900+t*spd)%(vh+30)-15;
+      g.moveTo(x,y);g.lineTo(x-3,y+len);
+    }
+    g.stroke();
+    // nearer, faster sheets at higher intensity
+    if(inten>.5){
+      g.strokeStyle='rgba(210,226,240,.20)';g.lineWidth=1.6;
+      g.beginPath();
+      for(let i=0;i<n*.3;i++){
+        const h=hash2(i*211,i*57);
+        const x=((h%1700)+(t*130))%(vw+40)-20;
+        const y=((h>>>6)%1900+t*760)%(vh+40)-20;
+        g.moveTo(x,y);g.lineTo(x-5,y+19);
+      }
+      g.stroke();
+    }
+    /* lightning: a two-pulse sky flash a few times a minute in a downpour.
+       Scheduled from the game clock + seed so both peers see the same bolt. */
+    if(inten>.72&&G){
+      const sec=Math.floor(G.t*2);               // half-second slots
+      if(hash2(gameSeed*31,sec)%44===0){
+        const ph=(G.t*2)%1;
+        const a=ph<.12?(.55-ph*3):(ph>.2&&ph<.3?(.35-(ph-.2)*2.4):0);
+        if(a>0){g.fillStyle='rgba(240,244,255,'+a.toFixed(3)+')';g.fillRect(0,0,vw,vh);}
+      }
+    }
+  }else{
+    // snow: cold wash, lazy flakes swaying as they fall
+    g.fillStyle='rgba(200,214,232,'+(0.08*inten).toFixed(3)+')';
+    g.fillRect(0,0,vw,vh);
+    const n=Math.round(130*inten);
+    g.fillStyle='rgba(244,248,252,.62)';
+    for(let i=0;i<n;i++){
+      const h=hash2(i*97,i*61);
+      const spd=42+(h%30),r=1+((h>>>5)%20)/10;
+      const y=((h>>>7)%1900+t*spd)%(vh+16)-8;
+      const x=(((h%1700)+Math.sin(t*(.5+(h%10)/18)+h)*22)%(vw+16)+(vw+16))%(vw+16)-8;
+      g.beginPath();g.arc(x,y,r,0,7);g.fill();
+    }
+  }
 }
 /* The box-select rubber band is painted by the 2D draw(), which is hidden in
    3D — the drag worked but showed nothing. A fixed-position div tracks selBox
