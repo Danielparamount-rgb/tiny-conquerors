@@ -4737,7 +4737,10 @@ function refreshTerrain(){
   }
   G.waterList=Object.keys(G.water).map(k=>{
     const[x,y]=k.split(',').map(Number);
-    return{x,y,h:hash2(x,y)%20};});
+    // e marks a shore tile — the animated foam laps only where water meets land
+    const e=(!G.water[(x+1)+','+y]&&!G.ford[(x+1)+','+y])||(!G.water[(x-1)+','+y]&&!G.ford[(x-1)+','+y])
+          ||(!G.water[x+','+(y+1)]&&!G.ford[x+','+(y+1)])||(!G.water[x+','+(y-1)]&&!G.ford[x+','+(y-1)])?1:0;
+    return{x,y,h:hash2(x,y)%20,e};});
   // river banks: dry sand over wet sand, dithered into the grass, with reeds
   const isLand=(x,y)=>{const kk=x+','+y;return !G.water[kk]&&!G.ford[kk];};
   for(const k in G.water){
@@ -8722,29 +8725,50 @@ function draw(){
   const vx0=G.cam.x-60,vx1=G.cam.x+vw/z+60,vy0=G.cam.y-100,vy1=G.cam.y+vh/z+60;
   cullX0=vx0;cullX1=vx1;cullY0=vy0;cullY1=vy1;
   RIG_LOD=z<.7;
-  // animated water
+  /* Animated water. The old version gave every tile an independent wiggle;
+     real water moves as COHERENT swells, so crest brightness now rides two
+     travelling waves evaluated in WORLD tile space — the same crest line
+     sweeps across neighbouring tiles instead of each tile twinkling alone.
+     Shore tiles (w.e) get a lapping foam arc on a slower third phase. All of
+     it is render-side cosmetics on G.t; the sim never looks at any of this. */
   if(G.waterList)for(const w of G.waterList){
     const p=isoPt(w.x+.5,w.y+.5);
     if(p.x<vx0||p.x>vx1||p.y<vy0||p.y>vy1)continue;
-    const ph=Math.sin(G.t*1.9+w.h);
+    // two swell trains crossing at an angle, world-coherent
+    const s1=Math.sin(w.x*.9+w.y*.55-G.t*1.8);
+    const s2=Math.sin(w.x*.42-w.y*.78+G.t*1.15);
     const off=((G.t*5+w.h*3.7)%14)-7;
-    ctx.strokeStyle='rgba(205,232,246,'+(.09+.09*ph).toFixed(3)+')';
-    ctx.lineWidth=1.2;
+    const a1=.05+.11*Math.max(0,s1);
+    ctx.strokeStyle='rgba(205,232,246,'+a1.toFixed(3)+')';
+    ctx.lineWidth=1.3;
     ctx.beginPath();
-    ctx.moveTo(p.x-9+off*.5,p.y-1+ph*1.4);
-    ctx.quadraticCurveTo(p.x+off*.5,p.y-3.5+ph*1.4,p.x+9+off*.5,p.y-1+ph*1.4);
+    ctx.moveTo(p.x-9+off*.5,p.y-1+s1*1.6);
+    ctx.quadraticCurveTo(p.x+off*.5,p.y-3.6+s1*1.6,p.x+9+off*.5,p.y-1+s1*1.6);
     ctx.stroke();
-    // second, slower ripple drifting the other way
-    const ph2=Math.sin(G.t*1.3+w.h*2.3);
-    ctx.strokeStyle='rgba(160,212,232,'+(.05+.06*ph2).toFixed(3)+')';
+    const a2=.04+.08*Math.max(0,s2);
+    ctx.strokeStyle='rgba(160,212,232,'+a2.toFixed(3)+')';
     ctx.beginPath();
-    ctx.moveTo(p.x-5-off*.4,p.y+3+ph2);
-    ctx.quadraticCurveTo(p.x-off*.4,p.y+1.4+ph2,p.x+5-off*.4,p.y+3+ph2);
+    ctx.moveTo(p.x-5-off*.4,p.y+3+s2*1.2);
+    ctx.quadraticCurveTo(p.x-off*.4,p.y+1.2+s2*1.2,p.x+5-off*.4,p.y+3+s2*1.2);
     ctx.stroke();
-    // occasional sun glint
-    if(ph>.92){
-      ctx.fillStyle='rgba(255,255,242,'+((ph-.92)*7).toFixed(3)+')';
-      ctx.fillRect(p.x+off,p.y-2+((w.h%5)-2),1.7,1.7);
+    // where the two trains peak together the surface catches the sun
+    if(s1>.55&&s2>.45&&!RIG_LOD){
+      const g2=Math.min(1,(s1+s2-1)*1.4);
+      ctx.fillStyle='rgba(255,255,244,'+(g2*.7).toFixed(3)+')';
+      ctx.fillRect(p.x+off-1,p.y-2+((w.h%5)-2),2.2,1.1);
+      ctx.fillRect(p.x+off-.4,p.y-2.6+((w.h%5)-2),1.1,2.4);
+    }
+    // lapping foam where water meets land — swells in, sighs out
+    if(w.e&&!RIG_LOD){
+      const f=Math.sin(G.t*.9+w.h*1.1);
+      if(f>0){
+        ctx.strokeStyle='rgba(235,248,252,'+(f*.20).toFixed(3)+')';
+        ctx.lineWidth=1.8;
+        ctx.beginPath();
+        ctx.moveTo(p.x-8,p.y+5.5-f);
+        ctx.quadraticCurveTo(p.x,p.y+7.5-f*1.6,p.x+8,p.y+5.5-f);
+        ctx.stroke();
+      }
     }
   }
   for(const c of G.corpses){
@@ -10864,6 +10888,121 @@ const R3={
     gl.disableVertexAttribArray(3);gl.disableVertexAttribArray(4);
     gl.depthMask(true);gl.disable(gl.BLEND);
   },
+  /* ---- animated water surface ----------------------------------------------
+     The terrain texture's water is a painting — correct colours, zero motion.
+     This pass lays a translucent live surface over every water tile: two swell
+     trains plus fine chop perturb a fake normal, the NW key light glints off
+     it SPECULARLY (so the sparkle moves when the camera orbits — the one thing
+     baked art can never do), depth tints and opacifies toward open water, and
+     a breathing foam band hugs the shore. Fords are deliberately bare: units
+     wade across them, and a water sheet over their feet reads as drowning.
+     Time comes from performance.now, not G.t — water keeps moving in pause,
+     and the sim never sees any of this. */
+  buildWaterMesh(){
+    const gl=this.gl,V=[],I=[];
+    // per-tile shore distance (0 at land, 1 by ~2.2 tiles out), corner-averaged
+    // so depth is continuous across tile seams — the 2D pass learned this the
+    // hard way (one value per tile always reads as a mosaic)
+    const dep={};
+    const isW=(x,y)=>!!G.water[x+','+y];
+    for(const k in G.water){
+      const[x,y]=k.split(',').map(Number);
+      let best=3;
+      for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
+        if(!dx&&!dy)continue;
+        if(!isW(x+dx,y+dy)&&!G.ford[(x+dx)+','+(y+dy)])
+          best=Math.min(best,Math.hypot(dx,dy));
+      }
+      dep[k]=Math.max(0,Math.min(1,(best-1)/2.2));
+    }
+    const cdep=(cx,cy)=>{let s=0,n=0;
+      for(const[ox,oy] of [[-1,-1],[0,-1],[-1,0],[0,0]]){
+        const k=(cx+ox)+','+(cy+oy);
+        if(k in dep){s+=dep[k];n++;}
+      }
+      return n?s/n:0;};
+    const WLVL=0.022;                       // just proud of the painted ground
+    for(const k in G.water){
+      const[x,y]=k.split(',').map(Number);
+      const b=V.length/4;
+      V.push(x,WLVL,y,cdep(x,y),       x+1,WLVL,y,cdep(x+1,y),
+             x+1,WLVL,y+1,cdep(x+1,y+1), x,WLVL,y+1,cdep(x,y+1));
+      I.push(b,b+2,b+1, b,b+3,b+2);
+    }
+    if(!this.wvbo){this.wvbo=gl.createBuffer();this.wibo=gl.createBuffer();}
+    gl.bindBuffer(gl.ARRAY_BUFFER,this.wvbo);
+    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(V),gl.STATIC_DRAW);
+    const VC=V.length/4;
+    let IA,itype=gl.UNSIGNED_SHORT;
+    if(VC>65535&&(this.gl2||gl.getExtension('OES_element_index_uint'))){
+      IA=new Uint32Array(I);itype=gl.UNSIGNED_INT;
+    }else IA=new Uint16Array(I);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.wibo);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,IA,gl.STATIC_DRAW);
+    this.wCount=IA.length;this.wIdxType=itype;
+    this.wKey=MAP+':'+elevVer;
+  },
+  initWater(){
+    const gl=this.gl;
+    const vs=`attribute vec3 aPos; attribute float aDep;
+      uniform mat4 uMVP; varying vec3 vW; varying float vDep;
+      void main(){ vW=aPos; vDep=aDep; gl_Position=uMVP*vec4(aPos,1.0); }`;
+    const fs=`precision mediump float;
+      uniform float uT; uniform vec3 uEye;
+      varying vec3 vW; varying float vDep;
+      void main(){
+        float p1=vW.x*1.9+vW.z*1.15-uT*1.6;     // long swell
+        float p2=vW.x*.75-vW.z*1.45+uT*1.05;    // crossing swell
+        float p3=(vW.x+vW.z)*3.1+uT*2.3;        // fine chop
+        float dx=cos(p1)*.95+cos(p2)*.23+cos(p3)*.35;
+        float dz=cos(p1)*.58-cos(p2)*.44+cos(p3)*.35;
+        vec3 n=normalize(vec3(-dx*.16,1.0,-dz*.16));
+        vec3 L=normalize(vec3(-.46,.80,-.38));
+        vec3 V2=normalize(uEye-vW);
+        float lam=max(0.,dot(n,L));
+        vec3 col=mix(vec3(.42,.71,.86),vec3(.13,.42,.62),vDep)*(.72+.38*lam);
+        float spec=pow(max(0.,dot(reflect(-L,n),V2)),64.)*(.55+.45*vDep);
+        col+=vec3(1.,.98,.90)*spec;
+        float foam=(1.-smoothstep(.02,.24,vDep))*(.45+.35*sin(uT*.9+(vW.x+vW.z)*2.2));
+        foam=max(0.,foam);
+        col=mix(col,vec3(.93,.97,.98),foam*.55);
+        float fres=pow(1.-max(0.,dot(n,V2)),2.0);
+        float a=.40+.30*vDep+.18*fres+foam*.25;
+        gl_FragColor=vec4(col,min(a,.85));
+      }`;
+    const mk=(t,s)=>{const sh=gl.createShader(t);gl.shaderSource(sh,s);gl.compileShader(sh);
+      if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS)){console.error(gl.getShaderInfoLog(sh));return null;}return sh;};
+    const v=mk(gl.VERTEX_SHADER,vs),f=mk(gl.FRAGMENT_SHADER,fs);
+    if(!v||!f){this.noWater=true;return false;}
+    const p=gl.createProgram();gl.attachShader(p,v);gl.attachShader(p,f);
+    gl.bindAttribLocation(p,0,'aPos');gl.bindAttribLocation(p,1,'aDep');
+    gl.linkProgram(p);
+    if(!gl.getProgramParameter(p,gl.LINK_STATUS)){console.error(gl.getProgramInfoLog(p));this.noWater=true;return false;}
+    this.wProg=p;
+    this.wLoc={uMVP:gl.getUniformLocation(p,'uMVP'),uT:gl.getUniformLocation(p,'uT'),
+      uEye:gl.getUniformLocation(p,'uEye')};
+    return true;
+  },
+  drawWater(mvp){
+    if(this.noWater)return;
+    if(!this.wProg&&!this.initWater())return;
+    const gl=this.gl;
+    if(this.wKey!==MAP+':'+elevVer)this.buildWaterMesh();
+    if(!this.wCount)return;
+    gl.useProgram(this.wProg);
+    gl.uniformMatrix4fv(this.wLoc.uMVP,false,mvp);
+    gl.uniform1f(this.wLoc.uT,performance.now()*.001%3600);
+    const t=this.target(),cp=Math.cos(this.pitch),sp=Math.sin(this.pitch),D=MAP*2;
+    gl.uniform3f(this.wLoc.uEye,t.x+cp*Math.sin(this.yaw)*D,sp*D,t.y+cp*Math.cos(this.yaw)*D);
+    gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+    gl.depthMask(false);                  // a film over the world, never an occluder
+    gl.bindBuffer(gl.ARRAY_BUFFER,this.wvbo);
+    gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,3,gl.FLOAT,false,16,0);
+    gl.enableVertexAttribArray(1);gl.vertexAttribPointer(1,1,gl.FLOAT,false,16,12);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.wibo);
+    gl.drawElements(gl.TRIANGLES,this.wCount,this.wIdxType,0);
+    gl.depthMask(true);gl.disable(gl.BLEND);
+  },
   /* ---- buildings as real geometry -----------------------------------------
      A massing table rather than 20 hand-modelled meshes: every building is a
      box plus a roof, driven by the data that already exists (b.size for the
@@ -12110,6 +12249,9 @@ const R3={
     if(FC&4){gl.enable(gl.CULL_FACE);gl.cullFace(gl.FRONT);}
     this.drawUnits(mvp);
     if(FC&4)gl.disable(gl.CULL_FACE);
+    // transparent passes after all opaque ones: water depth-tests against the
+    // world (hidden behind hills, parts around hulls) but writes no depth
+    this.drawWater(mvp);
     this.drawFx3(mvp);
     this.drawFog(mvp);
   },
@@ -12357,7 +12499,7 @@ requestAnimationFrame(frame);
 
 <script>
 (function(){
-  var BUILD = 'tq-v42';
+  var BUILD = 'tq-v43';
   addEventListener('load', function(){
     var ov = document.getElementById('startOverlay');
     if (!ov) return;
