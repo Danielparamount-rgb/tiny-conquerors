@@ -8943,22 +8943,9 @@ function draw(){
   ctx.save();
   ctx.transform(IW,IH,-IW,IH,0,0);
   ctx.drawImage(fogS,0,0,MAP,MAP);
-  // Slow-drifting mist, clipped to unexplored ground. Rebuilding this 512px
-  // canvas (9 composites) every frame was one of the heaviest render costs;
-  // the mist creeps at 4.5px/s, so refreshing it every 3rd frame is invisible.
-  wispT=(wispT+1)%3;
-  if(wispT===0||fogWasDirty){
-    wispCtx.globalCompositeOperation='source-over';
-    wispCtx.clearRect(0,0,512,512);
-    wispCtx.drawImage(maskS,0,0);
-    wispCtx.globalCompositeOperation='source-in';
-    const wx0=(G.t*4.5)%256,wy0=(G.t*2.6)%256;
-    for(let oy=-1;oy<1;oy++)for(let ox=-1;ox<2;ox++)
-      wispCtx.drawImage(noiseC,wx0+ox*256,wy0+oy*256,256,256);
-    for(let ox=-1;ox<2;ox++)
-      wispCtx.drawImage(noiseC,wx0+ox*256,wy0+256,256,256);
-    fogWasDirty=false;
-  }
+  // Slow-drifting mist, clipped to unexplored ground — shared with the 3D
+  // fog pass, which finally draws it too (it was a known 3D gap).
+  updateWisps();
   ctx.globalAlpha=.35;
   ctx.drawImage(wispC,0,0,MAP,MAP);
   ctx.globalAlpha=1;
@@ -8982,6 +8969,28 @@ function draw(){
     G.ageFx-=1/60;
   }
   drawMini();
+}
+/* Rebuild the drifting-mist canvas (unexplored-only). Every 3rd call, because
+   rebuilding a 512px canvas with 9 composites per frame was one of the
+   heaviest render costs and the mist creeps at 4.5px/s anyway. Shared by the
+   2D draw and R3.drawFog — whichever renderer is live keeps the mist alive.
+   wispVer lets the 3D path know when to re-upload its texture. */
+let wispVer=0;
+function updateWisps(stride){
+  // 3D passes 6: it also pays a 512px texture UPLOAD per rebuild, and mist
+  // creeping at 4.5px/s cannot tell 20Hz from 10Hz
+  wispT=(wispT+1)%(stride||3);
+  if(wispT!==0&&!fogWasDirty)return;
+  wispCtx.globalCompositeOperation='source-over';
+  wispCtx.clearRect(0,0,512,512);
+  wispCtx.drawImage(maskS,0,0);
+  wispCtx.globalCompositeOperation='source-in';
+  const wx0=(G.t*4.5)%256,wy0=(G.t*2.6)%256;
+  for(let oy=-1;oy<1;oy++)for(let ox=-1;ox<2;ox++)
+    wispCtx.drawImage(noiseC,wx0+ox*256,wy0+oy*256,256,256);
+  for(let ox=-1;ox<2;ox++)
+    wispCtx.drawImage(noiseC,wx0+ox*256,wy0+256,256,256);
+  fogWasDirty=false;wispVer++;
 }
 function miniDiamond(){mctx.beginPath();mctx.moveTo(100,10);mctx.lineTo(196,58);
   mctx.lineTo(100,106);mctx.lineTo(4,58);mctx.closePath();}
@@ -10623,6 +10632,13 @@ const R3={
              light:['#173312','#22491a','#2e6021','#3d7c2c','#54993c'],trunk:'#4a3018'},
   TREE_LEAF:{dark:['#122a0c','#1d4213','#28581a','#357024','#458830','#589b3e'],
              light:['#17330f','#255018','#316a20','#40852b','#529f38','#66b447'],trunk:'#54381e'},
+  /* Nine species meshes share one VBO and one instanced pipeline: five REAL
+     tree species (pine / oak / green maple / autumn maple / birch — a forest
+     of one cloned tree never reads as a forest), then the resources that were
+     simply MISSING from 3D: berry bush, gold mine, carcass, fish. Resource
+     meshes are authored at WORLD size (instance scale 1); trees keep the
+     pixel-height scaling for parity with the 2D sprites. */
+  SPN:9,
   buildTreeMeshes(){
     const V=[],I=[];                       // pos3, nrm3, col3  -> 9 floats/vert
     const hex=c=>[parseInt(c.slice(1,3),16)/255,parseInt(c.slice(3,5),16)/255,parseInt(c.slice(5,7),16)/255];
@@ -10632,33 +10648,29 @@ const R3={
       vx=c[0]-a[0],vy=c[1]-a[1],vz=c[2]-a[2];
       let nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;
       const L=Math.hypot(nx,ny,nz)||1;return [nx/L,ny/L,nz/L];};
-    // n-gon cone: apex at y1, base ring radius r at y0
-    const cone=(y0,y1,r,seg,col)=>{
-      const c=hex(col);
+    /* Winding audit still holds: cone and prism wind INTO the solid, blob is
+       flipped to match — everything here stays safe under cullFace(FRONT).
+       Cone undersides stay deleted (provably unseeable at any legal pitch). */
+    const cone=(y0,y1,r,seg,col,cx,cz)=>{
+      const c=hex(col);cx=cx||0;cz=cz||0;
       for(let i=0;i<seg;i++){
         const a0=i/seg*6.283,a1=(i+1)/seg*6.283;
-        const p0=[Math.cos(a0)*r,y0,Math.sin(a0)*r],p1=[Math.cos(a1)*r,y0,Math.sin(a1)*r],ap=[0,y1,0];
+        const p0=[cx+Math.cos(a0)*r,y0,cz+Math.sin(a0)*r],p1=[cx+Math.cos(a1)*r,y0,cz+Math.sin(a1)*r],ap=[cx,y1,cz];
         const n=nrm(p0,p1,ap);
         tri(push(p0,n,c),push(p1,n,c),push(ap,n,c));
       }
-      /* The cone underside used to be emitted here. It is PROVABLY unseeable:
-         its normal is (0,-1,0) and the eye sits at y = sin(pitch)*D with pitch
-         clamped to [0.35, 1.45], so dot(n, viewDir) >= 0.343 at every legal
-         camera — never even marginal. Removing it takes the pine from 66 to 38
-         triangles (-21% of all tree geometry) for exactly zero visual change. */
     };
-    const prism=(y0,y1,r,seg,col)=>{
-      const c=hex(col);
+    const prism=(y0,y1,r,seg,col,rt,cx,cz)=>{
+      const c=hex(col);rt=rt===undefined?r:rt;cx=cx||0;cz=cz||0;
       for(let i=0;i<seg;i++){
         const a0=i/seg*6.283,a1=(i+1)/seg*6.283;
-        const b0=[Math.cos(a0)*r,y0,Math.sin(a0)*r],b1=[Math.cos(a1)*r,y0,Math.sin(a1)*r];
-        const t0=[b0[0],y1,b0[2]],t1=[b1[0],y1,b1[2]];
+        const b0=[cx+Math.cos(a0)*r,y0,cz+Math.sin(a0)*r],b1=[cx+Math.cos(a1)*r,y0,cz+Math.sin(a1)*r];
+        const t0=[cx+Math.cos(a0)*rt,y1,cz+Math.sin(a0)*rt],t1=[cx+Math.cos(a1)*rt,y1,cz+Math.sin(a1)*rt];
         const n=nrm(b0,b1,t1);
         const i0=push(b0,n,c),i1=push(b1,n,c),i2=push(t1,n,c),i3=push(t0,n,c);
         tri(i0,i1,i2);tri(i0,i2,i3);
       }
     };
-    // rough sphere-ish blob (octahedron subdivided once) — cheap, reads round
     const blob=(cx,cy,cz,r,col,jit)=>{
       const c=hex(col);
       const P=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
@@ -10669,41 +10681,100 @@ const R3={
       };
       for(const f of F){
         const a=at(P[f[0]]),b=at(P[f[1]]),d=at(P[f[2]]);
-        const n=nrm(a,b,d);          // normal unchanged, so shading is bit-identical
+        const n=nrm(a,b,d);
         const i0=push(a,n,c),i1=push(b,n,c),i2=push(d,n,c);
-        /* REVERSED winding. The blob is the ONLY tree primitive whose winding
-           normal points OUTWARD; cone and prism both point INTO the solid. One
-           global cullFace mode cannot cover both, so the blob is flipped to
-           match. Vertex data is untouched — this is a visual no-op until
-           CULL_FACE is enabled in draw(). */
-        tri(i0,i2,i1);
+        tri(i0,i2,i1);                    // reversed — see winding audit above
       }
     };
-    // ---- species 0: pine. radius 1, total height ~1.15 ----
-    const P=this.TREE_PINE, L=this.TREE_LEAF;
-    const off=[],cnt=[];
-    off.push(0);
-    prism(0,.30,.11,5,P.trunk);
-    cone(.20,.62,1.00,7,P.light[1]);
-    cone(.40,.82,.76,7,P.light[2]);
-    cone(.60,1.00,.52,7,P.light[3]);
-    cone(.78,1.18,.28,7,P.light[4]);
-    cnt.push(I.length);
-    // ---- species 1: broadleaf ----
-    off.push(I.length);
-    prism(0,.52,.13,5,L.trunk);
-    blob(0,.86,0,.86,L.light[2],true);
-    blob(-.30,1.02,-.16,.54,L.light[3],true);
-    blob(.26,.96,.22,.50,L.light[4],true);
-    blob(-.06,1.20,.02,.38,L.light[5],true);
-    cnt.push(I.length-off[1]);
+    const off=[],cnt=[],hgt=[];
+    const mark=()=>off.push(I.length);
+    const seal=h=>{cnt.push(I.length-off[off.length-1]);hgt.push(h);};
+    const P=this.TREE_PINE;
+    // ---- 0 PINE: tall, tiered, bare trunk at the base ----
+    mark();
+    prism(0,.34,.10,5,P.trunk,.07);
+    cone(.22,.64,.60,7,P.light[1]);
+    cone(.42,.86,.47,7,P.light[2]);
+    cone(.62,1.05,.33,7,P.light[3]);
+    cone(.80,1.22,.19,7,P.light[4]);
+    seal(1.22);
+    // ---- 1 OAK: stout tapered trunk, broad spreading crown ----
+    mark();
+    prism(0,.46,.16,6,'#4e3319',.11);
+    blob(0,.74,0,.60,'#2e6a1f',true);
+    blob(-.44,.80,-.18,.46,'#357a26',true);
+    blob(.42,.82,.20,.48,'#40882e',true);
+    blob(-.14,1.00,.28,.42,'#4c9838',true);
+    blob(.10,1.04,-.24,.44,'#57a641',true);
+    seal(1.3);
+    // ---- 2 MAPLE, summer green: upright rounded crown ----
+    mark();
+    prism(0,.50,.11,5,'#5a3d20',.08);
+    blob(0,.86,0,.50,'#3f8f31',true);
+    blob(-.17,1.06,-.09,.38,'#4da03c',true);
+    blob(.15,1.04,.11,.40,'#59b048',true);
+    blob(0,1.22,0,.28,'#6ec25a',true);
+    seal(1.4);
+    // ---- 3 MAPLE in autumn: same habit, fire colours ----
+    mark();
+    prism(0,.50,.11,5,'#5a3d20',.08);
+    blob(0,.86,0,.50,'#b0511d',true);
+    blob(-.17,1.06,-.09,.38,'#c96a24',true);
+    blob(.15,1.04,.11,.40,'#d98a2e',true);
+    blob(0,1.22,0,.28,'#e8a83c',true);
+    seal(1.4);
+    // ---- 4 BIRCH: slender WHITE trunk with dark bands, airy high crown ----
+    mark();
+    prism(0,.80,.072,5,'#e6e2d6',.055);
+    prism(.20,.255,.076,5,'#4a4640',.074);
+    prism(.46,.505,.073,5,'#4a4640',.068);
+    blob(0,1.00,0,.38,'#7fb95a',true);
+    blob(-.13,1.16,.08,.30,'#93c86b',true);
+    blob(.13,1.20,-.06,.28,'#a5d67d',true);
+    seal(1.5);
+    // ---- 5 BERRY BUSH (world-size): green mound studded with berries ----
+    mark();
+    blob(0,.15,0,.26,'#2e6b22',true);
+    blob(-.16,.18,.09,.19,'#3a7d2c',true);
+    blob(.15,.20,-.07,.18,'#4a8f38',true);
+    blob(-.09,.28,-.12,.042,'#c22a20',false);
+    blob(.13,.26,.09,.042,'#d43428',false);
+    blob(0,.33,.02,.042,'#c22a20',false);
+    blob(-.19,.16,-.02,.038,'#d43428',false);
+    blob(.05,.20,-.18,.038,'#c22a20',false);
+    seal(1);
+    // ---- 6 GOLD MINE (world-size): rock crags, gold caps, loose nuggets ----
+    mark();
+    cone(0,.34,.27,4,'#736b5f');
+    cone(0,.48,.19,5,'#7e766a',.15,-.09);
+    cone(0,.28,.16,4,'#69615a',-.19,.11);
+    cone(.27,.42,.09,4,'#d9a92c',.15,-.09);
+    cone(.20,.31,.075,4,'#c9992a');
+    blob(.23,.05,.17,.055,'#e3b23c',false);
+    blob(-.21,.05,-.06,.048,'#d9a92c',false);
+    blob(-.04,.045,.24,.048,'#e3b23c',false);
+    seal(1);
+    // ---- 7 CARCASS (world-size): low meat mound, pale rib hints ----
+    mark();
+    blob(0,.075,0,.18,'#a24532',true);
+    blob(.11,.065,.07,.12,'#8f3a2a',true);
+    blob(-.12,.06,-.05,.11,'#b25340',true);
+    blob(.02,.13,.02,.045,'#e8e2d2',false);
+    blob(-.06,.12,-.04,.04,'#e8e2d2',false);
+    seal(1);
+    // ---- 8 FISH SCHOOL (world-size): ripple disc + fin above the water ----
+    mark();
+    cone(0,.028,.24,8,'#4585b2');
+    cone(.02,.15,.06,4,'#2f6f9e',.05,.03);
+    blob(-.09,.05,-.05,.045,'#77b6d9',false);
+    seal(1);
     const gl=this.gl;
     this.tvbo=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,this.tvbo);
     gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(V),gl.STATIC_DRAW);
     this.tibo=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.tibo);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(I),gl.STATIC_DRAW);
     this.treeOff=off;this.treeCnt=cnt;this.treeVerts=V.length/9;
-    this.treeH=[1.18,1.35];              // mesh height per species, for scaling
+    this.treeH=hgt;                      // mesh height per species, for scaling
   },
   initTrees(){
     const gl=this.gl;
@@ -10741,8 +10812,10 @@ const R3={
       uAlpha:gl.getUniformLocation(p,'uAlpha')};
     this.buildTreeMeshes();
     this.buildShadowMesh();
-    this.ivbo=[gl.createBuffer(),gl.createBuffer()];
-    this.iCount=[0,0];this.iAll=[0,0];this.treeKey='';this.cullKey='';
+    this.ivbo=Array.from({length:this.SPN},()=>gl.createBuffer());
+    this.iCount=new Array(this.SPN).fill(0);
+    this.iAll=new Array(this.SPN).fill(0);
+    this.treeKey='';this.cullKey='';
     return true;
   },
   /* One instance per tree, split by species so each is one drawElementsInstanced.
@@ -10750,25 +10823,33 @@ const R3={
      h%3===0, rr=10+(h%4)*1.7, dark when h>=5) so the 3D forest has the same
      species mix and size spread as the 2D art. */
   buildTrees(){
-    const gl=this.gl,A=[[],[]];
+    const gl=this.gl,A=Array.from({length:this.SPN},()=>[]);
     for(const k in G.res){
       const r=G.res[k];
-      if(r.type!=='wood')continue;
-      const h=hash2(r.x*13,r.y*17)%8;
-      const sp=(h%3===0)?0:1;
-      const rr=10+(h%4)*1.7;
-      const hp=(sp?30:34)+(h%4)*2.5;                 // sprite-space height in px
-      // per-instance yaw from a second hash so it does not correlate with the
-      // species/size hash — 0..2π in 32 steps is plenty to kill the clone look
+      let sp=-1,sxz=1,sy=1,shade=1;
+      if(r.type==='wood'){
+        /* species from the same hash the 2D sprites use, so a given tree is
+           the same KIND in both renderers: pine 3/8, oak 2/8, green maple,
+           autumn maple and birch 1/8 each — a mixed wood instead of clones */
+        const h=hash2(r.x*13,r.y*17)%8;
+        sp=(h%3===0)?0:(h===1||h===4)?1:(h===2)?2:(h===7)?3:4;
+        const rr=10+(h%4)*1.7;
+        const hp=(sp===0?34:30)+(h%4)*2.5;
+        sxz=rr/IW; sy=hp*this.HS/this.treeH[sp];
+        shade=.82+((h>>>3)%5)*.05;
+      }
+      else if(r.type==='gold')sp=6;
+      else if(r.type==='food')sp=(r.sub==='meat')?7:5;  // carcass vs berry bush
+      else if(r.type==='fish')sp=8;
+      if(sp<0)continue;
       const rot=(hash2(r.x*57,r.y*91)%32)*0.19635;
-      A[sp].push(r.x+.5, this.groundH(r.x+.5,r.y+.5), r.y+.5, rr/IW,
-                 hp*this.HS/this.treeH[sp], h>=5?0.80:1.0, rot);
+      A[sp].push(r.x+.5, this.groundH(r.x+.5,r.y+.5), r.y+.5, sxz, sy, shade, rot);
     }
     /* Keep the FULL set on the CPU and size the GPU buffer to match; the visible
        subset is packed into it each time the camera moves (see cullTrees). */
-    this.treeAll=[new Float32Array(A[0]),new Float32Array(A[1])];
-    this.treeVis=[new Float32Array(A[0].length),new Float32Array(A[1].length)];
-    for(let s=0;s<2;s++){
+    this.treeAll=A.map(a=>new Float32Array(a));
+    this.treeVis=A.map(a=>new Float32Array(a.length));
+    for(let s=0;s<this.SPN;s++){
       gl.bindBuffer(gl.ARRAY_BUFFER,this.ivbo[s]);
       gl.bufferData(gl.ARRAY_BUFFER,this.treeAll[s],gl.DYNAMIC_DRAW);
       this.iCount[s]=A[s].length/7;
@@ -10801,7 +10882,7 @@ const R3={
     const M=2.5;
     const hw=vw/G.cam.z/(2*this.PPT)+M, hh=vh/G.cam.z/(2*this.PPT)+M;
     const vis=G.vis,fr=this.dbg.cull;      // dbg.cull=0 now skips ONLY the frustum test
-    for(let s=0;s<2;s++){
+    for(let s=0;s<this.SPN;s++){
       const src=this.treeAll[s],dst=this.treeVis[s];
       let o=0;
       for(let i=0;i<src.length;i+=7){
@@ -10833,7 +10914,7 @@ const R3={
     const gl=this.gl,ex=this.iext;
     if(this.treeKey!==MAP+':'+elevVer+':'+resGen+':'+resVer)this.buildTrees();
     this.cullTrees();
-    if(!this.iCount[0]&&!this.iCount[1])return;
+    if(!this.iCount.some(n=>n))return;
     gl.useProgram(this.treeProg);
     gl.uniformMatrix4fv(this.treeLoc.uMVP,false,mvp);
     gl.uniform3f(this.treeLoc.uLight,-0.46,0.80,-0.38);   // key light from the NW
@@ -10842,7 +10923,7 @@ const R3={
     for(let i=0;i<3;i++){gl.enableVertexAttribArray(i);
       gl.vertexAttribPointer(i,3,gl.FLOAT,false,36,i*12);ex.vertexAttribDivisorANGLE(i,0);}
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.tibo);
-    for(let s=0;s<2;s++){
+    for(let s=0;s<this.SPN;s++){
       if(!this.iCount[s])continue;
       gl.bindBuffer(gl.ARRAY_BUFFER,this.ivbo[s]);
       gl.enableVertexAttribArray(3);gl.vertexAttribPointer(3,4,gl.FLOAT,false,28,0);
@@ -10900,6 +10981,23 @@ const R3={
       const cx=b.tx+b.size/2,cz=b.ty+b.size/2;
       A.push(cx, this.groundH(cx,cz)+0.010, cz, b.size*0.60*vs, 1,1,0);
     }
+    /* Ground resources cast too — a gold mine floating on clean lit grass
+       gives the game away. CACHED: scanning all of G.res (8,700 keys on Black
+       Forest) every frame cost real milliseconds, and the answer only changes
+       when resources or exploration do. */
+    const rsKey=resVer+':'+fogVer;
+    if(this.rsKey!==rsKey){
+      const RS=this.resShad=[];
+      for(const k in G.res){
+        const r=G.res[k];
+        if(r.type==='wood'||r.type==='fish')continue;
+        if(!G.vis[(r.y|0)*MAP+(r.x|0)])continue; // unexplored — same rule as trees
+        const rad=r.type==='gold'?0.34:(r.sub==='meat')?0.24:0.28;
+        RS.push(r.x+.5, this.groundH(r.x+.5,r.y+.5)+0.011, r.y+.5, rad, 1,1,0);
+      }
+      this.rsKey=rsKey;
+    }
+    if(this.resShad)for(const v of this.resShad)A.push(v);
     if(!A.length)return;
     gl.useProgram(this.treeProg);
     gl.uniformMatrix4fv(this.treeLoc.uMVP,false,mvp);
@@ -11519,14 +11617,21 @@ const R3={
             i2=vpush(c,n,col,part,team),i3=vpush(d,n,col,part,team);
       I.push(i0,i1,i2,i0,i2,i3);
     };
-    // axis-aligned box from min/max, tagged with a part index
-    const bx=(x0,y0,z0,x1,y1,z1,col,part,team)=>{
-      team=team||0;
-      q([x0,y0,z0],[x1,y0,z0],[x1,y1,z0],[x0,y1,z0],col,part,team);
-      q([x1,y0,z1],[x0,y0,z1],[x0,y1,z1],[x1,y1,z1],col,part,team);
-      q([x1,y0,z0],[x1,y0,z1],[x1,y1,z1],[x1,y1,z0],col,part,team);
-      q([x0,y0,z1],[x0,y0,z0],[x0,y1,z0],[x0,y1,z1],col,part,team);
-      q([x0,y1,z0],[x1,y1,z0],[x1,y1,z1],[x0,y1,z1],col,part,team);
+    /* Axis-aligned box from min/max, tagged with a part index. `tap` shrinks
+       the TOP face toward its centre (0..1) so a torso or head becomes a soft
+       frustum instead of a crate — the single cheapest cure for "everything
+       is made of boxes", because it costs ZERO extra triangles. Negative tap
+       WIDENS the top: that is what gives ship hulls a keel. */
+    const bx=(x0,y0,z0,x1,y1,z1,col,part,team,tap)=>{
+      team=team||0;tap=tap||0;
+      const cx2=(x0+x1)/2,cz2=(z0+z1)/2;
+      const sx=(x1-x0)/2*(1-tap),sz=(z1-z0)/2*(1-tap);
+      const tx0=cx2-sx,tx1=cx2+sx,tz0=cz2-sz,tz1=cz2+sz;
+      q([x0,y0,z0],[x1,y0,z0],[tx1,y1,tz0],[tx0,y1,tz0],col,part,team);
+      q([x1,y0,z1],[x0,y0,z1],[tx0,y1,tz1],[tx1,y1,tz1],col,part,team);
+      q([x1,y0,z0],[x1,y0,z1],[tx1,y1,tz1],[tx1,y1,tz0],col,part,team);
+      q([x0,y0,z1],[x0,y0,z0],[tx0,y1,tz0],[tx0,y1,tz1],col,part,team);
+      q([tx0,y1,tz0],[tx1,y1,tz0],[tx1,y1,tz1],[tx0,y1,tz1],col,part,team);
       q([x0,y0,z1],[x1,y0,z1],[x1,y0,z0],[x0,y0,z0],col,part,team);
     };
     const SKIN=hex('#e0b78e'),CLOTH=hex('#8a7a5e'),STEEL=hex('#b9bec4'),
@@ -11557,14 +11662,14 @@ const R3={
       bx(-.048,0,-.108,.048,.10,-.012,BOOT,2);      // boot
       bx(-.04,0,.02,.04,.28,.10,DARK,3);            // right leg
       bx(-.048,0,.012,.048,.10,.108,BOOT,3);
-      bx(-.085,.27,-.11,.085,.50,.11,CLOTH,0,1);    // torso — team tabard
+      bx(-.085,.27,-.11,.085,.50,.11,CLOTH,0,1,.16); // torso — tapers to the shoulders
       bx(-.087,.252,-.114,.087,.285,.114,BLACK,0,.66); // hem flare, darkened team
       bx(.085,.315,-.052,.092,.478,-.024,BLACK,0,.78); // tunic folds, front face
       bx(.085,.315,.016,.092,.478,.044,BLACK,0,.78);
       bx(-.092,.315,-.02,-.085,.478,.02,BLACK,0,.78);  // one on the back
       bx(-.089,.286,-.112,.089,.314,.112,LEATH,0);  // belt
       bx(.087,.29,-.014,.096,.31,.014,GOLDC,0);     // buckle
-      bx(-.06,.50,-.06,.06,.64,.06,SKIN,1);         // head
+      bx(-.06,.50,-.06,.06,.64,.06,SKIN,1,0,.14);   // head, crowned not cubed
       bx(.058,.566,-.034,.066,.588,-.012,EYE,1);    // eyes — the face reads
       bx(.058,.566,.012,.066,.588,.034,EYE,1);
       if(hat===0)bx(-.066,.582,-.066,.032,.658,.066,HAIR,1);      // bare head: hair cap
@@ -11633,7 +11738,7 @@ const R3={
     seal(4);piv.push([.27,.47]);
     // ---- 5 MONK — full robe, team sash, tonsure, no weapon
     mark();
-    bx(-.09,.02,-.10,.09,.52,.10,CLOTH,0);          // robe, floor length
+    bx(-.09,.02,-.10,.09,.52,.10,CLOTH,0,0,.24);    // robe, flaring to the hem
     bx(.088,.06,-.045,.094,.50,-.02,BLACK,0,.14);   // robe folds — near-neutral dark
     bx(.088,.06,.02,.094,.50,.045,BLACK,0,.14);
     bx(-.093,.22,-.035,.093,.32,.035,CLOTH,0,1);    // team sash
@@ -11661,13 +11766,13 @@ const R3={
       bx(-.20,0,-.106,-.14,.07,-.034,BOOT,3);
       bx(-.20,0,.04,-.14,.28,.10,DARK,2);
       bx(-.20,0,.034,-.14,.07,.106,BOOT,2);
-      bx(-.24,.26,-.11,.22,.48,.11,HIDE,0);         // barrel
+      bx(-.24,.26,-.11,.22,.48,.11,HIDE,0,0,.12);   // barrel, rounded back
       bx(-.25,.31,-.12,.23,.44,.12,CLOTH,0,1);      // caparison drape — team
       bx(-.255,.295,-.124,.235,.315,.124,WHITE,0,.85); // trim band, lifted team
       bx(-.255,.425,-.124,.235,.443,.124,BLACK,0,.68); // upper band, darkened team
       bx(-.07,.465,-.088,.10,.492,.088,LEATH,0);    // saddle pad
       bx(-.31,.32,-.02,-.24,.46,.02,DARK,0);        // tail
-      bx(.18,.42,-.05,.30,.64,.05,HIDE,1);          // neck
+      bx(.18,.42,-.05,.30,.64,.05,HIDE,1,0,.20);    // neck, tapering up
       bx(.17,.63,-.02,.295,.675,.02,HAIR,1);        // mane ridge
       bx(.28,.54,-.045,.42,.64,.045,HIDE,1);        // head
       bx(.335,.588,-.049,.357,.606,-.043,EYE,1);    // eyes
@@ -11707,7 +11812,7 @@ const R3={
     bx(-.26,0,.04,-.14,.32,.14,GREY,3);
     bx(.12,0,-.14,.24,.32,-.04,GREY,3);
     bx(.12,0,.04,.24,.32,.14,GREY,2);
-    bx(-.30,.30,-.17,.28,.64,.17,GREY,0);           // body
+    bx(-.30,.30,-.17,.28,.64,.17,GREY,0,0,.10);     // body, rounded spine
     bx(.26,.44,-.11,.44,.64,.11,GREY,1);            // head
     bx(.415,.565,-.095,.437,.585,-.088,EYE,1);      // eyes
     bx(.415,.565,.088,.437,.585,.095,EYE,1);
@@ -11793,7 +11898,7 @@ const R3={
     seal(14);piv.push([.12,.30]);
     // ---- 15 FISHING BOAT — open hull, fisher with a rod
     mark();
-    bx(-.28,-.03,-.12,.28,.13,.12,WOOD,0);          // hull, sitting in the water
+    bx(-.28,-.03,-.12,.28,.13,.12,WOOD,0,0,-.30);   // hull — keel narrow, gunwale wide
     bx(-.22,.11,-.08,.22,.14,.08,DARK,0);           // open interior
     bx(.26,.10,-.03,.32,.24,.03,WOOD,0);            // bow post
     bx(-.32,.10,-.03,-.26,.22,.03,WOOD,0);
@@ -11803,7 +11908,7 @@ const R3={
     seal(15);piv.push([.10,.24]);
     // ---- 16 ROUND SHIP (cog / transport / demo) — tubby trader
     mark();
-    bx(-.34,-.04,-.17,.34,.17,.17,WOOD,0);          // fat hull
+    bx(-.34,-.04,-.17,.34,.17,.17,WOOD,0,0,-.26);   // fat hull with a real keel line
     bx(-.32,.035,-.174,.32,.052,.174,DARK,0);       // plank seams
     bx(-.33,.10,-.174,.33,.117,.174,DARK,0);
     bx(-.36,.17,-.19,.36,.25,.19,WOOD,0);           // bulwark
@@ -11819,7 +11924,7 @@ const R3={
     seal(16);piv.push([.12,.30]);
     // ---- 17 WARSHIP (galley line) — ram prow, shield row, oars that row
     mark();
-    bx(-.44,-.03,-.13,.40,.15,.13,WOOD,0);          // long hull
+    bx(-.44,-.03,-.13,.40,.15,.13,WOOD,0,0,-.30);   // long hull, flared gunwales
     bx(-.42,.045,-.134,.38,.062,.134,DARK,0);       // plank seams
     bx(-.43,.10,-.134,.39,.117,.134,DARK,0);
     bx(.40,.0,-.05,.53,.09,.05,IRON,0);             // ram
@@ -11840,8 +11945,8 @@ const R3={
     seal(17);piv.push([.12,.24]);
     // ---- 18 TURTLE SHIP — iron carapace, spiked ridge, dragon prow
     mark();
-    bx(-.36,-.02,-.15,.36,.13,.15,WOOD,0);
-    bx(-.34,.13,-.14,.34,.25,.14,IRON,0);           // carapace
+    bx(-.36,-.02,-.15,.36,.13,.15,WOOD,0,0,-.24);
+    bx(-.34,.13,-.14,.34,.25,.14,IRON,0,0,.18);     // carapace, domed by taper
     bx(-.28,.25,-.11,.28,.33,.11,IRON,0);
     bx(-.16,.33,-.022,-.10,.40,.022,DARK,0);        // spine spikes
     bx(-.02,.33,-.022,.04,.40,.022,DARK,0);
@@ -11854,7 +11959,7 @@ const R3={
     bx(-.12,0,.03,-.07,.13,.08,DARK,3);
     bx(.05,0,-.08,.10,.13,-.03,DARK,3);
     bx(.05,0,.03,.10,.13,.08,DARK,2);
-    bx(-.15,.11,-.095,.13,.30,.095,WOOL,0);         // fleece
+    bx(-.15,.11,-.095,.13,.30,.095,WOOL,0,0,.18);   // fleece, rounded
     bx(-.13,.29,-.075,.11,.315,.075,hex('#d3cab2'),0); // wool crown, slightly shaded
     bx(.11,.17,-.045,.21,.27,.045,DARK,1);          // face
     bx(.205,.225,-.028,.213,.245,-.012,WOOL,1);     // eyes — pale on the dark face
@@ -11866,7 +11971,7 @@ const R3={
     bx(-.13,0,.025,-.09,.24,.065,TAN,3);
     bx(.07,0,-.065,.11,.24,-.025,TAN,3);
     bx(.07,0,.025,.11,.24,.065,TAN,2);
-    bx(-.17,.22,-.08,.14,.40,.08,TAN,0);            // body
+    bx(-.17,.22,-.08,.14,.40,.08,TAN,0,0,.14);      // body
     bx(-.20,.32,-.02,-.16,.42,.02,WOOL,0);          // tail flash
     bx(.10,.36,-.04,.19,.56,.04,TAN,1);             // neck
     bx(.15,.54,-.035,.28,.62,.035,TAN,1);           // head
@@ -11883,7 +11988,7 @@ const R3={
     bx(-.15,0,.035,-.09,.11,.085,DARK,3);
     bx(.07,0,-.085,.13,.11,-.035,DARK,3);
     bx(.07,0,.035,.13,.11,.085,DARK,2);
-    bx(-.19,.09,-.105,.17,.28,.105,BOARC,0);        // body
+    bx(-.19,.09,-.105,.17,.28,.105,BOARC,0,0,.12);  // body
     bx(-.15,.28,-.025,.11,.325,.025,DARK,0);        // bristle ridge
     bx(.15,.10,-.075,.30,.26,.075,BOARC,1);         // head
     bx(.255,.21,-.062,.272,.228,-.052,EYE,1);       // small mean eyes
@@ -12131,6 +12236,16 @@ const R3={
       const dim=CD[this.unitArch(c.type)]||CD[0];
       bx(c.x,g+0.035,c.y,dim[0],0.035,dim[1],[k*0.34,k*0.30,k*0.26]);
     }
+    // loose relics — a little gold monolith on a plinth (they were invisible
+    // in 3D; on Hallowed Ground the whole map revolves around finding them)
+    for(const rl of (G.relics||[])){
+      if(rl.held||rl.mon)continue;
+      if(!tileKnown(rl.x,rl.y))continue;
+      const g=this.groundH(rl.x,rl.y);
+      bx(rl.x,g+0.020,rl.y,0.11,0.020,0.11,[0.42,0.36,0.24]);          // plinth
+      bx(rl.x,g+0.150,rl.y,0.045,0.115,0.045,[0.85,0.66,0.20]);        // monolith
+      bx(rl.x,g+0.282,rl.y,0.058,0.018,0.058,[0.97,0.85,0.44]);        // gilt cap
+    }
     /* Fire and smoke on damaged buildings — camera-facing quads built fresh
        each frame (this mesh already rebuilds per frame, so animation is free).
        Flames go in the main OPAQUE range; smoke quads are appended AFTER
@@ -12247,8 +12362,8 @@ const R3={
         vUV=aCorner;
       }`;
     const fs=`precision mediump float;
-      uniform sampler2D uFog; varying vec2 vUV;
-      void main(){ gl_FragColor=texture2D(uFog,vUV); }`;
+      uniform sampler2D uFog; uniform float uMul; varying vec2 vUV;
+      void main(){ gl_FragColor=texture2D(uFog,vUV)*vec4(1.,1.,1.,uMul); }`;
     const mk=(t,s)=>{const sh=gl.createShader(t);gl.shaderSource(sh,s);gl.compileShader(sh);
       if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS)){console.error(gl.getShaderInfoLog(sh));return null;}return sh;};
     const v=mk(gl.VERTEX_SHADER,vs),f=mk(gl.FRAGMENT_SHADER,fs);
@@ -12259,12 +12374,14 @@ const R3={
     if(!gl.getProgramParameter(p,gl.LINK_STATUS)){console.error(gl.getProgramInfoLog(p));return false;}
     this.fogProg=p;
     this.fogLoc={uMVP:gl.getUniformLocation(p,'uMVP'),
-      uMap:gl.getUniformLocation(p,'uMap'),uFog:gl.getUniformLocation(p,'uFog')};
+      uMap:gl.getUniformLocation(p,'uMap'),uFog:gl.getUniformLocation(p,'uFog'),
+      uMul:gl.getUniformLocation(p,'uMul')};
     this.quad=gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER,this.quad);
     gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([0,0, 1,0, 0,1, 1,0, 1,1, 0,1]),gl.STATIC_DRAW);
     this.fogTex=gl.createTexture();
-    this.fogVerAt=-1;
+    this.mistTex=gl.createTexture();
+    this.fogVerAt=-1;this.mistVerAt=-1;
     return true;
   },
   drawFog(mvp){
@@ -12290,8 +12407,27 @@ const R3={
     gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
     gl.uniformMatrix4fv(this.fogLoc.uMVP,false,mvp);
     gl.uniform1f(this.fogLoc.uMap,MAP);
+    gl.uniform1f(this.fogLoc.uMul,1.0);
     gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.fogTex);
     gl.uniform1i(this.fogLoc.uFog,0);
+    gl.drawArrays(gl.TRIANGLES,0,6);
+    /* The drifting mist, at last ported to 3D — same wisp canvas the 2D path
+       drifts over unexplored ground, drawn as a second pass of the same quad
+       at the 2D's 0.35 alpha. updateWisps() is shared; whichever renderer is
+       live keeps the clouds moving. */
+    updateWisps(6);
+    if(this.mistVerAt!==wispVer){
+      gl.bindTexture(gl.TEXTURE_2D,this.mistTex);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false);
+      gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,wispC);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+      this.mistVerAt=wispVer;
+    }else gl.bindTexture(gl.TEXTURE_2D,this.mistTex);
+    gl.uniform1f(this.fogLoc.uMul,0.35);
     gl.drawArrays(gl.TRIANGLES,0,6);
     gl.disable(gl.BLEND); gl.depthMask(true); gl.enable(gl.DEPTH_TEST);
   },
@@ -12627,7 +12763,7 @@ requestAnimationFrame(frame);
 
 <script>
 (function(){
-  var BUILD = 'tq-v45';
+  var BUILD = 'tq-v46';
   addEventListener('load', function(){
     var ov = document.getElementById('startOverlay');
     if (!ov) return;
