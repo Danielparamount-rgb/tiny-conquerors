@@ -11640,20 +11640,21 @@ const R3={
      present actually draw — a typical scene runs 6-10 calls). The flag-based
      fallback exists so a future unit type added to UNITS renders as SOMETHING
      sensible before anyone thinks about its mesh. */
-  ARCHN:22,
+  ARCHN:42,
   UARCH:{
-    villager:4, militia:0, spearman:1, archer:2, skirmisher:1, scout:6, knight:6,
-    ram:10, petard:0, scorpion:13, mangonel:12, treb:11, bombard:14, handcannon:3,
-    monk:5, missionary:6, longbow:2, axeman:0, berserker:0, mangudai:7, teuton:0,
-    woad:0, cataphract:6, mameluke:7, huskarl:0, chukonu:2, elephant:8, janissary:3,
-    samurai:0, jaguar:0, eagle:0, plumed:2, warwagon:9, conquistador:7, tarkan:6,
+    villager:4, militia:0, spearman:1, archer:2, skirmisher:24, scout:25, knight:6,
+    ram:10, petard:41, scorpion:13, mangonel:12, treb:11, bombard:14, handcannon:3,
+    monk:5, missionary:6, longbow:36, axeman:34, berserker:31, mangudai:7, teuton:30,
+    woad:27, cataphract:6, mameluke:26, huskarl:33, chukonu:35, elephant:8, janissary:39,
+    samurai:32, jaguar:29, eagle:28, plumed:40, warwagon:9, conquistador:38, tarkan:37,
     fishing:15, cog:16, transport:16, galley:17, fireship:17, demo:16, longboat:17,
     turtle:18, cannongalleon:17, sheep:19, deer:20, boar:21,
   },
   /* attack-swing damping per archetype: 1 = full 51° chop (melee, treb throw,
      mangonel fling), small = recoil kick (guns, bolt throwers), 0 = the part
      scheme has nothing sensible to swing (monks, ships, most beasts). */
-  ATKF:[1,1,.7,.35,1,0, .9,.7,.8,0, 1,1,1,.3,.3, 0,0,0,.25, 0,0,0],
+  ATKF:[1,1,.7,.35,1,0, .9,.7,.8,0, 1,1,1,.3,.3, 0,0,0,.25, 0,0,0,
+        1,1,1,.9,.8, 1,1,1,1,1, 1,1,1,.35,.7, .9,.3,.3,.7,0],
   unitArch(t){
     if(this.UARCH[t]!==undefined)return this.UARCH[t];
     const d=UNITS[t]||{};
@@ -11795,7 +11796,8 @@ const R3={
           IRON=hex('#6b7078'),TUSK=hex('#e8e2d2'),WOOL=hex('#e3dcc6'),TAN=hex('#b08a5c'),
           GREY=hex('#8a8578'),BOARC=hex('#523d29'),DECK=hex('#8a6a42'),
           EYE=hex('#1c1410'),HAIR=hex('#3d2a18'),LEATH=hex('#4a331c'),
-          GOLDC=hex('#c9a227'),STRAW=hex('#c9b46a'),BOOT=hex('#2a1f14');
+          GOLDC=hex('#c9a227'),STRAW=hex('#c9b46a'),BOOT=hex('#2a1f14'),
+          WOADB=hex('#4a6fa8'),FLAME=hex('#f2a13c');
     // team-tinted detail rides the mix channel: aCol BLACK + mix m = team×m
     // (a darkened fold), aCol WHITE + mix m = team lifted toward white (a
     // highlight band). BLACK/WHITE below exist only for that trick.
@@ -11819,7 +11821,10 @@ const R3={
        nose. The part scheme and every per-type attachment point (helmet band
        at ±.065, arm centres z ±.133, weapon shaft z .13) are UNCHANGED, so
        all the per-archetype helmets/weapons/quivers still fit. */
-    const man=(shield,hat,beard)=>{
+    /* opt: tc = torso/sleeve colour (default CLOTH), tm = team-mix for those
+       surfaces (default 1), bare = skin torso, no tunic folds (woad, eagle). */
+    const man=(shield,hat,beard,opt)=>{
+      const o=opt||{},TC=o.tc||CLOTH,TM=o.tm!==undefined?o.tm:1;
       const leg=(zc,part)=>{
         lathe(0,zc,[[.115,.036,.038],[.20,.043,.045],[.295,.047,.049]],DARK,part); // thigh — full at the hip
         lathe(0,zc,[[.05,.026,.028],[.10,.035,.037],[.145,.036,.038]],DARK,part);  // calf — muscle at the top
@@ -11827,14 +11832,16 @@ const R3={
       };
       leg(-.06,2);leg(.06,3);
       oct(0,.218,0,.064,.086,.245,BLACK,0,.66);          // tunic hem, darkened team
-      oct(0,.235,0,.06,.082,.302,CLOTH,0,1,.04);         // hips / tunic skirt
+      oct(0,.235,0,.06,.082,.302,TC,0,TM,.04);           // hips / tunic skirt
       oct(0,.296,0,.057,.078,.322,LEATH,0);              // belt
       bx(.056,.30,-.013,.068,.32,.013,GOLDC,0);          // buckle
       lathe(0,0,[[.318,.055,.074],[.355,.050,.068],[.415,.053,.072],
-        [.452,.060,.081],[.478,.048,.066]],CLOTH,0,1);   // chest — waist in, shoulders out and rounded
-      bx(.048,.34,-.044,.056,.44,-.02,BLACK,0,.78);      // tunic folds, front face
-      bx(.048,.34,.02,.056,.44,.044,BLACK,0,.78);
-      bx(-.058,.34,-.017,-.05,.44,.017,BLACK,0,.78);     // one on the back
+        [.452,.060,.081],[.478,.048,.066]],TC,0,TM);     // chest — waist in, shoulders out and rounded
+      if(!o.bare){
+        bx(.048,.34,-.044,.056,.44,-.02,BLACK,0,.78);    // tunic folds, front face
+        bx(.048,.34,.02,.056,.44,.044,BLACK,0,.78);
+        bx(-.058,.34,-.017,-.05,.44,.017,BLACK,0,.78);   // one on the back
+      }
       oct(0,.472,0,.026,.03,.512,SKIN,1);                // neck
       lathe(0,0,[[.502,.030,.033],[.518,.043,.047],[.552,.051,.055],[.588,.053,.057],
         [.625,.047,.051],[.652,.030,.033],[.663,.008,.008]],SKIN,1); // skull — chin, cheeks, rounded crown
@@ -11847,9 +11854,9 @@ const R3={
         lathe(0,0,[[.633,.049,.052],[.668,.043,.046],[.692,.020,.022]],STRAW,1);} // crown, domed
       if(beard)bx(.04,.502,-.028,.056,.55,.028,HAIR,1);
       const arm=(zc,part)=>{
-        lathe(0,zc,[[.452,.025,.027],[.468,.034,.036],[.49,.024,.026]],CLOTH,part,1); // shoulder ball
-        lathe(0,zc,[[.36,.026,.028],[.42,.031,.033],[.468,.028,.030]],CLOTH,part,1);  // sleeved upper arm
-        lathe(0,zc,[[.29,.020,.022],[.335,.027,.029],[.372,.024,.026]],SKIN,part);    // bare forearm
+        lathe(0,zc,[[.452,.025,.027],[.468,.034,.036],[.49,.024,.026]],TC,part,TM); // shoulder ball
+        lathe(0,zc,[[.36,.026,.028],[.42,.031,.033],[.468,.028,.030]],TC,part,TM);  // sleeved upper arm
+        lathe(0,zc,[[.29,.020,.022],[.335,.027,.029],[.372,.024,.026]],SKIN,part);  // bare forearm
       };
       arm(-.133,4);
       lathe(0,-.133,[[.246,.014,.016],[.262,.026,.026],[.285,.026,.026],[.298,.012,.014]],SKIN,4); // hand
@@ -11939,7 +11946,10 @@ const R3={
        proper muzzle. Rider gets the same treatment as the footmen — chest,
        neck, jaw+crown head, nose. Leg part pairs, pivots and the helm/lance
        attachment heights are unchanged. */
-    const horse=()=>{
+    /* opt: bare = no caparison (scouts, steppe riders) — a light team blanket
+       carries the ownership read instead. */
+    const horse=(opt)=>{
+      const o=opt||{};
       const leg=(xc,zc,part)=>{
         lathe(xc,zc,[[.14,.028,.028],[.24,.033,.033],[.34,.038,.038]],DARK,part,0,8); // upper leg into the barrel
         lathe(xc,zc,[[.05,.022,.022],[.10,.026,.026],[.16,.025,.025]],DARK,part,0,8); // cannon
@@ -11948,9 +11958,13 @@ const R3={
       leg(.17,-.07,2);leg(.17,.07,3);leg(-.17,-.07,3);leg(-.17,.07,2);
       latheX(.375,0,[[-.26,.078,.068],[-.17,.112,.098],[-.02,.118,.102],
         [.13,.112,.098],[.24,.082,.072]],HIDE,0,0,12);   // barrel — real belly, chest and rump
-      latheX(.39,0,[[-.25,.074,.085],[-.15,.098,.113],[0,.102,.118],
-        [.12,.098,.113],[.23,.078,.089]],CLOTH,0,1,12);  // caparison drape — team, follows the barrel
-      latheX(.39,0,[[-.09,.104,.120],[.02,.105,.121],[.13,.100,.115]],WHITE,0,.85,12); // trim girth — a lifted-team band riding the drape
+      if(!o.bare){
+        latheX(.39,0,[[-.25,.074,.085],[-.15,.098,.113],[0,.102,.118],
+          [.12,.098,.113],[.23,.078,.089]],CLOTH,0,1,12);  // caparison drape — team, follows the barrel
+        latheX(.39,0,[[-.09,.104,.120],[.02,.105,.121],[.13,.100,.115]],WHITE,0,.85,12); // trim girth — a lifted-team band riding the drape
+      }else{
+        bx(-.12,.448,-.10,.14,.478,.10,CLOTH,0,1);  // light team blanket instead
+      }
       bx(-.07,.465,-.088,.10,.492,.088,LEATH,0);    // saddle pad
       oct(-.285,.30,0,.021,.021,.46,DARK,0,0,.3);   // tail
       lathe(.24,0,[[.42,.062,.050],[.53,.055,.044],[.63,.048,.038]],HIDE,1); // neck, tapering up
@@ -12185,6 +12199,222 @@ const R3={
     bx(.29,.175,-.065,.35,.20,-.048,TUSK,1);        // tusks
     bx(.29,.175,.048,.35,.20,.065,TUSK,1);
     seal(21);piv.push([.12,.22]);
+    /* ---- 22+ THE ROSTER PASS — per-unit reads from Daniel's unit-roster CSV.
+       Each brief names "the read": the one silhouette/prop that identifies the
+       unit at play zoom. Types that shared a generic body now get their own. */
+    // ---- 22 VILLAGER-PICK / 23 VILLAGER-HAMMER — tool swaps by job (chosen
+    // per frame in drawUnits from u.state/resKey; the sim knows nothing of it)
+    mark();
+    man(false,2,false);
+    bx(-.012,.32,.118,.012,.62,.142,WOOD,6);        // haft
+    bx(-.01,.585,.085,.01,.625,.195,STEEL,6);       // pick cross-head
+    seal(22);piv.push([.27,.47]);
+    mark();
+    man(false,2,false);
+    bx(-.012,.34,.118,.012,.57,.142,WOOD,6);
+    bx(-.03,.535,.098,.03,.59,.162,IRON,6);         // mallet head
+    seal(23);piv.push([.27,.47]);
+    // ---- 24 SKIRMISHER — javelin held high, buckler, spares on the back
+    mark();
+    man(false,0,false);
+    lathe(0,-.157,[[.335,.026,.007],[.36,.040,.011],[.385,.026,.007]],STEEL,4); // buckler lens
+    bx(-.078,.30,-.016,-.062,.60,.002,WOOD,0);      // javelin bundle
+    bx(-.076,.32,.006,-.06,.58,.024,WOOD,0);
+    bx(-.011,.30,.119,.011,.82,.141,WOOD,6);        // javelin
+    bx(-.015,.80,.115,.015,.87,.145,STEEL,6);       // point
+    seal(24);piv.push([.27,.47]);
+    // ---- 25 SCOUT — bare fast horse, team blanket, raised sabre, no armor
+    mark();
+    horse({bare:true});
+    lathe(.01,0,[[.752,.046,.049],[.786,.042,.045],[.81,.018,.02]],HAIR,1);
+    bx(-.005,.58,.115,.015,.80,.139,STEEL,6);       // sabre
+    bx(-.02,.553,.11,.02,.583,.144,LEATH,6);        // grip
+    seal(25);piv.push([.26,.55]);
+    // ---- 26 MAMELUKE ON CAMEL — the hump is the read; robed rider, thrown blade
+    mark();
+    const cleg=(xc,zc,part)=>{
+      lathe(xc,zc,[[.15,.024,.024],[.26,.029,.029],[.37,.033,.033]],TAN,part,0,8);
+      lathe(xc,zc,[[.05,.019,.019],[.11,.023,.023],[.16,.022,.022]],TAN,part,0,8);
+      latheX(.026,zc,[[xc-.024,.022,.022],[xc+.03,.016,.02]],BOOT,part);
+    };
+    cleg(.16,-.06,2);cleg(.16,.06,3);cleg(-.16,-.06,3);cleg(-.16,.06,2);
+    latheX(.41,0,[[-.24,.068,.060],[-.12,.094,.082],[.04,.096,.084],
+      [.15,.088,.078],[.23,.064,.056]],TAN,0,0,12);  // body
+    lathe(.05,0,[[.46,.058,.052],[.51,.072,.064],[.575,.046,.042],[.61,.016,.016]],TAN,0); // the hump
+    bx(-.17,.42,-.086,-.03,.452,.086,CLOTH,0,1);    // team saddle cloth behind the hump
+    lathe(.235,0,[[.43,.046,.040],[.56,.040,.035],[.70,.034,.030]],TAN,1);  // tall neck
+    latheX(.665,0,[[.235,.034,.030],[.30,.036,.032],[.37,.026,.024]],TAN,1);// head, carried high
+    latheX(.65,0,[[.355,.022,.020],[.415,.015,.015]],DARK,1);               // muzzle
+    bx(.27,.675,-.037,.29,.692,-.031,EYE,1);
+    bx(.27,.675,.031,.29,.692,.037,EYE,1);
+    bx(.24,.70,-.03,.265,.74,-.016,TAN,1);          // ears
+    bx(.24,.70,.016,.265,.74,.03,TAN,1);
+    oct(-.255,.30,0,.016,.016,.42,TAN,0,0,.3);      // tail
+    bx(-.16,.35,-.115,-.05,.46,-.088,CANV,0);       // rider legs in robe
+    bx(-.16,.35,.088,-.05,.46,.115,CANV,0);
+    lathe(-.10,0,[[.45,.052,.064],[.49,.048,.058],[.55,.050,.062],
+      [.60,.054,.068],[.635,.044,.056]],CANV,0);    // flowing robe torso
+    oct(-.10,.50,0,.054,.066,.535,CLOTH,0,1);       // team sash
+    oct(-.10,.635,0,.022,.026,.66,SKIN,1);
+    lathe(-.10,0,[[.655,.024,.026],[.67,.035,.038],[.695,.041,.044],
+      [.725,.042,.045],[.75,.036,.039],[.768,.012,.013]],SKIN,1); // head
+    lathe(-.10,0,[[.735,.045,.048],[.762,.041,.044],[.782,.018,.02]],CANV,1); // turban
+    bx(-.058,.695,-.026,-.048,.715,-.008,EYE,1);
+    bx(-.058,.695,.008,-.048,.715,.026,EYE,1);
+    bx(-.11,.55,.105,-.09,.72,.13,STEEL,6);         // thrown scimitar — offset
+    bx(-.095,.70,.108,-.075,.78,.127,STEEL,6);      // blades suggest the curve
+    seal(26);piv.push([.28,.60]);
+    // ---- 27 WOAD RAIDER — bare chest, blue warpaint, wild hair, long axe
+    mark();
+    man(false,0,false,{tc:SKIN,tm:0,bare:true});
+    bx(.048,.35,-.04,.056,.44,-.02,WOADB,0);        // warpaint chest stripes
+    bx(.048,.35,.02,.056,.44,.04,WOADB,0);
+    bx(.045,.545,-.03,.054,.56,.03,WOADB,1);        // face stripe
+    lathe(0,-.006,[[.58,.058,.062],[.62,.056,.06],[.66,.042,.046],[.685,.012,.012]],HAIR,1); // wild hair
+    bx(-.012,.30,.118,.012,.74,.142,WOOD,6);        // long axe haft
+    bx(-.04,.66,.108,.04,.73,.152,STEEL,6);         // broad head
+    seal(27);piv.push([.27,.47]);
+    // ---- 28 EAGLE WARRIOR — beaked cap, team feather crest, obsidian club
+    mark();
+    man(false,1,false,{tc:SKIN,tm:0,bare:true});
+    oct(0,.30,0,.058,.079,.334,CLOTH,0,1);          // team waist wrap
+    lathe(0,0,[[.585,.052,.056],[.62,.048,.052],[.652,.030,.033]],GOLDC,1); // beaked cap
+    bx(.048,.578,-.02,.075,.60,.02,GOLDC,1);        // the beak
+    bx(-.05,.645,-.014,.03,.75,.014,WHITE,1,.85);   // rising team crest
+    bx(-.07,.635,-.01,-.045,.71,.01,WHITE,1,.7);
+    bx(-.012,.32,.118,.012,.60,.142,WOOD,6);        // club
+    bx(-.026,.52,.108,.026,.60,.152,DARK,6);        // obsidian edge
+    seal(28);piv.push([.27,.47]);
+    // ---- 29 JAGUAR WARRIOR — spotted pelt suit and fanged hood
+    mark();
+    man(false,1,false,{tc:TAN,tm:.15});
+    lathe(0,0,[[.585,.054,.058],[.625,.051,.055],[.66,.036,.04],[.678,.01,.01]],TAN,1); // pelt hood
+    bx(.046,.60,-.03,.056,.617,-.018,DARK,1);       // hood spots
+    bx(-.02,.645,-.045,.0,.663,-.03,DARK,1);
+    bx(-.02,.645,.03,.0,.663,.045,DARK,1);
+    bx(.048,.578,-.016,.062,.594,.016,TUSK,1);      // fang motif at the brow
+    bx(.049,.40,-.036,.058,.418,-.02,DARK,0);       // suit spots
+    bx(.047,.36,.018,.056,.378,.034,DARK,0);
+    bx(-.059,.38,-.01,-.049,.398,.006,DARK,0);
+    bx(-.012,.32,.118,.012,.60,.142,WOOD,6);        // club
+    bx(-.026,.52,.108,.026,.60,.152,DARK,6);
+    seal(29);piv.push([.27,.47]);
+    // ---- 30 TEUTONIC KNIGHT — bucket helm, long pale surcoat, greatsword
+    mark();
+    man(true,1,false,{tc:CANV,tm:.12});
+    oct(0,.16,0,.062,.084,.24,CANV,0,.12);          // surcoat falls past the knees
+    lathe(0,0,[[.575,.056,.06],[.64,.056,.06],[.668,.05,.054],[.678,.012,.012]],STEEL,1); // flat-topped bucket helm
+    bx(.052,.60,-.028,.06,.612,.028,DARK,1);        // eye slit
+    bx(-.014,.44,.114,.014,.78,.146,STEEL,6);       // greatsword
+    bx(-.006,.44,.12,.006,.76,.14,WHITE,6,0);
+    bx(-.04,.415,.103,.04,.445,.157,WOOD,6);
+    seal(30);piv.push([.27,.47]);
+    // ---- 31 BERSERK — furs, fur collar, round shield, war axe
+    mark();
+    man(true,0,true,{tc:HIDE,tm:.2});
+    oct(0,.468,0,.056,.075,.505,BOARC,0);           // fur collar
+    bx(-.012,.32,.118,.012,.66,.142,WOOD,6);        // war axe
+    bx(-.036,.585,.108,.036,.65,.152,STEEL,6);
+    seal(31);piv.push([.27,.47]);
+    // ---- 32 SAMURAI — lamellar lacing, crested helm, curved blade
+    mark();
+    man(false,1,false);
+    bx(-.058,.365,-.073,.058,.378,.073,BLACK,0,.72); // lamellar bands
+    bx(-.056,.405,-.071,.056,.418,.071,BLACK,0,.72);
+    bx(-.06,.44,-.076,.06,.453,.076,BLACK,0,.72);
+    lathe(0,0,[[.585,.058,.062],[.63,.054,.058],[.663,.036,.04],[.678,.01,.01]],IRON,1); // helm
+    bx(-.068,.588,-.05,-.052,.64,.05,IRON,1);       // flared neck guard
+    bx(.05,.655,-.008,.075,.695,.008,GOLDC,1);      // crest horns
+    bx(.05,.655,-.03,.062,.685,-.014,GOLDC,1);
+    bx(.05,.655,.014,.062,.685,.03,GOLDC,1);
+    bx(-.012,.44,.116,.012,.70,.14,STEEL,6);        // blade, hinted curve
+    bx(-.008,.68,.122,.01,.75,.134,STEEL,6);
+    bx(-.03,.415,.106,.03,.44,.154,GOLDC,6);        // tsuba
+    seal(32);piv.push([.27,.47]);
+    // ---- 33 HUSKARL — the OVERSIZED round shield sells the arrow resistance
+    mark();
+    man(false,1,true,{tc:HIDE,tm:.25});
+    lathe(0,-.16,[[.28,.05,.012],[.36,.088,.02],[.45,.05,.012]],CLOTH,4,1); // great shield, team face
+    lathe(0,-.174,[[.345,.02,.006],[.365,.032,.01],[.385,.02,.006]],GOLDC,4); // boss
+    lathe(0,0,[[.585,.056,.06],[.628,.052,.056],[.66,.034,.037],[.674,.01,.01]],IRON,1); // helm
+    bx(-.012,.32,.118,.012,.64,.142,WOOD,6);        // long axe
+    bx(-.034,.575,.108,.034,.635,.152,STEEL,6);
+    seal(33);piv.push([.27,.47]);
+    // ---- 34 THROWING AXEMAN — bearded axe raised to hurl, spare at the belt
+    mark();
+    man(false,1,false);
+    lathe(0,0,[[.585,.055,.059],[.622,.052,.056],[.655,.036,.039],[.668,.01,.01]],STEEL,1); // mail coif
+    bx(-.045,.30,-.09,-.02,.345,-.065,STEEL,0);     // spare axe at the hip
+    bx(-.05,.335,-.095,-.015,.357,-.06,DARK,0);
+    bx(-.011,.34,.119,.011,.72,.141,WOOD,6);        // raised axe
+    bx(-.032,.64,.11,.032,.71,.15,STEEL,6);         // bearded head
+    seal(34);piv.push([.27,.47]);
+    // ---- 35 CHU KO NU — repeating crossbow; the box magazine is the read
+    mark();
+    man(false,0,false);
+    bx(.02,.435,.108,.30,.468,.152,WOOD,6);         // stock, held level
+    bx(.08,.468,.104,.22,.522,.156,WOOD,6);         // top magazine box
+    bx(.085,.522,.11,.215,.532,.15,DARK,6);         // lid seam
+    bx(.06,.44,.075,.09,.462,.185,WOOD,6);          // prod arms
+    seal(35);piv.push([.27,.47]);
+    // ---- 36 LONGBOWMAN — team hood, man-height bow
+    mark();
+    man(false,1,false);
+    lathe(0,0,[[.582,.056,.06],[.625,.052,.056],[.66,.036,.04],[.675,.01,.01]],CLOTH,1,1); // hood
+    bx(-.105,.34,-.03,-.062,.55,.03,WOOD,0);        // quiver
+    bx(-.10,.55,-.026,-.066,.60,.026,CANV,0);
+    bx(.115,.26,.122,.135,.42,.142,WOOD,6);         // bow as tall as the man
+    bx(.125,.42,.122,.145,.56,.142,WOOD,6);
+    bx(.115,.56,.122,.135,.74,.142,WOOD,6);
+    bx(.108,.27,.128,.114,.73,.136,CANV,6);         // string
+    seal(36);piv.push([.27,.47]);
+    // ---- 37 TARKAN — steppe rider, burning torch (fire vs buildings)
+    mark();
+    horse({bare:true});
+    lathe(.01,0,[[.752,.047,.05],[.786,.043,.046],[.81,.02,.022]],HAIR,1); // fur cap
+    bx(-.005,.56,.115,.015,.76,.139,WOOD,6);        // torch haft
+    lathe(.005,.127,[[.755,.02,.02],[.78,.032,.032],[.82,.024,.024],[.85,.008,.008]],FLAME,6); // flame
+    seal(37);piv.push([.26,.55]);
+    // ---- 38 CONQUISTADOR — arquebus fired from horseback, crested morion
+    mark();
+    horse();
+    lathe(.01,0,[[.752,.047,.051],[.79,.043,.047],[.815,.024,.026],[.826,.008,.008]],STEEL,1); // morion
+    bx(-.02,.818,-.006,.05,.84,.006,STEEL,1);       // comb crest
+    bx(-.06,.60,.112,.02,.64,.148,WOOD,6);          // stock
+    bx(.02,.615,.116,.30,.655,.144,IRON,6);         // long barrel
+    bx(.28,.607,.111,.305,.663,.149,DARK,6);        // muzzle band
+    seal(38);piv.push([.26,.55]);
+    // ---- 39 JANISSARY — tall white börk headdress, longest barrel
+    mark();
+    man(false,1,false);
+    lathe(0,0,[[.585,.054,.058],[.62,.05,.054],[.652,.036,.039]],CANV,1);   // cap base
+    lathe(0,-.01,[[.652,.042,.046],[.72,.040,.044],[.78,.030,.033],[.795,.01,.01]],CANV,1); // tall crown
+    bx(-.05,.42,.112,.02,.475,.148,WOOD,6);         // stock
+    bx(.02,.44,.118,.36,.492,.142,IRON,6);          // longer than the hand cannon
+    bx(.34,.432,.113,.365,.50,.147,DARK,6);
+    seal(39);piv.push([.27,.47]);
+    // ---- 40 PLUMED ARCHER — team plumage on head and arms, quick shortbow
+    mark();
+    man(false,1,false,{tc:CANV,tm:.2});
+    lathe(0,0,[[.585,.052,.056],[.617,.048,.052],[.647,.030,.033]],TAN,1);  // cap
+    bx(-.04,.645,-.012,.02,.75,.012,WHITE,1,.85);   // tall team plume
+    bx(-.06,.635,-.008,-.038,.71,.008,WHITE,1,.7);
+    bx(-.05,.44,-.155,-.02,.52,-.125,WHITE,4,.8);   // arm plumes
+    bx(-.05,.44,.125,-.02,.52,.155,WHITE,6,.8);
+    bx(.115,.30,.122,.135,.44,.142,WOOD,6);         // shortbow
+    bx(.125,.44,.122,.145,.55,.142,WOOD,6);
+    bx(.115,.55,.122,.135,.69,.142,WOOD,6);
+    bx(.108,.31,.128,.114,.68,.136,CANV,6);
+    seal(40);piv.push([.27,.47]);
+    // ---- 41 PETARD — powder keg hugged to the chest, sparking fuse
+    mark();
+    man(false,0,false);
+    latheX(.36,0,[[.05,.052,.052],[.10,.058,.058],[.16,.052,.052]],WOOD,0); // the keg
+    bx(.05,.328,-.06,.16,.344,.06,IRON,0);          // barrel hoops
+    bx(.05,.392,-.06,.16,.408,.06,IRON,0);
+    bx(.15,.40,-.008,.17,.455,.008,DARK,0);         // fuse
+    bx(.152,.45,-.013,.178,.478,.013,FLAME,0);      // spark
+    seal(41);piv.push([.27,.47]);
     const gl=this.gl;
     this.uvbo=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,this.uvbo);
     gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(V),gl.STATIC_DRAW);
@@ -12270,7 +12500,14 @@ const R3={
     const t=G.t||0;
     for(const u of G.units){
       if(!allied(u.p,localP)&&!tileVis(u.x,u.y))continue;
-      const a=this.unitArch(u.type);
+      let a=this.unitArch(u.type);
+      /* Villager tools swap by job (roster CSV: "tool is the read") — pure
+         render-side choice off u.state/resKey, the sim never sees it. */
+      if(u.type==='villager'){
+        if(u.state==='toBuild'||u.state==='building')a=23;         // hammer
+        else{const r=u.resKey?G.res[u.resKey]:null;
+          if((r&&r.type==='gold')||u.carryType==='gold')a=22;}     // pick
+      }
       const tc=teamColor(u.p)||'#3b7bd4';
       const r=parseInt(tc.slice(1,3),16)/255,g2=parseInt(tc.slice(3,5),16)/255,b2=parseInt(tc.slice(5,7),16)/255;
       // walk phase advances with speed; idle units breathe slowly instead
@@ -13061,7 +13298,7 @@ requestAnimationFrame(frame);
 
 <script>
 (function(){
-  var BUILD = 'tq-v50';
+  var BUILD = 'tq-v51';
   addEventListener('load', function(){
     var ov = document.getElementById('startOverlay');
     if (!ov) return;
