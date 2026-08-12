@@ -11691,38 +11691,94 @@ const R3={
        ring toward the centre (0..1), tapB the BOTTOM ring. 8 side quads + two
        cap fans = 32 tris. Winding matches bx() so the unit-pass culling and
        the negated-normal convention both hold. */
-    const K8=1/Math.cos(Math.PI/8);
-    const oct=(cx,y0,cz,rx,rz,y1,col,part,team,tap,tapB)=>{
-      team=team||0;const st=1-(tap||0),sb=1-(tapB||0);
-      const P=[];
-      for(let r=0;r<2;r++)for(let k=0;k<8;k++){
-        const a=Math.PI/8+k*Math.PI/4,s=r?st:sb,y=r?y1:y0;
-        P.push([cx+Math.cos(a)*K8*rx*s,y,cz+Math.sin(a)*K8*rz*s]);
+    /* Smooth-shaded surface of revolution on the Y axis. P = rings bottom→top,
+       each [y, rx, rz]. Vertices carry SMOOTH radial normals tilted by the
+       profile slope, so the lambert term shades a continuous curve — smooth
+       normals, not more polygons, are what kill the boxy read. Winding and
+       cap fans follow the same convention the box helper uses (verified
+       visible under the unit-pass culling). Caps only where the end ring is
+       open; a profile that closes to ~0 radius needs none. */
+    const lathe=(cx,cz,P,col,part,team,seg)=>{
+      team=team||0;seg=seg||10;
+      const R=P.length,ring=[];
+      for(let i=0;i<R;i++){
+        const y=P[i][0],rx=P[i][1],rz=P[i][2]!==undefined?P[i][2]:P[i][1];
+        const p0=P[Math.max(0,i-1)],p1=P[Math.min(R-1,i+1)];
+        const dy=(p1[0]-p0[0])||1e-6;
+        const r1z=p1[2]!==undefined?p1[2]:p1[1],r0z=p0[2]!==undefined?p0[2]:p0[1];
+        const sl=((p1[1]+r1z)-(p0[1]+r0z))/2/dy;
+        const idx=[];
+        for(let k=0;k<seg;k++){
+          const a=k/seg*2*Math.PI,px=Math.cos(a),pz=Math.sin(a);
+          let nx=px/(rx||1e-4),nz=pz/(rz||1e-4);
+          const L=Math.hypot(nx,nz)||1;nx/=L;nz/=L;
+          const nl=Math.hypot(nx,sl,nz)||1;
+          idx.push(vpush([cx+px*rx,y,cz+pz*rz],[nx/nl,-sl/nl,nz/nl],col,part,team));
+        }
+        ring.push(idx);
       }
-      for(let k=0;k<8;k++)q(P[k],P[(k+1)%8],P[8+(k+1)%8],P[8+k],col,part,team);
-      const ct=vpush([cx,y1,cz],[0,1,0],col,part,team),
-            cb=vpush([cx,y0,cz],[0,-1,0],col,part,team);
-      for(let k=0;k<8;k++){const k2=(k+1)%8;
-        I.push(ct,vpush(P[8+k],[0,1,0],col,part,team),vpush(P[8+k2],[0,1,0],col,part,team));
-        I.push(cb,vpush(P[k2],[0,-1,0],col,part,team),vpush(P[k],[0,-1,0],col,part,team));
+      for(let i=0;i<R-1;i++)for(let k=0;k<seg;k++){
+        const k2=(k+1)%seg;
+        I.push(ring[i][k],ring[i][k2],ring[i+1][k2],ring[i][k],ring[i+1][k2],ring[i+1][k]);
       }
+      const cap=(i,up)=>{
+        const y=P[i][0],rx=P[i][1],rz=P[i][2]!==undefined?P[i][2]:P[i][1];
+        if(rx<.01&&rz<.01)return;
+        const n=[0,up,0],c=vpush([cx,y,cz],n,col,part,team);
+        for(let k=0;k<seg;k++){const k2=(k+1)%seg;
+          const v1=vpush([cx+Math.cos(k/seg*2*Math.PI)*rx,y,cz+Math.sin(k/seg*2*Math.PI)*rz],n,col,part,team),
+                v2=vpush([cx+Math.cos(k2/seg*2*Math.PI)*rx,y,cz+Math.sin(k2/seg*2*Math.PI)*rz],n,col,part,team);
+          if(up>0)I.push(c,v1,v2);else I.push(c,v2,v1);
+        }
+      };
+      cap(R-1,1);cap(0,-1);
     };
-    /* Same frustum extruded along X — animal bodies, muzzles, trunks. tapF
-       shrinks the x1 (nose) ring, tapB the x0 (tail) ring. */
+    /* Same lathe extruded along X — animal bodies, muzzles, trunks.
+       P = rings back(x0)→front(x1), each [x, ry, rz]. */
+    const latheX=(cy,cz,P,col,part,team,seg)=>{
+      team=team||0;seg=seg||10;
+      const R=P.length,ring=[];
+      for(let i=0;i<R;i++){
+        const x=P[i][0],ry=P[i][1],rz=P[i][2]!==undefined?P[i][2]:P[i][1];
+        const p0=P[Math.max(0,i-1)],p1=P[Math.min(R-1,i+1)];
+        const dx=(p1[0]-p0[0])||1e-6;
+        const r1z=p1[2]!==undefined?p1[2]:p1[1],r0z=p0[2]!==undefined?p0[2]:p0[1];
+        const sl=((p1[1]+r1z)-(p0[1]+r0z))/2/dx;
+        const idx=[];
+        for(let k=0;k<seg;k++){
+          const a=k/seg*2*Math.PI,py=Math.sin(a),pz=Math.cos(a);
+          let ny=py/(ry||1e-4),nz=pz/(rz||1e-4);
+          const L=Math.hypot(ny,nz)||1;ny/=L;nz/=L;
+          const nl=Math.hypot(sl,ny,nz)||1;
+          idx.push(vpush([x,cy+py*ry,cz+pz*rz],[-sl/nl,ny/nl,nz/nl],col,part,team));
+        }
+        ring.push(idx);
+      }
+      for(let i=0;i<R-1;i++)for(let k=0;k<seg;k++){
+        const k2=(k+1)%seg;
+        I.push(ring[i][k],ring[i][k2],ring[i+1][k2],ring[i][k],ring[i+1][k2],ring[i+1][k]);
+      }
+      const cap=(i,fwd)=>{
+        const x=P[i][0],ry=P[i][1],rz=P[i][2]!==undefined?P[i][2]:P[i][1];
+        if(ry<.01&&rz<.01)return;
+        const n=[fwd,0,0],c=vpush([x,cy,cz],n,col,part,team);
+        for(let k=0;k<seg;k++){const k2=(k+1)%seg;
+          const v1=vpush([x,cy+Math.sin(k/seg*2*Math.PI)*ry,cz+Math.cos(k/seg*2*Math.PI)*rz],n,col,part,team),
+                v2=vpush([x,cy+Math.sin(k2/seg*2*Math.PI)*ry,cz+Math.cos(k2/seg*2*Math.PI)*rz],n,col,part,team);
+          if(fwd>0)I.push(c,v1,v2);else I.push(c,v2,v1);
+        }
+      };
+      cap(R-1,1);cap(0,-1);
+    };
+    /* The old octagonal helpers, now thin wrappers over the smooth lathe —
+       every existing call site becomes round-shaded for free. */
+    const oct=(cx,y0,cz,rx,rz,y1,col,part,team,tap,tapB)=>{
+      const st=1-(tap||0),sb=1-(tapB||0);
+      lathe(cx,cz,[[y0,rx*sb,rz*sb],[y1,rx*st,rz*st]],col,part,team,10);
+    };
     const octX=(x0,cy,cz,ry,rz,x1,col,part,team,tapF,tapB)=>{
-      team=team||0;const sf=1-(tapF||0),sb=1-(tapB||0);
-      const P=[];
-      for(let r=0;r<2;r++)for(let k=0;k<8;k++){
-        const a=Math.PI/8+k*Math.PI/4,s=r?sf:sb,x=r?x1:x0;
-        P.push([x,cy+Math.sin(a)*K8*ry*s,cz+Math.cos(a)*K8*rz*s]);
-      }
-      for(let k=0;k<8;k++)q(P[k],P[(k+1)%8],P[8+(k+1)%8],P[8+k],col,part,team);
-      const cf=vpush([x1,cy,cz],[1,0,0],col,part,team),
-            cb=vpush([x0,cy,cz],[-1,0,0],col,part,team);
-      for(let k=0;k<8;k++){const k2=(k+1)%8;
-        I.push(cf,vpush(P[8+k],[1,0,0],col,part,team),vpush(P[8+k2],[1,0,0],col,part,team));
-        I.push(cb,vpush(P[k2],[-1,0,0],col,part,team),vpush(P[k],[-1,0,0],col,part,team));
-      }
+      const sf=1-(tapF||0),sb=1-(tapB||0);
+      latheX(cy,cz,[[x0,ry*sb,rz*sb],[x1,ry*sf,rz*sf]],col,part,team,10);
     };
     const SKIN=hex('#e0b78e'),CLOTH=hex('#8a7a5e'),STEEL=hex('#b9bec4'),
           WOOD=hex('#6b4a2a'),DARK=hex('#3a2d1e'),HIDE=hex('#7d6a4e'),CANV=hex('#e6dcc2'),
@@ -11755,36 +11811,38 @@ const R3={
        all the per-archetype helmets/weapons/quivers still fit. */
     const man=(shield,hat,beard)=>{
       const leg=(zc,part)=>{
-        oct(0,.115,zc,.042,.044,.295,DARK,part,0,-.12);  // thigh — widens to the hip
-        oct(0,.055,zc,.032,.034,.14,DARK,part,0,-.18);   // calf — widens to the knee
-        bx(-.042,0,zc-.03,.068,.062,zc+.03,BOOT,part);   // boot, toe forward
+        lathe(0,zc,[[.115,.036,.038],[.20,.043,.045],[.295,.047,.049]],DARK,part); // thigh — full at the hip
+        lathe(0,zc,[[.05,.026,.028],[.10,.035,.037],[.145,.036,.038]],DARK,part);  // calf — muscle at the top
+        latheX(.032,zc,[[-.042,.030,.028],[.02,.032,.030],[.066,.022,.026]],BOOT,part); // boot, rounded toe
       };
       leg(-.06,2);leg(.06,3);
       oct(0,.218,0,.064,.086,.245,BLACK,0,.66);          // tunic hem, darkened team
       oct(0,.235,0,.06,.082,.302,CLOTH,0,1,.04);         // hips / tunic skirt
       oct(0,.296,0,.057,.078,.322,LEATH,0);              // belt
       bx(.056,.30,-.013,.068,.32,.013,GOLDC,0);          // buckle
-      oct(0,.318,0,.053,.07,.475,CLOTH,0,1,-.17);        // chest — widens to the shoulders
-      bx(.05,.335,-.044,.058,.458,-.02,BLACK,0,.78);     // tunic folds, front face
-      bx(.05,.335,.02,.058,.458,.044,BLACK,0,.78);
-      bx(-.06,.335,-.017,-.052,.458,.017,BLACK,0,.78);   // one on the back
+      lathe(0,0,[[.318,.055,.074],[.355,.050,.068],[.415,.053,.072],
+        [.452,.060,.081],[.478,.048,.066]],CLOTH,0,1);   // chest — waist in, shoulders out and rounded
+      bx(.048,.34,-.044,.056,.44,-.02,BLACK,0,.78);      // tunic folds, front face
+      bx(.048,.34,.02,.056,.44,.044,BLACK,0,.78);
+      bx(-.058,.34,-.017,-.05,.44,.017,BLACK,0,.78);     // one on the back
       oct(0,.472,0,.026,.03,.512,SKIN,1);                // neck
-      oct(0,.503,0,.051,.055,.60,SKIN,1,0,0,.30);        // jaw — narrows to the chin
-      oct(0,.60,0,.051,.055,.657,SKIN,1,.45);            // crown, rounded
+      lathe(0,0,[[.502,.030,.033],[.518,.043,.047],[.552,.051,.055],[.588,.053,.057],
+        [.625,.047,.051],[.652,.030,.033],[.663,.008,.008]],SKIN,1); // skull — chin, cheeks, rounded crown
       bx(.043,.562,-.032,.054,.584,-.012,EYE,1);         // eyes — the face reads
       bx(.043,.562,.012,.054,.584,.032,EYE,1);
       bx(.047,.535,-.011,.063,.572,.011,SKIN,1);         // nose
-      if(hat===0)oct(0,.598,-.004,.054,.058,.668,HAIR,1,.5);   // bare head: hair cap
+      if(hat===0)lathe(0,-.004,[[.588,.054,.058],[.625,.051,.055],[.655,.036,.040],
+        [.672,.008,.008]],HAIR,1);                       // bare head: hair, a rounded cap
       else if(hat===2){oct(0,.612,0,.086,.09,.633,STRAW,1);    // straw brim
-        oct(0,.633,0,.049,.052,.69,STRAW,1,.28);}              // crown
+        lathe(0,0,[[.633,.049,.052],[.668,.043,.046],[.692,.020,.022]],STRAW,1);} // crown, domed
       if(beard)bx(.04,.502,-.028,.056,.55,.028,HAIR,1);
       const arm=(zc,part)=>{
-        oct(0,.452,zc,.035,.037,.49,CLOTH,part,1,.3);    // shoulder roundel
-        oct(0,.36,zc,.03,.032,.468,CLOTH,part,1,-.12);   // sleeved upper arm
-        oct(0,.29,zc,.024,.026,.372,SKIN,part,0,-.14);   // bare forearm
+        lathe(0,zc,[[.452,.025,.027],[.468,.034,.036],[.49,.024,.026]],CLOTH,part,1); // shoulder ball
+        lathe(0,zc,[[.36,.026,.028],[.42,.031,.033],[.468,.028,.030]],CLOTH,part,1);  // sleeved upper arm
+        lathe(0,zc,[[.29,.020,.022],[.335,.027,.029],[.372,.024,.026]],SKIN,part);    // bare forearm
       };
       arm(-.133,4);
-      bx(-.032,.248,-.157,.032,.296,-.109,SKIN,4);       // hand
+      lathe(0,-.133,[[.246,.014,.016],[.262,.026,.026],[.285,.026,.026],[.298,.012,.014]],SKIN,4); // hand
       if(shield){
         bx(-.005,.28,-.225,.055,.47,-.16,CLOTH,4,1);   // shield, team face
         bx(.012,.345,-.232,.038,.405,-.222,GOLDC,4);   // boss
@@ -11792,14 +11850,14 @@ const R3={
         bx(-.005,.45,-.23,.055,.47,-.158,BLACK,4,.62);
       }
       arm(.133,6);                                       // weapon arm — swings WITH the weapon
-      bx(-.032,.248,.109,.032,.296,.157,SKIN,6);         // weapon hand
+      lathe(0,.133,[[.246,.014,.016],[.262,.026,.026],[.285,.026,.026],[.298,.012,.014]],SKIN,6); // weapon hand
     };
     // ---- 0 SWORDSMAN (militia line, UU infantry, petard) — hip .27 shoulder .47
     mark();
     man(true,1,true);
-    bx(-.065,.585,-.065,.065,.67,.065,STEEL,1);     // helm
+    lathe(0,0,[[.585,.061,.065],[.628,.058,.062],[.663,.040,.044],[.684,.010,.011]],STEEL,1); // helm — a domed skullcap
     bx(-.02,.655,-.02,.02,.70,.02,BLACK,1,.8);      // team plume stub
-    bx(.062,.585,-.012,.07,.645,.012,STEEL,1);      // nasal bar
+    bx(.058,.585,-.012,.066,.645,.012,STEEL,1);     // nasal bar
     bx(-.078,.462,-.115,.02,.502,-.078,STEEL,4);    // pauldrons over the arm tops
     bx(-.078,.462,.078,.02,.502,.115,STEEL,6);
     bx(-.012,.44,.115,.012,.72,.145,STEEL,6);       // blade, upright at rest
@@ -11810,8 +11868,8 @@ const R3={
     // ---- 1 SPEARMAN (spear/skirmisher) — kettle hat, tall pike
     mark();
     man(true,1,true);
-    bx(-.075,.60,-.075,.075,.635,.075,STEEL,1);     // kettle brim
-    bx(-.045,.635,-.045,.045,.675,.045,STEEL,1);    // crown
+    lathe(0,0,[[.602,.078,.082],[.626,.070,.074]],STEEL,1);  // kettle brim — a real disc
+    lathe(0,0,[[.626,.048,.052],[.658,.042,.046],[.680,.016,.018]],STEEL,1); // domed crown
     bx(-.012,.30,.118,.012,.98,.142,WOOD,6);        // shaft
     bx(-.014,.60,.116,.014,.64,.144,LEATH,6);       // grip wrap
     bx(-.02,.96,.112,.02,1.06,.148,STEEL,6);        // spearhead
@@ -11831,7 +11889,7 @@ const R3={
     // ---- 3 GUNNER (hand cannoneer, janissary) — iron tube held level
     mark();
     man(false,1,false);
-    bx(-.065,.585,-.065,.065,.66,.065,IRON,1);      // iron cap
+    lathe(0,0,[[.585,.060,.064],[.625,.055,.059],[.655,.034,.037],[.668,.010,.011]],IRON,1); // iron cap, domed
     bx(-.05,.42,.112,.02,.475,.148,WOOD,6);         // stock
     bx(.02,.44,.115,.30,.495,.145,IRON,6);          // barrel
     bx(.28,.432,.11,.305,.503,.15,DARK,6);          // muzzle band
@@ -11851,8 +11909,8 @@ const R3={
     bx(-.093,.22,-.035,.093,.32,.035,CLOTH,0,1);    // team sash
     bx(-.095,.205,-.037,.095,.225,.037,STRAW,0);    // rope belt under it
     oct(0,.505,0,.024,.028,.53,SKIN,1);             // neck
-    oct(0,.512,0,.05,.054,.60,SKIN,1,0,.26);        // jaw — narrows to the chin
-    oct(0,.60,0,.05,.054,.652,SKIN,1,.45);          // crown, rounded
+    lathe(0,0,[[.512,.030,.033],[.528,.042,.046],[.558,.050,.054],[.592,.052,.056],
+      [.622,.046,.050],[.645,.028,.031],[.655,.008,.008]],SKIN,1); // skull — chin, cheeks, crown
     bx(.042,.565,-.031,.052,.586,-.012,EYE,1);      // eyes
     bx(.042,.565,.012,.052,.586,.031,EYE,1);
     bx(.046,.538,-.01,.061,.573,.01,SKIN,1);        // nose
@@ -11873,21 +11931,22 @@ const R3={
        attachment heights are unchanged. */
     const horse=()=>{
       const leg=(xc,zc,part)=>{
-        oct(xc,.14,zc,.036,.036,.34,DARK,part,0,-.16);   // upper leg into the barrel
-        oct(xc,.05,zc,.026,.026,.16,DARK,part,0,-.12);   // cannon
-        bx(xc-.032,0,zc-.028,xc+.04,.055,zc+.028,BOOT,part); // hoof
+        lathe(xc,zc,[[.14,.028,.028],[.24,.033,.033],[.34,.038,.038]],DARK,part,0,8); // upper leg into the barrel
+        lathe(xc,zc,[[.05,.022,.022],[.10,.026,.026],[.16,.025,.025]],DARK,part,0,8); // cannon
+        latheX(.028,zc,[[xc-.03,.026,.026],[xc+.012,.028,.028],[xc+.038,.020,.024]],BOOT,part); // hoof
       };
       leg(.17,-.07,2);leg(.17,.07,3);leg(-.17,-.07,3);leg(-.17,.07,2);
-      octX(-.26,.375,0,.115,.10,.24,HIDE,0,0,.30,.34);   // barrel — chest and rump rounded
-      octX(-.25,.39,0,.10,.115,.23,CLOTH,0,1,.24,.30); // caparison drape — team, follows the barrel
-      bx(-.255,.295,-.122,.235,.315,.122,WHITE,0,.85); // trim band, lifted team
-      bx(-.255,.425,-.117,.235,.443,.117,BLACK,0,.68); // upper band, darkened team
+      latheX(.375,0,[[-.26,.078,.068],[-.17,.112,.098],[-.02,.118,.102],
+        [.13,.112,.098],[.24,.082,.072]],HIDE,0,0,12);   // barrel — real belly, chest and rump
+      latheX(.39,0,[[-.25,.074,.085],[-.15,.098,.113],[0,.102,.118],
+        [.12,.098,.113],[.23,.078,.089]],CLOTH,0,1,12);  // caparison drape — team, follows the barrel
+      latheX(.39,0,[[-.09,.104,.120],[.02,.105,.121],[.13,.100,.115]],WHITE,0,.85,12); // trim girth — a lifted-team band riding the drape
       bx(-.07,.465,-.088,.10,.492,.088,LEATH,0);    // saddle pad
       oct(-.285,.30,0,.021,.021,.46,DARK,0,0,.3);   // tail
-      oct(.24,.42,0,.06,.048,.63,HIDE,1,0,.30);     // neck, tapering up
+      lathe(.24,0,[[.42,.062,.050],[.53,.055,.044],[.63,.048,.038]],HIDE,1); // neck, tapering up
       bx(.17,.615,-.018,.30,.66,.018,HAIR,1);       // mane ridge
-      octX(.27,.585,0,.052,.046,.42,HIDE,1,0,.12,.20); // head
-      octX(.40,.565,0,.036,.033,.47,DARK,1,0,.30);  // muzzle
+      latheX(.585,0,[[.27,.050,.044],[.34,.052,.046],[.42,.042,.038]],HIDE,1); // head
+      latheX(.565,0,[[.40,.034,.031],[.44,.030,.028],[.47,.024,.022]],DARK,1); // muzzle
       bx(.33,.598,-.05,.352,.616,-.044,EYE,1);      // eyes
       bx(.33,.598,.044,.352,.616,.05,EYE,1);
       bx(.36,.545,-.049,.40,.62,.049,LEATH,1);      // bridle strap
@@ -11896,12 +11955,13 @@ const R3={
       bx(-.02,.34,-.135,.06,.48,-.105,CLOTH,0,1);   // rider legs against the flanks
       bx(-.02,.34,.105,.06,.48,.135,CLOTH,0,1);
       oct(.01,.468,0,.058,.072,.492,BLACK,0,.66);   // rider hem band
-      oct(.01,.475,0,.055,.068,.665,CLOTH,0,1,-.12); // rider torso — shouldered
-      bx(.06,.52,-.042,.067,.648,-.018,BLACK,0,.78);  // rider tunic folds
-      bx(.06,.52,.018,.067,.648,.042,BLACK,0,.78);
+      lathe(.01,0,[[.475,.056,.070],[.515,.051,.063],[.575,.053,.067],
+        [.63,.058,.075],[.662,.046,.060]],CLOTH,0,1); // rider torso — waist and shoulders
+      bx(.058,.53,-.042,.065,.62,-.018,BLACK,0,.78);  // rider tunic folds
+      bx(.058,.53,.018,.065,.62,.042,BLACK,0,.78);
       oct(.01,.66,0,.024,.028,.688,SKIN,1);         // rider neck
-      oct(.01,.682,0,.043,.046,.762,SKIN,1,0,.26);  // rider jaw
-      oct(.01,.762,0,.043,.046,.805,SKIN,1,.45);    // rider crown
+      lathe(.01,0,[[.682,.026,.028],[.698,.037,.040],[.727,.043,.046],[.758,.044,.047],
+        [.785,.038,.041],[.805,.014,.015]],SKIN,1); // rider skull — chin, cheeks, crown
       bx(.046,.728,-.027,.056,.748,-.009,EYE,1);    // rider eyes
       bx(.046,.728,.009,.056,.748,.027,EYE,1);
       bx(.049,.705,-.009,.063,.736,.009,SKIN,1);    // rider nose
@@ -11909,13 +11969,14 @@ const R3={
     // ---- 6 CAVALRY (scout/knight line, UU cavalry) — couched lance
     mark();
     horse();
-    bx(-.035,.755,-.05,.055,.815,.05,STEEL,1);      // helm
+    lathe(.01,0,[[.752,.047,.051],[.79,.043,.047],[.815,.024,.026],[.826,.008,.008]],STEEL,1); // helm, domed
     bx(-.06,.57,.105,.50,.595,.13,WOOD,6);          // lance
     bx(.50,.562,.10,.585,.60,.135,STEEL,6);         // point
     seal(6);piv.push([.26,.55]);
     // ---- 7 CAVALRY ARCHER (mangudai, conquistador, mameluke) — bow at the knee
     mark();
     horse();
+    lathe(.01,0,[[.752,.047,.050],[.786,.043,.046],[.812,.020,.022]],HAIR,1); // fur cap
     bx(.10,.50,.115,.13,.62,.135,WOOD,6);           // compact bow, three slats
     bx(.115,.62,.115,.14,.72,.135,WOOD,6);
     bx(.10,.72,.115,.125,.82,.135,WOOD,6);
@@ -11927,8 +11988,9 @@ const R3={
     oct(-.20,0,.09,.052,.048,.33,GREY,3,0,-.12);
     oct(.18,0,-.09,.052,.048,.33,GREY,3,0,-.12);
     oct(.18,0,.09,.052,.048,.33,GREY,2,0,-.12);
-    octX(-.30,.47,0,.185,.165,.28,GREY,0,0,.28,.32); // body — rounded chest and rump
-    octX(.26,.54,0,.10,.095,.44,GREY,1,0,.20);      // head
+    latheX(.47,0,[[-.30,.128,.114],[-.18,.176,.156],[.02,.185,.165],
+      [.17,.172,.152],[.28,.128,.114]],GREY,0,0,12); // body — a real rounded mass
+    latheX(.54,0,[[.26,.096,.091],[.34,.10,.095],[.44,.082,.078]],GREY,1); // head
     bx(.40,.565,-.083,.425,.585,-.075,EYE,1);       // eyes
     bx(.40,.565,.075,.425,.585,.083,EYE,1);
     oct(.465,.13,0,.042,.036,.475,GREY,1,0,-.08,.35); // trunk — narrows to the tip
@@ -12075,7 +12137,7 @@ const R3={
     bx(-.12,0,.03,-.07,.13,.08,DARK,3);
     bx(.05,0,-.08,.10,.13,-.03,DARK,3);
     bx(.05,0,.03,.10,.13,.08,DARK,2);
-    octX(-.15,.205,0,.10,.098,.13,WOOL,0,0,.24,.24); // fleece — a real rounded bale
+    latheX(.205,0,[[-.15,.074,.072],[-.07,.098,.096],[.04,.099,.097],[.13,.078,.076]],WOOL,0); // fleece — plump and round
     bx(.11,.17,-.045,.21,.27,.045,DARK,1);          // face
     bx(.205,.225,-.028,.213,.245,-.012,WOOL,1);     // eyes — pale on the dark face
     bx(.205,.225,.012,.213,.245,.028,WOOL,1);
@@ -12086,7 +12148,7 @@ const R3={
     oct(-.11,0,.045,.021,.021,.25,TAN,3,0,-.15);
     oct(.09,0,-.045,.021,.021,.25,TAN,3,0,-.15);
     oct(.09,0,.045,.021,.021,.25,TAN,2,0,-.15);
-    octX(-.17,.31,0,.095,.078,.14,TAN,0,0,.26,.30); // body — rounded chest and haunch
+    latheX(.31,0,[[-.17,.066,.055],[-.09,.092,.076],[.04,.093,.077],[.14,.070,.058]],TAN,0); // body — rounded chest and haunch
     bx(-.20,.32,-.02,-.16,.42,.02,WOOL,0);          // tail flash
     oct(.145,.36,0,.042,.038,.56,TAN,1,0,.25);      // neck, tapering up
     octX(.15,.58,0,.04,.036,.29,TAN,1,0,.25);       // head
@@ -12103,9 +12165,9 @@ const R3={
     bx(-.15,0,.035,-.09,.11,.085,DARK,3);
     bx(.07,0,-.085,.13,.11,-.035,DARK,3);
     bx(.07,0,.035,.13,.11,.085,DARK,2);
-    octX(-.19,.185,0,.10,.10,.17,BOARC,0,0,.20,.26); // body — barrel-round
+    latheX(.185,0,[[-.19,.072,.072],[-.10,.098,.098],[.06,.099,.099],[.17,.080,.080]],BOARC,0); // body — barrel-round
     bx(-.15,.27,-.025,.11,.315,.025,DARK,0);        // bristle ridge
-    octX(.15,.18,0,.085,.072,.31,BOARC,1,0,.22);    // head, narrowing to the snout
+    latheX(.18,0,[[.15,.080,.068],[.23,.078,.066],[.31,.062,.053]],BOARC,1); // head, narrowing to the snout
     bx(.255,.21,-.062,.272,.228,-.052,EYE,1);       // small mean eyes
     bx(.255,.21,.052,.272,.228,.062,EYE,1);
     octX(.30,.157,0,.03,.032,.362,DARK,1,0,.3);     // snout
