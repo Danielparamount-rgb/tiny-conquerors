@@ -6481,7 +6481,7 @@ function drawBld(b){
     ctx.fillRect(pt.x-sp.ox,pt.y-sp.oy,sp.w,sp.h);
     ctx.globalAlpha=1;
   }
-  if(b.built&&b.hp<b.maxhp*.35)drawFlames(b);
+  if(b.built&&b.hp<b.maxhp*.75&&!d.thin&&!d.farm)drawFlames(b);
   const barY=pt.y-sp.oy-3,barX=pc.x-15;
   if(!b.built){
     ctx.fillStyle='rgba(16,12,6,.75)';ctx.fillRect(barX,barY,30,4);
@@ -6498,21 +6498,55 @@ function drawBld(b){
     ctx.fillStyle='#efe2bd';ctx.fillRect(barX+.5,qy+.5,29*(b.qt/t),2.5);
   }
 }
+/* Fire and smoke on damaged buildings, by tier: below 75% HP a building
+   smoulders (smoke only), below 50% it burns, below 25% it's an inferno.
+   Everything is STATELESS — derived from G.t, b.id and hp each frame, so
+   there are no particle arrays to grow, nothing to serialize, and two
+   lockstep peers can disagree about every pixel of it. */
 function drawFlames(b){
+  const r=b.hp/b.maxhp;
+  const tier=r<.25?2:r<.5?1:0;              // 0 smoulder, 1 burning, 2 inferno
   const pc=isoPt(b.tx+b.size/2,b.ty+b.size/2);
   pc.y-=elevTile(b.tx+b.size/2,b.ty+b.size/2)*10;
-  const spots=[[-9,-8],[7,-14],[0,-3]];
-  for(let i=0;i<3;i++){
-    const fx=pc.x+spots[i][0],fy=pc.y+spots[i][1];
-    const fl=.7+.3*Math.sin(G.t*13+b.id*3+i*2.4);
-    ctx.fillStyle='rgba(226,110,30,.85)';
-    ctx.beginPath();
-    ctx.moveTo(fx-3,fy);ctx.quadraticCurveTo(fx-2,fy-5*fl,fx,fy-8*fl);
-    ctx.quadraticCurveTo(fx+2,fy-5*fl,fx+3,fy);ctx.closePath();ctx.fill();
-    ctx.fillStyle='rgba(250,210,90,.9)';
-    ctx.beginPath();
-    ctx.moveTo(fx-1.5,fy);ctx.quadraticCurveTo(fx-1,fy-3*fl,fx,fy-4.5*fl);
-    ctx.quadraticCurveTo(fx+1,fy-3*fl,fx+1.5,fy);ctx.closePath();ctx.fill();
+  const d=BLDS[b.type];
+  const BSv=d.thin||d.farm?1:BLD_VS2D;
+  const roofH=(IHT[b.type]||18)*BSv;        // anchor heights track the drawn art
+  const nA=1+tier;                          // 1..3 fire points
+  for(let i=0;i<nA;i++){
+    const h=hash2(b.id*31+i*7,b.id*13+i*29);
+    // anchor scattered over the footprint, lifted onto the body/roof
+    const ax=pc.x+(((h%100)/100)-.5)*b.size*IW*.9;
+    const ay=pc.y-roofH*(.25+((h>>>7)%40)/100)+b.size*IH*.3;
+    // --- smoke first, flames paint over its base ---
+    const puffs=tier===0?2:3;
+    for(let s2=0;s2<puffs;s2++){
+      const p=((G.t*.42)+(h>>>3)/97+s2/puffs)%1;
+      const rise=(34+b.size*10+tier*9)*p;
+      const sway=Math.sin(p*5.2+h)*5.5*p;
+      const rad=3.4+8.5*p+tier*1.2;
+      const al=(tier===0?.32:.45)*(1-p)*(p>.06?1:p/.06);
+      const g2=52+70*p;                     // dark near the fire, paler as it thins
+      ctx.fillStyle='rgba('+(g2|0)+','+((g2*.97)|0)+','+((g2*.94)|0)+','+al.toFixed(3)+')';
+      ctx.beginPath();ctx.ellipse(ax+sway,ay-6-rise,rad,rad*.82,0,0,7);ctx.fill();
+    }
+    if(tier===0)continue;                   // smouldering: smoke without flame
+    // --- layered flame tongues, two flicker phases so it never loops visibly ---
+    const fl=.62+.26*Math.sin(G.t*13+b.id*3+i*2.4)+.16*Math.sin(G.t*7.3+i*5.1+b.id);
+    const hgt=(11+tier*6+b.size*3)*fl;
+    const tongue=(w,hh,col)=>{
+      ctx.fillStyle=col;
+      ctx.beginPath();
+      ctx.moveTo(ax-w,ay);
+      ctx.quadraticCurveTo(ax-w*.6,ay-hh*.55,ax+Math.sin(G.t*9+i)*w*.4,ay-hh);
+      ctx.quadraticCurveTo(ax+w*.6,ay-hh*.55,ax+w,ay);ctx.closePath();ctx.fill();
+    };
+    tongue(4.4+tier,hgt,'rgba(168,52,12,.72)');          // deep red base
+    tongue(3.2+tier*.6,hgt*.82,'rgba(226,110,30,.88)');  // orange body
+    tongue(1.9,hgt*.55,'rgba(250,210,90,.92)');          // yellow core
+    if(tier===2)tongue(1,hgt*.32,'rgba(255,250,225,.9)');// white heart
+    // warm glow licking the wall behind the fire
+    ctx.fillStyle='rgba(255,150,50,'+(.05+.04*fl).toFixed(3)+')';
+    ctx.beginPath();ctx.ellipse(ax,ay-2,11+tier*3,7+tier*2,0,0,7);ctx.fill();
   }
 }
 /* ---------- directional unit rig: shared 3D-joint projection core ----------
@@ -12061,6 +12095,63 @@ const R3={
       const dim=CD[this.unitArch(c.type)]||CD[0];
       bx(c.x,g+0.035,c.y,dim[0],0.035,dim[1],[k*0.34,k*0.30,k*0.26]);
     }
+    /* Fire and smoke on damaged buildings — camera-facing quads built fresh
+       each frame (this mesh already rebuilds per frame, so animation is free).
+       Flames go in the main OPAQUE range; smoke quads are appended AFTER
+       fxSplit and drawn as a second blended pass. Same stateless rule as the
+       2D version: everything derives from the clock, the id and hp. */
+    const B2=this.basis(),t2=performance.now()*.001;
+    const bb=(cx,cy,cz,s,col)=>{
+      const rx=B2.rx*s,rz=B2.rz*s;
+      const ux=B2.ux*s,uy=B2.uy*s,uz=B2.uz*s;
+      const i0=push([cx-rx-ux,cy-uy,cz-rz-uz],UP,col);
+      const i1=push([cx+rx-ux,cy-uy,cz+rz-uz],UP,col);
+      const i2=push([cx+rx+ux,cy+uy,cz+rz+uz],UP,col);
+      const i3=push([cx-rx+ux,cy+uy,cz-rz+uz],UP,col);
+      I.push(i0,i1,i2,i0,i2,i3);
+    };
+    const burning=[];
+    for(const b of G.blds){
+      if(!b.built||!b.maxhp||b.hp>=b.maxhp*.75)continue;
+      if(!allied(b.p,localP)&&!b.seen)continue;
+      const M=this.BMASS[b.type];
+      if(!M||M.r==='flat')continue;           // walls and farms don't burn
+      const r=b.hp/b.maxhp,tier=r<.25?2:r<.5?1:0;
+      const vs=this.BVS,H=(IHT[b.type]||18)*this.HS*vs;
+      const g=this.groundH(b.tx+b.size/2,b.ty+b.size/2);
+      for(let i=0;i<=tier;i++){
+        const h=hash2(b.id*31+i*7,b.id*13+i*29);
+        const ax=b.tx+b.size*(.28+((h%100)/100)*.44);
+        const az=b.ty+b.size*(.28+(((h>>>9)%100)/100)*.44);
+        /* anchors sit ON THE ROOFLINE, not inside the massing — a billboard
+           inside the volume loses the depth test to its own walls and the
+           fire is simply invisible (found the hard way: the first pass put
+           them at mid-wall and 3D showed smoke with no flames) */
+        const ay=g+H*(1.0+((h>>>7)%30)/100*.28);
+        burning.push({ax,ay,az,h,tier,i});
+        if(tier>0){
+          const fl=.62+.26*Math.sin(t2*11+b.id*3+i*2.4)+.16*Math.sin(t2*7.3+i*5.1);
+          const s=(.07+.04*tier+b.size*.012)*fl+.05;
+          bb(ax,ay+s*.55,az,s*1.15,[0.66,0.20,0.05]);       // red base
+          bb(ax,ay+s*.75,az,s*.78,[0.89,0.43,0.12]);        // orange body
+          bb(ax,ay+s*.95,az,s*.46,[0.98,0.82,0.35]);        // yellow core
+          if(tier===2)bb(ax,ay+s*1.05,az,s*.26,[1,.98,.88]);
+        }
+      }
+    }
+    this.fxSplit=I.length;                    // smoke starts here — drawn blended
+    for(const f2 of burning){
+      const puffs=f2.tier===0?2:3;
+      for(let s2=0;s2<puffs;s2++){
+        const p=((t2*.40)+(f2.h>>>3)/97+s2/puffs)%1;
+        const rise=p*(0.9+f2.tier*.25);
+        const sway=Math.sin(p*5.2+f2.h)*.10*p;
+        let s=.055+.13*p;
+        if(p>.85)s*=(1-p)/.15;                // dissolve instead of popping
+        const g2=.30+.34*p;
+        bb(f2.ax+sway,f2.ay+.12+rise,f2.az+sway*.6,s,[g2,g2*.97,g2*.94]);
+      }
+    }
     const gl=this.gl;
     if(!this.fxvbo){this.fxvbo=gl.createBuffer();this.fxibo=gl.createBuffer();}
     gl.bindBuffer(gl.ARRAY_BUFFER,this.fxvbo);
@@ -12088,7 +12179,18 @@ const R3={
     gl.enableVertexAttribArray(4);gl.vertexAttribPointer(4,3,gl.FLOAT,false,28,16);
     ex.vertexAttribDivisorANGLE(4,1);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.fxibo);
-    ex.drawElementsInstancedANGLE(gl.TRIANGLES,this.fxCount,gl.UNSIGNED_SHORT,0,1);
+    // opaque range: rings, projectiles, corpses, flames
+    ex.drawElementsInstancedANGLE(gl.TRIANGLES,this.fxSplit||this.fxCount,gl.UNSIGNED_SHORT,0,1);
+    // smoke range: blended, no depth write — soot, not solid grey boxes
+    if(this.fxSplit!=null&&this.fxCount>this.fxSplit){
+      gl.uniform1f(this.treeLoc.uAlpha,0.42);
+      gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+      gl.depthMask(false);
+      ex.drawElementsInstancedANGLE(gl.TRIANGLES,this.fxCount-this.fxSplit,
+        gl.UNSIGNED_SHORT,this.fxSplit*2,1);
+      gl.depthMask(true);gl.disable(gl.BLEND);
+      gl.uniform1f(this.treeLoc.uAlpha,1.0);
+    }
     ex.vertexAttribDivisorANGLE(3,0);ex.vertexAttribDivisorANGLE(4,0);
     gl.disableVertexAttribArray(3);gl.disableVertexAttribArray(4);
   },
