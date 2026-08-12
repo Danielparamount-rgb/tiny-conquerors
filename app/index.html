@@ -11224,6 +11224,9 @@ const R3={
     const wall=(A,R,U,col,style,seed,openings)=>{
       panel(A,R,U,0,0,1,1,0,shade(col,0.55));            // mortar / backing
       const H=Math.hypot(U[0],U[1],U[2]),W=Math.hypot(R[0],R[1],R[2]);
+      // weathering: every wall darkens where it meets the ground — rain splash
+      // and damp climb real walls, and its absence is what reads as "model"
+      if(style!=='solid')panel(A,R,U,0,0,1,0.09,REL*0.55,shade(col,0.62));
       if(style==='solid'){
         // one clean face — banners and other blocks that must read as pure
         // colour. The default stone branch put moss on the bottom course of
@@ -11333,6 +11336,24 @@ const R3={
              [cx+Math.cos(a1)*r,y0,cz+Math.sin(a1)*r],[cx,y1,cz],col);
       }
     };
+    // thin octagonal collar hugging a cone — stacked, they read as the tile
+    // courses of a real conical roof instead of a smooth party hat
+    const ring=(cx,cz,r,y,h,col)=>{
+      const seg=8;
+      for(let i=0;i<seg;i++){
+        const a0=i/seg*6.283,a1=(i+1)/seg*6.283;
+        quad([cx+Math.cos(a0)*r,y,cz+Math.sin(a0)*r],
+             [cx+Math.cos(a1)*r,y,cz+Math.sin(a1)*r],
+             [cx+Math.cos(a1)*r*.92,y+h,cz+Math.sin(a1)*r*.92],
+             [cx+Math.cos(a0)*r*.92,y+h,cz+Math.sin(a0)*r*.92],col);
+      }
+    };
+    // conical roof with tile courses: the cone plus two shaded collars
+    const coneTiled=(cx,cz,r,y0,y1,col)=>{
+      cone(cx,cz,r,y0,y1,col);
+      ring(cx,cz,r*.80,y0+(y1-y0)*.24,(y1-y0)*.07,shade(col,0.82));
+      ring(cx,cz,r*.55,y0+(y1-y0)*.52,(y1-y0)*.06,shade(col,0.88));
+    };
     const dome=(cx,cz,r,y0,y1,col)=>{
       const seg=10,ring=4;
       for(let j=0;j<ring;j++){
@@ -11380,7 +11401,7 @@ const R3={
       let win=null;
       if(b.built&&M.r!=='flat'&&H>0.28){
         const per=s>=2?3:2;
-        const slit=b.type==='castle';
+        const slit=b.type==='castle'||b.type==='tower';   // fortifications slit, homes glaze
         win=[];
         for(let f=0;f<4;f++){
           const a=[];
@@ -11396,6 +11417,13 @@ const R3={
       box(x0,z0,x1,z1,g,wh,wallC,style,b.id*7919,win);
       const tcS=teamColor(b.p),tcv=hex(tcS&&tcS.length===7?tcS:'#3b7bd4');
       const midx=(x0+x1)/2,midz=(z0+z1)/2;
+      // foundation plinth: a slightly proud stone course at the ground line.
+      // Real buildings SIT on something; without this they perch on the grass.
+      if(b.built&&M.r!=='flat'){
+        const pl=.035;
+        box(x0-pl,z0-pl,x1+pl,z1+pl,g,g+Math.min(.07,H*.06),
+            shade(hex('#8f887b'),0.96),'solid',b.id,null);
+      }
       /* ---- per-type extras: the details that make each building itself ---- */
       if(b.built){
         if(style==='stone'&&!BLDS[b.type].thin){
@@ -11452,12 +11480,42 @@ const R3={
           const A0=[x1,g,z1],R0=[x0-x1,0,0],U0=[0,wh-g,0];
           panel(A0,R0,U0,.70,.12,.86,.38,REL*1.4,[0.95,0.5,0.13]);
           panel(A0,R0,U0,.73,.17,.83,.32,REL*1.55,[1.0,0.8,0.32]);
+        }else if(b.type==='dock'){
+          // a working waterfront: mooring posts, a boom crane, waiting cargo
+          for(const[px2,pz2] of [[x0+.05,z0+.05],[x1-.05,z0+.05],[x0+.05,z1-.05],[x1-.05,z1-.05]])
+            box(px2-.035,pz2-.035,px2+.035,pz2+.035,g-.02,g+.22,hex('#5e4023'),'solid',b.id,null);
+          box(midx-.045,midz-.045,midx+.045,midz+.045,g,g+.62,hex('#6b4a2a'),'solid',b.id,null);
+          box(midx-.03,midz-.30,midx+.03,midz+.03,g+.52,g+.58,hex('#7a5631'),'solid',b.id,null);
+          box(midx-.02,midz-.30,midx+.02,midz-.26,g+.30,g+.52,hex('#3a2d1e'),'solid',b.id,null);
+          box(x1-.30,z0+.06,x1-.10,z0+.22,g,g+.14,hex('#8a6a42'),'solid',b.id,null);
         }
       }
       if(b.built&&M.r!=='flat'){
         const rc=hex(M.rc);
-        if(M.r==='gable')gable(x0-inset*.6,z0-inset*.6,x1+inset*.6,z1+inset*.6,wh,g+H,rc,b.id*131);
-        else if(M.r==='cone')cone(midx,midz,(x1-x0)*.62,wh,g+H,rc);
+        if(M.r==='gable'){
+          gable(x0-inset*.6,z0-inset*.6,x1+inset*.6,z1+inset*.6,wh,g+H,rc,b.id*131);
+          if(style==='plaster'){
+            /* king-post trusses in the gable ends — the half-timber read from
+               the road. Thin dark beams poking just proud of the end triangle:
+               one post to the ridge, one collar beam across. */
+            const beam=hex('#4a3520'),ridge=g+H;
+            for(const ex2 of [x0-inset*.6,x1+inset*.6]){
+              box(ex2-.014,midz-.018,ex2+.014,midz+.018,wh,ridge-.03,beam,'solid',b.id,null);
+              box(ex2-.012,midz-(midz-z0)*.42,ex2+.012,midz+(z1-midz)*.42,
+                  wh+(ridge-wh)*.40,wh+(ridge-wh)*.47,beam,'solid',b.id,null);
+            }
+          }
+          if(b.type==='house'||b.type==='blacksmith'||b.type==='tc'){
+            // a chimney breathing gentle smoke says "someone lives here"
+            // louder than any texture. Position formula shared with buildFx.
+            const chx=x1-(x1-x0)*.24,ridge=g+H;
+            box(chx-.045,midz-.045,chx+.045,midz+.045,ridge-H*.30,ridge+H*.10,
+                hex('#8f887b'),'solid',b.id,null);
+            box(chx-.058,midz-.058,chx+.058,midz+.058,ridge+H*.10,ridge+H*.135,
+                hex('#5a544a'),'solid',b.id,null);
+          }
+        }
+        else if(M.r==='cone')coneTiled(midx,midz,(x1-x0)*.62,wh,g+H,rc);
         else if(M.r==='dome')dome(midx,midz,(x1-x0)*.44,wh,g+H,rc);
         else if(M.r==='crown'){
           /* crenellated parapet: a proud lip ringed with merlons. The corner
@@ -11483,7 +11541,7 @@ const R3={
           for(const [ox,oz] of [[x0,z0],[x1,z0],[x0,z1],[x1,z1]]){
             const ty0=g,ty1=g+H*.92;
             box(ox-tr,oz-tr,ox+tr,oz+tr,ty0,ty1,hex(M.w),'stone',b.id*31+ox*13,null);
-            cone(ox,oz,tr*1.25,ty1,ty1+H*.34,hex(M.rc));
+            coneTiled(ox,oz,tr*1.25,ty1,ty1+H*.34,hex(M.rc));
           }
         }
         if(b.type==='monastery'){
@@ -12290,6 +12348,20 @@ const R3={
         }
       }
     }
+    /* hearth smoke: healthy houses, town halls and smithies breathe a thin
+       pale wisp from their chimney — the cheapest "people live here" in the
+       whole renderer. Position formula mirrors the chimney in buildBlds. */
+    const hearth=[];
+    for(const b of G.blds){
+      if(!b.built||b.maxhp&&b.hp<b.maxhp*.75)continue;   // damaged ones already smoke
+      if(b.type!=='house'&&b.type!=='tc'&&b.type!=='blacksmith')continue;
+      if(!allied(b.p,localP)&&!b.seen)continue;
+      const s=b.size,inset=s*.10,vs=this.BVS,hw=(s/2-inset)*vs;
+      const cxm=b.tx+s/2,czm=b.ty+s/2;
+      const H=(IHT[b.type]||18)*this.HS*vs;
+      const g=this.groundH(cxm,czm);
+      hearth.push({ax:cxm+hw-2*hw*.24,ay:g+H+H*.135,az:czm,h:hash2(b.id*17,b.id*5)});
+    }
     this.fxSplit=I.length;                    // smoke starts here — drawn blended
     for(const f2 of burning){
       const puffs=f2.tier===0?2:3;
@@ -12301,6 +12373,16 @@ const R3={
         if(p>.85)s*=(1-p)/.15;                // dissolve instead of popping
         const g2=.30+.34*p;
         bb(f2.ax+sway,f2.ay+.12+rise,f2.az+sway*.6,s,[g2,g2*.97,g2*.94]);
+      }
+    }
+    for(const f2 of hearth){
+      for(let s2=0;s2<2;s2++){
+        const p=((t2*.22)+(f2.h>>>3)/97+s2/2)%1;   // slower, lazier than fire smoke
+        const sway=Math.sin(p*4.4+f2.h)*.07*p;
+        let s=.030+.055*p;
+        if(p>.82)s*=(1-p)/.18;
+        const g2=.56+.20*p;                        // pale woodsmoke, not soot
+        bb(f2.ax+sway,f2.ay+.05+p*.55,f2.az+sway*.5,s,[g2,g2,g2*.98]);
       }
     }
     const gl=this.gl;
@@ -12763,7 +12845,7 @@ requestAnimationFrame(frame);
 
 <script>
 (function(){
-  var BUILD = 'tq-v46';
+  var BUILD = 'tq-v47';
   addEventListener('load', function(){
     var ov = document.getElementById('startOverlay');
     if (!ov) return;
