@@ -6419,12 +6419,37 @@ const ISO_ART={
     g.beginPath();g.moveTo(0,13-27);g.lineTo(8,13-24.5);g.lineTo(0,13-22);g.closePath();g.fill();
   },
 };
-function getBldSpr(type,p,built,stage,vr){
+/* Snow rim: whiten the top few pixels of every opaque column — the classic
+   sprite trick; snow settles on every upward surface (ridges, eaves, chimney
+   tops) without knowing any per-building geometry. Runs ONCE per cache build. */
+function snowRim(c,lvl){
+  const g2=c.getContext('2d');
+  let im;try{im=g2.getImageData(0,0,c.width,c.height);}catch(e){return;}
+  const d=im.data,w=c.width,h=c.height;
+  const depth=lvl===2?13:7,al=lvl===2?.92:.62;
+  for(let x=0;x<w;x++){
+    for(let y=0;y<h;y++){
+      const i=(y*w+x)*4;
+      if(d[i+3]>60){
+        for(let k=0;k<depth&&y+k<h;k++){
+          const j=((y+k)*w+x)*4;
+          if(d[j+3]<=60)break;
+          const wgt=al*(1-k/depth);
+          d[j]+= (246-d[j])*wgt; d[j+1]+=(249-d[j+1])*wgt; d[j+2]+=(253-d[j+2])*wgt;
+        }
+        break;
+      }
+    }
+  }
+  g2.putImageData(im,0,0);
+}
+function getBldSpr(type,p,built,stage,vr,sl){
   stage=built?0:(stage||0);
+  sl=built?(sl||0):0;               // construction sites don't hold snow
   const age=G?G.P[p].age:3;
   const ab=age>=3?2:age>=2?1:0; // 0 thatch era · 1 shingle era · 2 imperial stone-and-gold
   vr=type==='house'?(vr||0):0;      // variance only where the cache stays tiny
-  const key=type+'_'+p+'_'+(built?1:0)+'_'+stage+'_'+ab+'_'+vr;
+  const key=type+'_'+p+'_'+(built?1:0)+'_'+stage+'_'+ab+'_'+vr+'_'+sl;
   if(ISPR[key])return ISPR[key];
   let sp;
   if(!built){
@@ -6474,6 +6499,7 @@ function getBldSpr(type,p,built,stage,vr){
       }
     });
   }else sp=mkIsoSpr(BLDS[type].size,IHT[type],(g,ss)=>ISO_ART[type](g,ss,p,ab,vr));
+  if(sl)snowRim(sp.c,sl);
   ISPR[key]=sp;return sp;
 }
 /* ---------- entity drawing ---------- */
@@ -6487,7 +6513,7 @@ function drawBld(b){
     ctx.beginPath();ctx.ellipse(pc.x,pc.y,b.size*IW*.82,b.size*IH*.82,0,0,7);ctx.stroke();
   }
   const stage=b.built?0:Math.min(2,Math.floor(3*b.prog/BLDS[b.type].bt));
-  const sp=getBldSpr(b.type,b.p,b.built,stage,hash2(b.tx,b.ty)%3);
+  const sp=getBldSpr(b.type,b.p,b.built,stage,hash2(b.tx,b.ty)%3,wxSnowLvl);
   // buildings draw larger than their footprint art (BLD_VS2D — tuned by
   // Daniel, currently +25% over the 1.13 base), anchored at the south corner
   // so they gain presence without shifting their base. VISUAL ONLY. Walls and
@@ -11702,6 +11728,26 @@ const R3={
         box(midx-bw,midz-bw,midx+bw,midz+bw,g+H,g+H+H*.22,tcv,'solid',b.id,null);
         if(b.type==='wonder')  // gold finial above the banner
           box(midx-.03,midz-.03,midx+.03,midz+.03,g+H+H*.22,g+H+H*.34,hex('#d9b44a'),'solid',b.id,null);
+        /* lying snow — white caps on the upward surfaces, driven by the same
+           wxSnowLvl the 2D sprite rim uses (bldSig carries it, so the town
+           whitens and thaws without waiting for a construction event) */
+        if(wxSnowLvl){
+          const SN=[.94,.955,.98];
+          if(M.r==='gable'){
+            box(x0-inset*.6,midz-.10,x1+inset*.6,midz+.10,g+H-.005,g+H+.030,SN,'solid',b.id,null);
+            if(wxSnowLvl===2){                     // heavier fall reaches the eaves
+              box(x0-inset*.6,z0-inset*.6-.02,x1+inset*.6,z0-inset*.6+.07,wh-.005,wh+.026,SN,'solid',b.id,null);
+              box(x0-inset*.6,z1+inset*.6-.07,x1+inset*.6,z1+inset*.6+.02,wh-.005,wh+.026,SN,'solid',b.id,null);
+            }
+          }else if(M.r==='cone'){
+            cone(midx,midz,(x1-x0)*.28,g+H-.10,g+H+.035,SN);
+          }else if(M.r==='crown'){
+            box(x0+.10,z0+.10,x1-.10,z1-.10,wh+.002,wh+.020,SN,'solid',b.id,null);
+          }
+        }
+      }
+      if(b.built&&wxSnowLvl&&(b.type==='wall'||b.type==='swall'||b.type==='gate'||b.type==='sgate')){
+        box(x0+.02,z0+.02,x1-.02,z1-.02,g+H,g+H+.020,[.94,.955,.98],'solid',b.id,null);
       }
       n++;
     }
@@ -11743,8 +11789,9 @@ const R3={
     let h=G.blds.length*2654435761;
     for(const b of G.blds)h=(h^(b.id*31+(b.built?7:(b.prog*20)|0)+b.p*3+(b.seen?13:0)))>>>0;
     // players' ages are in the key: buildings re-dress the moment an owner
-    // ages up (roofs/walls read the age), not at the next construction event
-    return h+':'+MAP+':'+elevVer+':'+G.P.map(p=>(p&&p.age)||0).join('');
+    // ages up (roofs/walls read the age), not at the next construction event.
+    // wxSnowLvl too — the whole town whitens and thaws with the weather.
+    return h+':'+MAP+':'+elevVer+':'+G.P.map(p=>(p&&p.age)||0).join('')+':'+wxSnowLvl;
   },
   drawBlds(mvp){
     if(this.noTrees)return;                      // shares the instanced path
@@ -13884,10 +13931,34 @@ function weatherNow(){
   const heavy=.55+((hash2(gameSeed*7,w*11)%40)/100);   // .55...95 per episode
   return {kind,inten:Math.max(0,ramp)*heavy};
 }
+/* Snow COVER — how white the world currently is, 0..1. Accumulates through a
+   snow episode and melts over ~7 minutes afterwards, derived entirely from
+   the same seed schedule weatherNow() reads, so it needs no state and every
+   peer agrees. Quantised to wxSnowLvl (0/1/2) for the sprite caches.
+   window.__wxCov overrides for testing. */
+let wxSnowLvl=0;
+function snowCover(){
+  if(window.__wxCov!=null)return window.__wxCov;
+  if(!G||typeof gameSeed==='undefined')return 0;
+  if(hash2(gameSeed,7)%3!==0)return 0;             // warm climate: never settles
+  const EP=120,w0=Math.floor(G.t/EP);
+  let acc=0;
+  for(let k=0;k<=5;k++){
+    const w=w0-k;if(w<0)break;
+    if(hash2(gameSeed*13,w*29)%10>=3)continue;      // that episode was dry
+    const heavy=.55+((hash2(gameSeed*7,w*11)%40)/100);
+    const amt=k===0?Math.min(1,(G.t-w*EP)/60)*heavy:heavy;
+    const melt=k===0?1:Math.max(0,1-(G.t-(w+1)*EP)/420);
+    acc+=amt*melt;
+  }
+  return Math.min(1,acc);
+}
 function drawWeather(){
   const wx=weatherNow();
   updateWeatherAudio(wx);
-  if(wx.inten<=0.01){
+  const cov=snowCover();
+  wxSnowLvl=cov>.6?2:cov>.22?1:0;
+  if(wx.inten<=0.01&&cov<=0.02){
     if(!wxWasClear){wxCtx.clearRect(0,0,wxC.width,wxC.height);wxWasClear=true;}
     return;
   }
@@ -13895,6 +13966,11 @@ function drawWeather(){
   if(wxC.width!==vw||wxC.height!==vh){wxC.width=vw;wxC.height=vh;}
   const g=wxCtx,t=performance.now()*.001,inten=wx.inten;
   g.clearRect(0,0,vw,vh);
+  if(cov>0.02){ // winter light — the world pales as the snow lies
+    g.fillStyle='rgba(230,238,248,'+(0.10*cov).toFixed(3)+')';
+    g.fillRect(0,0,vw,vh);
+  }
+  if(inten<=0.01)return;   // lying snow but no fresh fall
   if(wx.kind==='rain'){
     // overcast wash — the light drops before the rain reads
     g.fillStyle='rgba(30,38,52,'+(0.10*inten).toFixed(3)+')';
@@ -14115,7 +14191,7 @@ requestAnimationFrame(frame);
 
 <script>
 (function(){
-  var BUILD = 'tq-v56';
+  var BUILD = 'tq-v57';
   addEventListener('load', function(){
     var ov = document.getElementById('startOverlay');
     if (!ov) return;
