@@ -11392,11 +11392,18 @@ const R3={
       // under construction: short and scaffold-brown, growing with prog
       const done=b.built?1:(0.22+0.55*(b.prog||0));
       const H=(IHT[b.type]||18)*this.HS*done*vs;
-      const wallC=hex(b.built?M.w:'#9a8560');
+      /* Age dress (mirrors the 2D ab buckets): Dark/Feudal thatch roofs,
+         Castle terracotta (the palette as authored), Imperial slate + pale
+         ashlar walls. Signature roofs (blue slate monastery/university/castle,
+         the wonder's gold dome) stay themselves at every age. bldSig carries
+         the players' ages, so the whole town re-dresses on age-up. */
+      const age=(G.P[b.p]&&G.P[b.p].age)||0, ab=age>=3?2:age===2?1:0;
+      let wallC=hex(b.built?M.w:'#9a8560');
       const wh=g+H*(M.r==='flat'?1:M.wh);
       // wall treatment follows the palette: pale ashlar -> masonry, cream/buff
       // -> half-timbered plaster, anything else -> boarding
-      const style=b.built?(M.w==='#a8a294'?'stone':(M.w==='#f0e7cd'||M.w==='#d8c9a8'||M.w==='#c9b48c')?'plaster':'plank'):'plank';
+      let style=b.built?(M.w==='#a8a294'?'stone':(M.w==='#f0e7cd'||M.w==='#d8c9a8'||M.w==='#c9b48c')?'plaster':'plank'):'plank';
+      if(b.built&&ab===2&&style==='plaster'){style='stone';wallC=hex('#cfc8b6');}
       /* openings per face — box() builds faces in order [z0, z1, +x, −x], and
          at the HOME camera (yaw 45°) the two faces you actually see are z1 and
          +x. The door was on face 0 and therefore always hidden behind the
@@ -11495,7 +11502,8 @@ const R3={
         }
       }
       if(b.built&&M.r!=='flat'){
-        const rc=hex(M.rc);
+        const sig=M.rc==='#5a7ea8'||M.rc==='#d9b44a';
+        const rc=hex(sig?M.rc:(ab===0?'#b5a267':ab===2?'#6f8095':M.rc));
         if(M.r==='gable'){
           gable(x0-inset*.6,z0-inset*.6,x1+inset*.6,z1+inset*.6,wh,g+H,rc,b.id*131);
           if(style==='plaster'){
@@ -11599,7 +11607,9 @@ const R3={
   bldSig(){
     let h=G.blds.length*2654435761;
     for(const b of G.blds)h=(h^(b.id*31+(b.built?7:(b.prog*20)|0)+b.p*3+(b.seen?13:0)))>>>0;
-    return h+':'+MAP+':'+elevVer;
+    // players' ages are in the key: buildings re-dress the moment an owner
+    // ages up (roofs/walls read the age), not at the next construction event
+    return h+':'+MAP+':'+elevVer+':'+G.P.map(p=>(p&&p.age)||0).join('');
   },
   drawBlds(mvp){
     if(this.noTrees)return;                      // shares the instanced path
@@ -11640,7 +11650,7 @@ const R3={
      present actually draw — a typical scene runs 6-10 calls). The flag-based
      fallback exists so a future unit type added to UNITS renders as SOMETHING
      sensible before anyone thinks about its mesh. */
-  ARCHN:55,
+  ARCHN:76,
   UARCH:{
     villager:4, militia:0, spearman:1, archer:2, skirmisher:24, scout:25, knight:6,
     ram:10, petard:41, scorpion:13, mangonel:12, treb:11, bombard:14, handcannon:3,
@@ -11655,12 +11665,22 @@ const R3={
      scheme has nothing sensible to swing (monks, ships, most beasts). */
   ATKF:[1,1,.7,.35,1,0, .9,.7,.8,0, 1,1,1,.3,.3, 0,0,0,.25, 0,0,0,
         1,1,1,.9,.8, 1,1,1,1,1, 1,1,1,.35,.7, .9,.3,.3,.7,0,
-        1,1,1, 1,1, .35,.35, 1, .9,.9, .9, 1, 0],
+        1,1,1, 1,1, .35,.35, 1, .9,.9, .9, 1, 0,
+        .7,1,1,.7,1, 1,.9,.8,1,.35, .8,.3,1,1,1, .7,0,.3,.9,0, 0],
   /* Age-variant archetype per line unit, indexed by the OWNING PLAYER's age
-     (0 Dark..3 Imperial). Chosen per frame in drawUnits — render side only. */
+     (0 Dark..3 Imperial). Chosen per frame in drawUnits — render side only.
+     Unique units use the same table: their Imperial slot IS the elite,
+     matching statFor's elite-at-Imperial rule. */
   AGEV:{militia:[42,43,0,44], spearman:[45,45,1,46], archer:[2,2,47,48],
         skirmisher:[24,24,49,49], scout:[25,25,50,51], knight:[6,6,6,52],
-        ram:[10,10,10,53], galley:[17,17,17,54]},
+        ram:[10,10,10,53], galley:[17,17,17,54],
+        longbow:[36,36,36,55], axeman:[34,34,34,56], berserker:[31,31,31,57],
+        mangudai:[7,7,7,58], teuton:[30,30,30,59], woad:[27,27,27,60],
+        cataphract:[6,6,6,61], mameluke:[26,26,26,62], huskarl:[33,33,33,63],
+        chukonu:[35,35,35,64], elephant:[8,8,8,65], janissary:[39,39,39,66],
+        samurai:[32,32,32,67], jaguar:[29,29,29,68], eagle:[28,28,28,69],
+        plumed:[40,40,40,70], warwagon:[9,9,9,71], conquistador:[38,38,38,72],
+        tarkan:[37,37,37,73], longboat:[17,17,17,74], turtle:[18,18,18,75]},
   unitArch(t){
     if(this.UARCH[t]!==undefined)return this.UARCH[t];
     const d=UNITS[t]||{};
@@ -12020,7 +12040,8 @@ const R3={
     bx(.105,.51,.121,.111,.81,.129,CANV,6);         // string
     seal(7);piv.push([.26,.55]);
     // ---- 8 ELEPHANT — grey mass, trunk, tusks, team howdah
-    mark();
+    // (body factored so the Imperial elite can re-dress it)
+    const elephantBody=()=>{
     oct(-.20,0,-.09,.052,.048,.33,GREY,2,0,-.12);   // columnar legs
     oct(-.20,0,.09,.052,.048,.33,GREY,3,0,-.12);
     oct(.18,0,-.09,.052,.048,.33,GREY,3,0,-.12);
@@ -12041,9 +12062,10 @@ const R3={
     bx(-.14,.62,-.12,.10,.78,.12,CLOTH,0,1);        // howdah — team
     bx(-.145,.61,-.125,.105,.64,.125,WHITE,0,.85);  // howdah trim band
     oct(-.005,.78,0,.038,.038,.875,SKIN,1,.3,.1);   // mahout
-    seal(8);piv.push([.30,.60]);
+    };
+    mark();elephantBody();seal(8);piv.push([.30,.60]);
     // ---- 9 WAR WAGON — armoured team cabin, draught horse
-    mark();
+    const wagonBody=()=>{
     bx(-.30,0,-.19,-.12,.24,-.13,DARK,2);
     bx(-.30,0,.13,-.12,.24,.19,DARK,3);
     bx(.02,0,-.19,.20,.24,-.13,DARK,3);
@@ -12057,7 +12079,8 @@ const R3={
     octX(.44,.53,0,.04,.036,.60,HIDE,1,0,.25);      // its head
     bx(.34,0,-.075,.40,.26,-.025,DARK,2);
     bx(.34,0,.025,.40,.26,.075,DARK,3);
-    seal(9);piv.push([.14,.40]);
+    };
+    mark();wagonBody();seal(9);piv.push([.14,.40]);
     // ---- 10 RAM — hide-skinned shed, the log itself batters (part 6)
     mark();
     bx(-.30,0,-.20,-.16,.22,-.14,DARK,2);
@@ -12138,7 +12161,7 @@ const R3={
     bx(-.026,.64,-.175,.026,.666,.175,BLACK,0,.72);
     seal(16);piv.push([.12,.30]);
     // ---- 17 WARSHIP (galley line) — ram prow, shield row, oars that row
-    mark();
+    const warshipBody=()=>{
     bx(-.44,-.03,-.13,.40,.15,.13,WOOD,0,0,-.30);   // long hull, flared gunwales
     bx(-.42,.045,-.134,.38,.062,.134,DARK,0);       // plank seams
     bx(-.43,.10,-.134,.39,.117,.134,DARK,0);
@@ -12157,9 +12180,10 @@ const R3={
     bx(-.026,.66,-.245,.026,.688,.245,BLACK,0,.72);
     bx(-.20,.07,-.31,.16,.10,-.14,WOOD,4);          // port oar bank — rows
     bx(-.20,.07,.14,.16,.10,.31,WOOD,5);            // starboard bank
-    seal(17);piv.push([.12,.24]);
+    };
+    mark();warshipBody();seal(17);piv.push([.12,.24]);
     // ---- 18 TURTLE SHIP — iron carapace, spiked ridge, dragon prow
-    mark();
+    const turtleBody=()=>{
     bx(-.36,-.02,-.15,.36,.13,.15,WOOD,0,0,-.24);
     bx(-.34,.13,-.14,.34,.25,.14,IRON,0,0,.18);     // carapace, domed by taper
     bx(-.28,.25,-.11,.28,.33,.11,IRON,0);
@@ -12167,7 +12191,8 @@ const R3={
     bx(-.02,.33,-.022,.04,.40,.022,DARK,0);
     bx(.12,.33,-.022,.18,.40,.022,DARK,0);
     bx(.36,.10,-.05,.49,.23,.05,hex('#b8923a'),1);  // dragon head
-    seal(18);piv.push([.12,.26]);
+    };
+    mark();turtleBody();seal(18);piv.push([.12,.26]);
     // ---- 19 SHEEP — wool box on stub legs
     mark();
     bx(-.12,0,-.08,-.07,.13,-.03,DARK,2);
@@ -12244,7 +12269,7 @@ const R3={
     bx(-.02,.553,.11,.02,.583,.144,LEATH,6);        // grip
     seal(25);piv.push([.26,.55]);
     // ---- 26 MAMELUKE ON CAMEL — the hump is the read; robed rider, thrown blade
-    mark();
+    const camelBody=()=>{
     const cleg=(xc,zc,part)=>{
       lathe(xc,zc,[[.15,.024,.024],[.26,.029,.029],[.37,.033,.033]],TAN,part,0,8);
       lathe(xc,zc,[[.05,.019,.019],[.11,.023,.023],[.16,.022,.022]],TAN,part,0,8);
@@ -12276,7 +12301,8 @@ const R3={
     bx(-.058,.695,.008,-.048,.715,.026,EYE,1);
     bx(-.11,.55,.105,-.09,.72,.13,STEEL,6);         // thrown scimitar — offset
     bx(-.095,.70,.108,-.075,.78,.127,STEEL,6);      // blades suggest the curve
-    seal(26);piv.push([.28,.60]);
+    };
+    mark();camelBody();seal(26);piv.push([.28,.60]);
     // ---- 27 WOAD RAIDER — bare chest, blue warpaint, wild hair, long axe
     mark();
     man(false,0,false,{tc:SKIN,tm:0,bare:true});
@@ -12570,10 +12596,251 @@ const R3={
     bx(-.20,.07,-.31,.16,.10,-.14,WOOD,4);          // oar banks
     bx(-.20,.07,.14,.16,.10,.31,WOOD,5);
     seal(54);piv.push([.12,.24]);
+    /* ---- 55+ ELITE UNIQUE UNITS — Imperial upgrades per the roster CSV's
+       elite briefs. Selected through the same AGEV table (elites go Imperial
+       in the sim, so age 3 IS elite). */
+    // ---- 55 ELITE LONGBOWMAN — light mail, brighter hood trim
+    mark();
+    man(false,1,false);
+    oct(0,.455,0,.052,.070,.492,STEEL,0);           // mail collar
+    lathe(0,0,[[.582,.056,.06],[.625,.052,.056],[.66,.036,.04],[.675,.01,.01]],CLOTH,1,1);
+    oct(0,.578,0,.058,.062,.596,WHITE,1,.85);       // bright hood trim ring
+    bx(-.105,.34,-.03,-.062,.55,.03,WOOD,0);
+    bx(-.10,.55,-.026,-.066,.60,.026,CANV,0);
+    bx(.115,.26,.122,.135,.42,.142,WOOD,6);
+    bx(.125,.42,.122,.145,.56,.142,WOOD,6);
+    bx(.115,.56,.122,.135,.74,.142,WOOD,6);
+    bx(.108,.27,.128,.114,.73,.136,CANV,6);
+    seal(55);piv.push([.27,.47]);
+    // ---- 56 ELITE THROWING AXEMAN — shoulder plate and helm crest
+    mark();
+    man(false,1,false);
+    lathe(0,0,[[.585,.055,.059],[.622,.052,.056],[.655,.036,.039],[.668,.01,.01]],STEEL,1);
+    bx(-.016,.66,-.016,.016,.73,.016,WHITE,1,.85);  // team helm crest
+    bx(-.078,.462,-.115,.02,.502,-.078,STEEL,4);    // shoulder plate
+    bx(-.045,.30,-.09,-.02,.345,-.065,STEEL,0);
+    bx(-.05,.335,-.095,-.015,.357,-.06,DARK,0);
+    bx(-.011,.34,.119,.011,.72,.141,WOOD,6);
+    bx(-.038,.63,.108,.038,.71,.152,STEEL,6);       // heavier axe head
+    seal(56);piv.push([.27,.47]);
+    // ---- 57 ELITE BERSERK — bear-pelt shoulders, great axe
+    mark();
+    man(true,0,true,{tc:BOARC,tm:.15});             // darker heavier furs
+    oct(0,.468,0,.058,.078,.508,BOARC,0);           // fur collar
+    oct(0,.448,-.133,.042,.044,.495,BOARC,4);       // bear-pelt shoulders
+    oct(0,.448,.133,.042,.044,.495,BOARC,6);
+    bx(-.012,.30,.118,.012,.70,.142,WOOD,6);        // great axe
+    bx(-.044,.60,.104,.044,.685,.156,STEEL,6);
+    seal(57);piv.push([.27,.47]);
+    // ---- 58 ELITE MANGUDAI — light lamellar over the rider
+    mark();
+    horse();
+    lathe(.01,0,[[.752,.047,.050],[.786,.043,.046],[.812,.020,.022]],HAIR,1);
+    oct(.01,.55,0,.056,.070,.60,BLACK,0,.72);       // lamellar band
+    oct(.01,.61,0,.055,.068,.655,BLACK,0,.72);
+    bx(.10,.50,.115,.13,.62,.135,WOOD,6);
+    bx(.115,.62,.115,.14,.72,.135,WOOD,6);
+    bx(.10,.72,.115,.125,.82,.135,WOOD,6);
+    bx(.105,.51,.121,.111,.81,.129,CANV,6);
+    seal(58);piv.push([.26,.55]);
+    // ---- 59 ELITE TEUTONIC KNIGHT — extra plate mass, greatsword
+    mark();
+    man(true,1,false,{tc:CANV,tm:.12});
+    oct(0,.16,0,.062,.084,.24,CANV,0,.12);
+    oct(0,.34,0,.057,.075,.46,STEEL,0,0,-.12);      // added breastplate
+    lathe(0,0,[[.575,.057,.061],[.642,.057,.061],[.67,.051,.055],[.68,.012,.012]],STEEL,1);
+    bx(.052,.60,-.028,.06,.612,.028,DARK,1);
+    bx(-.078,.462,-.115,.02,.502,-.078,STEEL,4);    // pauldrons
+    bx(-.078,.462,.078,.02,.502,.115,STEEL,6);
+    bx(-.016,.44,.112,.016,.82,.148,STEEL,6);       // bigger greatsword
+    bx(-.007,.44,.12,.007,.80,.14,WHITE,6,0);
+    bx(-.044,.412,.10,.044,.448,.16,WOOD,6);
+    seal(59);piv.push([.27,.47]);
+    // ---- 60 ELITE WOAD RAIDER — more paint, trophy ornaments, larger axe
+    mark();
+    man(false,0,false,{tc:SKIN,tm:0,bare:true});
+    bx(.048,.35,-.04,.056,.44,-.02,WOADB,0);
+    bx(.048,.35,.02,.056,.44,.04,WOADB,0);
+    bx(-.058,.36,-.03,-.05,.45,.03,WOADB,0);        // back paint too
+    bx(.045,.545,-.03,.054,.56,.03,WOADB,1);
+    bx(.044,.518,-.022,.052,.532,.022,WOADB,1);     // second face stripe
+    oct(0,.30,0,.057,.078,.324,GOLDC,0);            // trophy torc at the waist
+    lathe(0,-.006,[[.58,.06,.064],[.622,.058,.062],[.664,.044,.048],[.69,.012,.012]],HAIR,1);
+    bx(-.012,.30,.118,.012,.78,.142,WOOD,6);
+    bx(-.048,.68,.104,.048,.765,.156,STEEL,6);      // larger axe
+    seal(60);piv.push([.27,.47]);
+    // ---- 61 ELITE CATAPHRACT — gilded scale over horse and rider
+    mark();
+    horse();
+    oct(.01,.50,0,.056,.071,.63,GOLDC,0);           // gilded scale cuirass
+    lathe(.01,0,[[.75,.048,.052],[.795,.044,.048],[.822,.026,.028],[.832,.008,.008]],GOLDC,1); // gilded helm
+    bx(.30,.60,-.042,.40,.66,.042,GOLDC,1);         // gilded chamfron
+    bx(-.06,.57,.105,.44,.595,.13,STEEL,6);         // mace-shafted lance
+    bx(.44,.555,.095,.50,.61,.14,GOLDC,6);          // gold head
+    seal(61);piv.push([.26,.55]);
+    // ---- 62 ELITE MAMELUKE — richer robes, gold tack on the camel
+    mark();
+    camelBody();
+    bx(-.17,.415,-.09,-.03,.435,.09,GOLDC,0);       // gold saddle trim
+    oct(-.10,.535,0,.055,.067,.56,GOLDC,0);         // gold sash trim
+    oct(-.10,.755,0,.043,.046,.775,GOLDC,1);        // gold turban band
+    seal(62);piv.push([.28,.60]);
+    // ---- 63 ELITE HUSKARL — iron-rimmed shield, darker heavier furs
+    mark();
+    man(false,1,true,{tc:BOARC,tm:.18});
+    lathe(0,-.16,[[.275,.054,.013],[.36,.092,.021],[.455,.054,.013]],CLOTH,4,1);
+    lathe(0,-.168,[[.27,.056,.010],[.36,.096,.016],[.46,.056,.010]],IRON,4);   // iron rim ring behind
+    lathe(0,-.176,[[.345,.02,.006],[.365,.032,.01],[.385,.02,.006]],GOLDC,4);
+    lathe(0,0,[[.585,.056,.06],[.628,.052,.056],[.66,.034,.037],[.674,.01,.01]],IRON,1);
+    bx(-.012,.32,.118,.012,.64,.142,WOOD,6);
+    bx(-.038,.57,.106,.038,.64,.154,STEEL,6);
+    seal(63);piv.push([.27,.47]);
+    // ---- 64 ELITE CHU KO NU — lamellar coat, larger repeater
+    mark();
+    man(false,0,false);
+    bx(-.058,.365,-.073,.058,.378,.073,BLACK,0,.72); // lamellar bands
+    bx(-.056,.405,-.071,.056,.418,.071,BLACK,0,.72);
+    bx(.02,.43,.106,.32,.47,.154,WOOD,6);           // bigger stock
+    bx(.07,.47,.10,.24,.532,.16,WOOD,6);            // bigger magazine
+    bx(.075,.532,.108,.235,.542,.152,DARK,6);
+    bx(.06,.44,.065,.095,.468,.195,WOOD,6);
+    seal(64);piv.push([.27,.47]);
+    // ---- 65 ELITE WAR ELEPHANT — metal face plate and tusk caps
+    mark();
+    elephantBody();
+    bx(.34,.50,-.085,.45,.63,.085,STEEL,1);         // face plate
+    bx(.52,.315,-.098,.575,.36,-.055,GOLDC,1);      // tusk caps
+    bx(.52,.315,.055,.575,.36,.098,GOLDC,1);
+    bx(-.15,.60,-.128,.11,.625,.128,GOLDC,0);       // gilded howdah base band
+    seal(65);piv.push([.30,.60]);
+    // ---- 66 ELITE JANISSARY — gold-trimmed uniform, ornate musket
+    mark();
+    man(false,1,false);
+    oct(0,.33,0,.058,.079,.352,GOLDC,0);            // gold waist trim
+    lathe(0,0,[[.585,.054,.058],[.62,.05,.054],[.652,.036,.039]],CANV,1);
+    lathe(0,-.01,[[.652,.042,.046],[.72,.040,.044],[.78,.030,.033],[.795,.01,.01]],CANV,1);
+    oct(0,.655,-.01,.043,.047,.675,GOLDC,1);        // gold headdress band
+    bx(-.05,.42,.112,.02,.475,.148,WOOD,6);
+    bx(.02,.44,.118,.38,.492,.142,IRON,6);          // even longer ornate barrel
+    bx(.10,.492,.122,.16,.502,.138,GOLDC,6);        // gold barrel band
+    bx(.36,.432,.113,.385,.50,.147,DARK,6);
+    seal(66);piv.push([.27,.47]);
+    // ---- 67 ELITE SAMURAI — personal back-banner in team colour
+    mark();
+    man(false,1,false);
+    bx(-.058,.365,-.073,.058,.378,.073,BLACK,0,.72);
+    bx(-.056,.405,-.071,.056,.418,.071,BLACK,0,.72);
+    bx(-.06,.44,-.076,.06,.453,.076,BLACK,0,.72);
+    lathe(0,0,[[.585,.058,.062],[.63,.054,.058],[.663,.036,.04],[.678,.01,.01]],IRON,1);
+    bx(-.068,.588,-.05,-.052,.64,.05,IRON,1);
+    bx(.05,.655,-.008,.075,.695,.008,GOLDC,1);
+    bx(.05,.655,-.03,.062,.685,-.014,GOLDC,1);
+    bx(.05,.655,.014,.062,.685,.03,GOLDC,1);
+    bx(-.075,.30,-.008,-.06,.82,.008,WOOD,0);       // sashimono pole
+    bx(-.115,.62,-.004,-.075,.80,.004,CLOTH,0,1);   // team back-banner
+    bx(-.012,.44,.116,.012,.70,.14,STEEL,6);
+    bx(-.008,.68,.122,.01,.75,.134,STEEL,6);
+    bx(-.03,.415,.106,.03,.44,.154,GOLDC,6);
+    seal(67);piv.push([.27,.47]);
+    // ---- 68 ELITE JAGUAR WARRIOR — fuller pelt coverage, hide shield
+    mark();
+    man(false,1,false,{tc:TAN,tm:.1});
+    lathe(0,0,[[.585,.054,.058],[.625,.051,.055],[.66,.036,.04],[.678,.01,.01]],TAN,1);
+    bx(.046,.60,-.03,.056,.617,-.018,DARK,1);
+    bx(-.02,.645,-.045,.0,.663,-.03,DARK,1);
+    bx(-.02,.645,.03,.0,.663,.045,DARK,1);
+    bx(.048,.578,-.016,.062,.594,.016,TUSK,1);
+    oct(0,.44,-.133,.036,.038,.478,TAN,4);          // pelt arm covers
+    oct(0,.44,.133,.036,.038,.478,TAN,6);
+    bx(.048,.40,-.036,.058,.418,-.02,DARK,0);
+    bx(.046,.36,.018,.056,.378,.034,DARK,0);
+    bx(-.059,.38,-.01,-.049,.398,.006,DARK,0);
+    bx(-.059,.42,-.034,-.049,.438,-.018,DARK,0);    // more spots
+    lathe(0,-.157,[[.335,.028,.008],[.36,.044,.012],[.385,.028,.008]],HIDE,4); // hide shield
+    bx(-.012,.32,.118,.012,.62,.142,WOOD,6);
+    bx(-.03,.52,.106,.03,.62,.154,DARK,6);          // larger club
+    seal(68);piv.push([.27,.47]);
+    // ---- 69 ELITE EAGLE WARRIOR — larger crest, brighter plumage
+    mark();
+    man(false,1,false,{tc:SKIN,tm:0,bare:true});
+    oct(0,.30,0,.058,.079,.334,CLOTH,0,1);
+    lathe(0,0,[[.585,.052,.056],[.62,.048,.052],[.652,.030,.033]],GOLDC,1);
+    bx(.048,.578,-.02,.075,.60,.02,GOLDC,1);
+    bx(-.05,.645,-.016,.034,.79,.016,WHITE,1,.85);  // taller crest
+    bx(-.075,.635,-.012,-.045,.75,.012,WHITE,1,.7);
+    bx(-.095,.62,-.008,-.07,.70,.008,WHITE,1,.85);
+    bx(-.05,.44,-.155,-.02,.52,-.125,WHITE,4,.8);   // arm plumes
+    bx(-.05,.44,.125,-.02,.52,.155,WHITE,6,.8);
+    bx(-.012,.32,.118,.012,.60,.142,WOOD,6);
+    bx(-.026,.52,.108,.026,.60,.152,DARK,6);
+    seal(69);piv.push([.27,.47]);
+    // ---- 70 ELITE PLUMED ARCHER — fuller plumage, jade accents
+    mark();
+    man(false,1,false,{tc:CANV,tm:.2});
+    lathe(0,0,[[.585,.052,.056],[.617,.048,.052],[.647,.030,.033]],TAN,1);
+    bx(-.04,.645,-.012,.02,.78,.012,WHITE,1,.85);
+    bx(-.06,.635,-.008,-.038,.74,.008,WHITE,1,.7);
+    bx(-.078,.625,-.006,-.058,.70,.006,WHITE,1,.85);
+    bx(-.05,.44,-.155,-.02,.54,-.125,WHITE,4,.8);
+    bx(-.05,.44,.125,-.02,.54,.155,WHITE,6,.8);
+    oct(0,.30,0,.057,.078,.322,hex('#3f8e6d'),0);   // jade waist band
+    bx(.115,.30,.122,.135,.44,.142,WOOD,6);
+    bx(.125,.44,.122,.145,.55,.142,WOOD,6);
+    bx(.115,.55,.122,.135,.69,.142,WOOD,6);
+    bx(.108,.31,.128,.114,.68,.136,CANV,6);
+    seal(70);piv.push([.27,.47]);
+    // ---- 71 ELITE WAR WAGON — iron panels over the wood, heavier wheels
+    mark();
+    wagonBody();
+    bx(-.33,.36,-.158,.25,.56,-.147,IRON,0);        // iron side plates
+    bx(-.33,.36,.147,.25,.56,.158,IRON,0);
+    bx(-.36,.58,-.175,.28,.60,.175,IRON,0);         // iron roof edge
+    bx(-.31,0,-.20,-.11,.05,-.12,IRON,2);           // heavier wheel rims
+    bx(-.31,0,.12,-.11,.05,.20,IRON,3);
+    seal(71);piv.push([.14,.40]);
+    // ---- 72 ELITE CONQUISTADOR — polished cuirass, helmet plume
+    mark();
+    horse();
+    oct(.01,.50,0,.056,.071,.625,STEEL,0);          // polished cuirass
+    lathe(.01,0,[[.752,.047,.051],[.79,.043,.047],[.815,.024,.026],[.826,.008,.008]],STEEL,1);
+    bx(-.02,.818,-.006,.05,.84,.006,STEEL,1);
+    bx(-.01,.83,-.008,.006,.90,.008,WHITE,1,.85);   // team plume
+    bx(-.06,.60,.112,.02,.64,.148,WOOD,6);
+    bx(.02,.615,.116,.33,.655,.144,IRON,6);         // longer arquebus
+    bx(.31,.607,.111,.335,.663,.149,DARK,6);
+    seal(72);piv.push([.26,.55]);
+    // ---- 73 ELITE TARKAN — lamellar coat, bigger flame
+    mark();
+    horse({bare:true});
+    lathe(.01,0,[[.752,.047,.05],[.786,.043,.046],[.81,.02,.022]],HAIR,1);
+    oct(.01,.55,0,.056,.070,.60,BLACK,0,.72);       // lamellar bands
+    oct(.01,.61,0,.055,.068,.655,BLACK,0,.72);
+    bx(-.005,.56,.115,.015,.76,.139,WOOD,6);
+    lathe(.005,.127,[[.75,.024,.024],[.78,.040,.040],[.83,.030,.030],[.87,.010,.010]],FLAME,6); // bigger flame
+    seal(73);piv.push([.26,.55]);
+    // ---- 74 ELITE LONGBOAT — carved prow ornament, more shields
+    mark();
+    warshipBody();
+    lathe(.44,0,[[.09,.028,.028],[.16,.036,.036],[.23,.022,.022],[.27,.008,.008]],GOLDC,0); // carved prow spiral
+    for(let i=0;i<3;i++){
+      bx(-.24+i*.17,.24,-.155,-.17+i*.17,.30,-.148,CLOTH,0,1); // upper shield row
+      bx(-.24+i*.17,.24,.148,-.17+i*.17,.30,.155,CLOTH,0,1);
+    }
+    seal(74);piv.push([.12,.24]);
+    // ---- 75 ELITE TURTLE SHIP — more spikes, darker heavier iron
+    mark();
+    turtleBody();
+    bx(-.24,.33,-.022,-.18,.41,.022,DARK,0);        // extra spine spikes
+    bx(.06,.33,-.022,.12,.41,.022,DARK,0);
+    bx(.20,.33,-.022,.26,.40,.022,DARK,0);
+    bx(-.30,.25,-.13,.30,.28,-.10,DARK,0);          // dark iron plate seams
+    bx(-.30,.25,.10,.30,.28,.13,DARK,0);
+    seal(75);piv.push([.12,.26]);
     }else{
-      // no 32-bit indices: age variants alias their base archetype's geometry
+      // no 32-bit indices: age and elite variants alias their base geometry
       const alias=b=>{off.push(off[b]);cnt.push(cnt[b]);piv.push(piv[b]);};
-      [0,0,0, 1,1, 2,2, 24, 25,25, 6, 10, 17].forEach(alias);
+      [0,0,0, 1,1, 2,2, 24, 25,25, 6, 10, 17,
+       36,34,31,7,30,27,6,26,33,35,8,39,32,29,28,40,9,38,37,17,18].forEach(alias);
     }
     const gl=this.gl;
     this.uvbo=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,this.uvbo);
@@ -13464,7 +13731,7 @@ requestAnimationFrame(frame);
 
 <script>
 (function(){
-  var BUILD = 'tq-v52';
+  var BUILD = 'tq-v53';
   addEventListener('load', function(){
     var ov = document.getElementById('startOverlay');
     if (!ov) return;
