@@ -390,6 +390,10 @@
       <button data-tb="0" class="sel">Standard pace</button>
       <button data-tb="1">⚡ Turbo</button>
     </div>
+    <div class="diff">
+      <button data-rg="0" class="sel">Conquest</button>
+      <button data-rg="1">👑 Regicide</button>
+    </div>
     </div>
     <button class="bigbtn" id="startBtn">⚔ &nbsp;Begin the Conquest</button>
     <button class="bigbtn alt" id="campBtn">📜 &nbsp;Campaign</button>
@@ -614,6 +618,8 @@ const UNITS={
   /* ---- ships (manual p. 44) — built at the Dock ---- */
   fishing:{name:'Fishing Ship',hp:60,atk:0,range:.6,speed:1.5,cost:{w:75},train:7,ship:true,fisher:true,passive:true},
   cog:{name:'Trade Cog',hp:80,atk:0,range:.6,speed:1.7,cost:{w:100,g:50},train:9,age:1,ship:true,passive:true},
+  tradecart:{name:'Trade Cart',hp:70,atk:0,range:.6,speed:1.5,cost:{w:100,g:50},train:10,age:1,passive:true,trade:true},
+  king:{name:'King',hp:75,atk:0,range:.6,speed:1.35,cost:{},train:1,age:0,passive:true,king:true},
   transport:{name:'Transport Ship',hp:100,atk:0,range:.6,speed:1.7,cost:{w:125},train:10,age:1,ship:true,passive:true,garCap:5},
   galley:{name:'Galley',hp:120,atk:6,range:4.5,speed:1.8,cost:{w:90,g:30},train:11,age:1,ship:true,ranged:true,
     line:{name:[,'Galley','War Galley','Galleon'],hp:[,120,135,165],atk:[,6,7,8],rng:[,4.5,5,5.5]}},
@@ -883,7 +889,7 @@ const BLDS={
   gate:{name:'Palisade Gate',hp:500,size:1,cost:{w:30},bt:8,thin:true,gate:true},
   swall:{name:'Stone Wall',hp:1500,size:1,cost:{w:5,g:10},bt:7,thin:true,age:2},
   sgate:{name:'Stone Gate',hp:2000,size:1,cost:{w:20,g:40},bt:11,thin:true,gate:true,age:2},
-  market:{name:'Market',hp:800,size:2,cost:{w:150},bt:14,age:1},
+  market:{name:'Market',hp:800,size:2,cost:{w:150},bt:14,age:1,trains:['tradecart']},
   blacksmith:{name:'Blacksmith',hp:1000,size:2,cost:{w:150},bt:14,age:1},
   university:{name:'University',hp:1200,size:2,cost:{w:200},bt:16,age:2},
   wonder:{name:'Wonder',hp:4800,size:2,cost:{w:1000,g:1000},bt:100,age:3},
@@ -899,7 +905,7 @@ const DIFF=[{trickle:0,firstWave:380,waveEvery:210,waveGrow:2,vT:[6,9,12,14]},
             {trickle:1.8,firstWave:195,waveEvery:100,waveGrow:4,vT:[8,13,16,18]}];
 
 /* ================= state ================= */
-let G=null, diffSel=0, civSel=0, mapSel=0, playersSel=2, teamSel=0, turboSel=0, NP=2, uid=1;
+let G=null, diffSel=0, civSel=0, mapSel=0, playersSel=2, teamSel=0, turboSel=0, regicideSel=0, NP=2, uid=1;
 /* Nature owns the wildlife. Player slots run 0..7, so 8 is always free; giving
    the animals a real player index means they path, take damage, die and draw
    through exactly the same code as everything else. G.P/G.teams/G.ais are
@@ -1147,12 +1153,17 @@ function newGame(){
      sel:[],placing:null,pend:null,amode:false,cam:{x:0,y:0,z:1},
      stats:{trained:0,razed:0},lastRaidToast:-99};
   G.vis=new Uint8Array(MAP*MAP);G.visT=0;
+  // Regicide is a match property fixed at start: kings spawn in the start
+  // loop and the win check switches to king survival. Skirmish-only; the
+  // network start path forces regicideSel=0 so peers can never disagree.
+  G.regicide=(regicideSel&&!mission)?1:0;
   genMap();
   for(let p=0;p<NP;p++){
     const [bx,by]=START[p];
     addBld(p,'tc',bx,by,true);
     const nv=3+(CIVS[G.P[p].civ].startVills||0);
     for(let i=0;i<nv;i++)addUnit(p,'villager',bx-1+i%3,by+3+(i/3|0));
+    if(G.regicide)addUnit(p,'king',bx+3,by+2);   // Regicide: every lord starts with a King
     if(mapSel===2&&!mission){ // Hallowed Ground: every lord starts with the cloth
       let placed=null;
       for(let r=3;r<9&&!placed;r++)for(let a=0;a<12&&!placed;a++){
@@ -2225,7 +2236,7 @@ function netBegin(m){
   NP=players.length+ai;
   playersSel=NP;
   mapSel=cfg.map|0;diffSel=cfg.diff==null?1:cfg.diff|0;turboSel=cfg.turbo|0;
-  teamSel=cfg.team|0;
+  teamSel=cfg.team|0;regicideSel=0;   // net games are conquest until the lobby carries the option
   // Civs and teams come from the lobby, not from this machine's start screen,
   // so every peer builds the same players.
   netCivs=[];netTeams=null;
@@ -2265,7 +2276,7 @@ function netRejoin(m){
   const ai=Math.max(0,Math.min(8-players.length,cfg.ai|0));
   NP=players.length+ai;playersSel=NP;
   mapSel=cfg.map|0;diffSel=cfg.diff==null?1:cfg.diff|0;
-  turboSel=cfg.turbo|0;teamSel=cfg.team|0;
+  turboSel=cfg.turbo|0;teamSel=cfg.team|0;regicideSel=0;
   netCivs=[];for(const p of players)netCivs[p.seat]=p.civ;
   localP=m.seat;
   civSel=netCivs[localP]!=null?netCivs[localP]:0;
@@ -2829,6 +2840,17 @@ function step(dt){
       const b=G.blds.find(bb=>bb.id===r.mon);return b&&b.p===localP;}).length;
     if(dep>=mission.win.n)return endGame(true);
   }
+  if(G.regicide){
+    // Regicide: the crown is the win condition. A king inside a building or a
+    // transport is alive — only death removes him from all three lists.
+    const kingAlive=pred=>
+      G.units.some(u2=>UNITS[u2.type].king&&pred(u2))||
+      G.blds.some(b2=>b2.gar&&b2.gar.some(g2=>UNITS[g2.type].king&&pred(g2)))||
+      G.units.some(u2=>u2.gar&&u2.gar.some(g2=>UNITS[g2.type].king&&pred(g2)));
+    const pK=kingAlive(k=>k.p===localP),eK=kingAlive(k=>!allied(k.p,localP));
+    if(!eK)endGame(true);else if(!pK)endGame(false);
+    return;
+  }
   const pTC=G.blds.find(b=>b.p===localP&&b.type==='tc');
   const eTC=G.blds.find(b=>!allied(b.p,localP)&&b.type==='tc');
   if(!eTC)endGame(true);else if(!pTC)endGame(false);
@@ -3115,13 +3137,15 @@ function updateUnit(u,dt){
             if(foe)cmdConvert(u,foe,false);
           }
         }
-      }else if(u.type==='cog'){
-        // idle Trade Cog: run a route between our dock and the nearest foreign dock
+      }else if(u.type==='cog'||u.type==='tradecart'){
+        // idle trader: run a route between our dock/market and the nearest
+        // foreign one — the cart is the land twin of the cog, same states
         u.scanT=(u.scanT||0)-dt;
         if(u.scanT<=0){u.scanT=2;
-          const home=G.blds.find(b=>b.p===u.p&&b.type==='dock'&&b.built);
+          const bt=u.type==='cog'?'dock':'market';
+          const home=G.blds.find(b=>b.p===u.p&&b.type===bt&&b.built);
           let far=null,fd=1e9;
-          for(const b of G.blds){if(b.p===u.p||b.type!=='dock'||!b.built)continue;
+          for(const b of G.blds){if(b.p===u.p||b.type!==bt||!b.built)continue;
             const c=bldCenter(b),dd=Math.hypot(c.x-u.x,c.y-u.y);
             if(dd<fd){fd=dd;far=b;}}
           if(home&&far){u.state='tradeOut';u.tradeA=home.id;u.tradeB=far.id;
@@ -3894,7 +3918,7 @@ function saveGame(){
     const strip=u=>{const o=Object.assign({},u);o.path=null;o._gar=null;o._garU=null;
       if(o.gar)o.gar=o.gar.map(g=>Object.assign({},g,{path:null,_gar:null,_garU:null}));
       return o;};
-    const data={v:1,t:G.t,mapSel,diffSel,turboSel,seed:gameSeed,uid,np:NP,mapN:MAP,starts:START,teams:G.teams,
+    const data={v:1,t:G.t,mapSel,diffSel,turboSel,regicide:G.regicide||0,seed:gameSeed,uid,np:NP,mapN:MAP,starts:START,teams:G.teams,
       wonderT:G.wonderT||null,relicT:G.relicT||null,
       mission:mission?mission.id:null,
       P:G.P,ais:G.ais,relics:G.relics,groups:G.groups,stats:G.stats,cam:G.cam,
@@ -3911,6 +3935,7 @@ function loadGame(){
   try{data=JSON.parse(localStorage.getItem('tq_save'));}catch(e){return false;}
   if(!data||data.v!==1)return false;
   mapSel=data.mapSel;diffSel=data.diffSel;turboSel=data.turboSel||0;uid=data.uid||1;
+  const savedRegicide=data.regicide||0;   // applied to G after the literal below
   seedSim(data.seed||1);
   NP=data.np||data.P.length||2;
   setMapSize(data.mapN||64);
@@ -3927,6 +3952,7 @@ function loadGame(){
      wonderT:data.wonderT||null,relicT:data.relicT||null,
      stats:data.stats,lastRaidToast:-99,
      map:data.map,water:data.water,ford:data.ford};
+  G.regicide=savedRegicide;
   G.elev=Uint8Array.from(data.elev);
   G.vis=Uint8Array.from(data.vis);G.visT=0;
   G.navBlock={};
@@ -6635,6 +6661,7 @@ const MAN_COSTUME={
   plumed:  {tunic:'dark',legC:'#4a3a26',belt:'leather',helm:'plume',weapon:'bow',quiver:true,sash:true},
   petard:  {tunic:'#8a6538',legC:'#4a3a26',belt:'leather',helm:'steel',weapon:'bomb'},
   handcannon:{tunic:'team',legC:'#4a3a26',belt:'leather',helm:'kettle',weapon:'gun'},
+  king:     {tunic:'team',legC:'#4a3a26',helm:'crown',weapon:'none',robe:true},
 };
 function drawManRig(u,t,TC,mc){
   const phi=octPhi(u),pr=rigProj(phi),s=pr.s,c=pr.c,sgn=c>=0?1:-1;
@@ -6867,6 +6894,13 @@ function drawManRig(u,t,TC,mc){
     ctx.beginPath();ctx.moveTo(b1.x,b1.y);ctx.lineTo(c2.x,c2.y);
     ctx.moveTo(c3.x,c3.y);ctx.lineTo(c4.x,c4.y);ctx.stroke();
     armIdle(-1,-swing*.4);
+  }else if(mc.weapon==='none'){ // unarmed (the King): plain arms, and a gold
+    armIdle(-1,-swing*.4);      // scepter held at rest in the right hand
+    armIdle(1,swing*.4);
+    const sc0=pr(2.7,.4,5.4),sc1=pr(2.7,.4,10.8);
+    ctx.strokeStyle='#c9a227';ctx.lineWidth=1.3;
+    ctx.beginPath();ctx.moveTo(sc0.x,sc0.y);ctx.lineTo(sc1.x,sc1.y);ctx.stroke();
+    ctx.fillStyle='#e5c95c';ctx.beginPath();ctx.arc(sc1.x,sc1.y,1.1,0,7);ctx.fill();
   }
   /* head */
   const H2=pr(0,.3,13.9);
@@ -6938,6 +6972,16 @@ function drawManRig(u,t,TC,mc){
     ctx.fillStyle='rgba(60,42,20,.75)';
     for(const[ox2,oy2] of [[-1.8,-2.4],[.4,-3],[1.9,-2.2]]){
       ctx.beginPath();ctx.arc(H2.x+ox2,H2.y+oy2,.6,0,7);ctx.fill();}
+  }else if(mc.helm==='crown'){ // gold circlet with points — the King
+    ctx.fillStyle='#5a3d22';
+    ctx.beginPath();ctx.arc(H2.x,H2.y-.6,2.95,Math.PI*.9,Math.PI*2.1);ctx.fill();
+    ctx.fillStyle='#e3b23c';ctx.strokeStyle='#8a6a2f';ctx.lineWidth=.6;
+    ctx.fillRect(H2.x-2.7,H2.y-3.3,5.4,1.5);ctx.strokeRect(H2.x-2.7,H2.y-3.3,5.4,1.5);
+    for(const px3 of [-2.0,-.7,.7,2.0]){
+      ctx.beginPath();ctx.moveTo(H2.x+px3-.55,H2.y-3.3);ctx.lineTo(H2.x+px3,H2.y-5.1);
+      ctx.lineTo(H2.x+px3+.55,H2.y-3.3);ctx.closePath();ctx.fill();ctx.stroke();
+    }
+    ctx.fillStyle='#b03a30';ctx.beginPath();ctx.arc(H2.x,H2.y-2.55,.55,0,7);ctx.fill();
   }else if(mc.helm==='plume'){ // eagle-feather crest, team-tinted
     ctx.fillStyle='#7c5a34';
     ctx.beginPath();ctx.arc(H2.x,H2.y-1.2,2.9,Math.PI,2*Math.PI);ctx.fill();
@@ -7511,6 +7555,73 @@ function drawBombard(u,t,TC){
   siegeWheel(pr,sgn*2.8,.6,true,2.8);
   ctx.restore();
 }
+function drawTradeCart(u,t,TC){
+  // two-wheel goods cart behind a plodding ox; team colour on the canopy.
+  // Diagonal-snapped like the war wagon so it never collapses end-on.
+  let phi=octPhi(u);
+  phi=Math.round((phi-Math.PI/4)/(Math.PI/2))*(Math.PI/2)+Math.PI/4;
+  const pr=rigProj(phi),s=pr.s,c=pr.c,sgn=c>=0?1:-1;
+  const g=gaitOf(u,t);
+  const wob=g.mv?Math.sin(Math.PI*2*g.ph)*.9:0;
+  ctx.save();
+  const HW=2.7,HL=3.8,Z0=2.0,Z1=5.6,ZR=8.4;
+  const quad=(a,b,cc,d,fill,stroke)=>{ctx.fillStyle=fill;ctx.beginPath();
+    ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.lineTo(cc.x,cc.y);ctx.lineTo(d.x,d.y);
+    ctx.closePath();ctx.fill();
+    if(stroke){ctx.strokeStyle='rgba(64,44,26,.5)';ctx.lineWidth=.9;ctx.stroke();}};
+  /* the ox, out in front (units face -y in rig space here, matching the
+     wagon's rear archer at +y) */
+  const oxCY=-HL-3.6;
+  ctx.strokeStyle='#4a3a26';ctx.lineWidth=1.6;               // legs first
+  for(const off of [-1.4,1.4]){
+    for(const ly of [oxCY-1.5,oxCY+1.5]){
+      const hp2=pr(off,ly,2.4),lp=pr(off+((ly<oxCY)?wob:-wob)*.25,ly,0);
+      ctx.beginPath();ctx.moveTo(hp2.x,hp2.y);ctx.lineTo(lp.x,lp.y);ctx.stroke();}}
+  const oxb=pr(0,oxCY,3.0);
+  ctx.fillStyle='#7d6a4e';ctx.strokeStyle=OUT;ctx.lineWidth=1;
+  ctx.beginPath();ctx.ellipse(oxb.x,oxb.y,4.2,3.0,pr.a*.2,0,7);ctx.fill();ctx.stroke();
+  const oxh=pr(0,oxCY-2.6,2.2);
+  ctx.fillStyle='#6d5a40';ctx.beginPath();ctx.ellipse(oxh.x,oxh.y,2.0,1.7,0,0,7);ctx.fill();ctx.stroke();
+  ctx.strokeStyle='#e8e2d2';ctx.lineWidth=1.1;               // horns
+  ctx.beginPath();ctx.moveTo(oxh.x-1.5,oxh.y-1.1);ctx.quadraticCurveTo(oxh.x-2.9,oxh.y-2.4,oxh.x-2.1,oxh.y-2.9);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(oxh.x+1.5,oxh.y-1.1);ctx.quadraticCurveTo(oxh.x+2.9,oxh.y-2.4,oxh.x+2.1,oxh.y-2.9);ctx.stroke();
+  const yk0=pr(0,oxCY+1.4,3.2),yk1=pr(0,-HL+.4,2.8);          // yoke pole
+  ctx.strokeStyle='#6b4a2a';ctx.lineWidth=1.3;
+  ctx.beginPath();ctx.moveTo(yk0.x,yk0.y);ctx.lineTo(yk1.x,yk1.y);ctx.stroke();
+  const wheel=(wx,near)=>{const q=pr(wx,.6,2.7);
+    ctx.fillStyle='#54381e';ctx.strokeStyle='rgba(64,44,26,.6)';ctx.lineWidth=.8;
+    ctx.beginPath();ctx.ellipse(q.x,q.y,Math.max(1,2.8*Math.abs(s)),2.8,0,0,7);ctx.fill();
+    if(near){ctx.stroke();ctx.strokeStyle='#c9a15e';ctx.lineWidth=.7;
+      ctx.beginPath();ctx.ellipse(q.x,q.y,Math.max(.6,1.5*Math.abs(s)),1.5,0,0,7);ctx.stroke();}};
+  wheel(-sgn*HW,false);
+  // low plank bed
+  quad(pr(-sgn*HW,-HL,Z0),pr(-sgn*HW,HL,Z0),pr(-sgn*HW,HL,Z1),pr(-sgn*HW,-HL,Z1),'#5f4526',false);
+  const ey=s>=0?-HL:HL;
+  quad(pr(-HW,ey,Z0),pr(HW,ey,Z0),pr(HW,ey,Z1),pr(-HW,ey,Z1),'#6d5231',true);
+  quad(pr(sgn*HW,-HL,Z0),pr(sgn*HW,HL,Z0),pr(sgn*HW,HL,Z1),pr(sgn*HW,-HL,Z1),'#7a5830',true);
+  ctx.strokeStyle='rgba(255,244,214,.3)';ctx.lineWidth=.9;
+  {const a=pr(sgn*HW,-HL,Z1),b=pr(sgn*HW,HL,Z1);
+   ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}
+  // the goods: grain sacks and a gold chest riding openly up front
+  for(const [sx2,sy2,col] of [[-1.1,-2.2,'#c9b07f'],[1.1,-1.4,'#b8a06a']]){
+    const q=pr(sx2,sy2,Z1);
+    ctx.fillStyle=col;ctx.strokeStyle=OUT;ctx.lineWidth=.8;
+    ctx.beginPath();ctx.ellipse(q.x,q.y,1.9,1.6,0,0,7);ctx.fill();ctx.stroke();
+  }
+  {const q=pr(0,-.4,Z1);
+   ctx.fillStyle='#e3b23c';ctx.strokeStyle='#8a6a2f';ctx.lineWidth=.8;
+   ctx.fillRect(q.x-1.7,q.y-1.4,3.4,2.1);ctx.strokeRect(q.x-1.7,q.y-1.4,3.4,2.1);}
+  // arched team canopy over the rear half
+  const rib=(ty2)=>{const a=pr(-HW,ty2,Z1),m=pr(0,ty2,ZR),b=pr(HW,ty2,Z1);
+    ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.quadraticCurveTo(m.x,m.y,b.x,b.y);};
+  ctx.fillStyle=TC.main;
+  rib(1.0);const bEnd=pr(HW,HL,Z1),aEnd=pr(-HW,HL,Z1),mEnd=pr(0,HL,ZR);
+  ctx.lineTo(bEnd.x,bEnd.y);ctx.quadraticCurveTo(mEnd.x,mEnd.y,aEnd.x,aEnd.y);ctx.closePath();ctx.fill();
+  ctx.strokeStyle=TC.dark;ctx.lineWidth=.9;
+  for(const ty2 of[1.0,HL*.55,HL]){rib(ty2);ctx.stroke();}
+  wheel(sgn*HW,true);
+  ctx.restore();
+}
 function drawWarWagon(u,t,TC){
   // Korean War Wagon: armored cart with a team-color canopy and bow slits.
   // Heading snaps to the diagonals so the cart never collapses end-on.
@@ -7824,6 +7935,8 @@ function drawUnitBody(u,t,sw,TC){
   else if(u.type==='bombard')drawBombard(u,t,TC);
   else if(u.type==='handcannon')drawManRigT(u,t,TC,'handcannon');
   else if(u.type==='warwagon')drawWarWagon(u,t,TC);
+  else if(u.type==='tradecart')drawTradeCart(u,t,TC);
+  else if(u.type==='king')drawManRigT(u,t,TC,'king');
   else if(u.type==='archer'||u.type==='longbow'||u.type==='chukonu'||u.type==='janissary'
     ||u.type==='plumed')drawArcher(u,t,sw,TC,false);
   else if(u.type==='skirmisher'||u.type==='axeman')drawArcher(u,t,sw,TC,true);
@@ -9900,10 +10013,12 @@ const UNIT_ICONS={villager:'🧑‍🌾',militia:'⚔️',spearman:'🔱',archer
   chukonu:'🏹',elephant:'🐘',janissary:'💥',samurai:'⚔️',jaguar:'🐆',eagle:'🦅',
   plumed:'🏹',warwagon:'🛞',conquistador:'💥',tarkan:'🔥',petard:'💣',missionary:'📿',
   fishing:'🎣',cog:'⛵',transport:'🛶',galley:'⚓',fireship:'🔥',demo:'💥',longboat:'🐉',turtle:'🐢',
-  scorpion:'🎯',mangonel:'🪨',treb:'🏗️',bombard:'💣',handcannon:'💥',cannongalleon:'💥'};
+  scorpion:'🎯',mangonel:'🪨',treb:'🏗️',bombard:'💣',handcannon:'💥',cannongalleon:'💥',
+  tradecart:'🛒',king:'👑'};
 const TRAIN_KEYS_BY_BLD={tc:{c:'villager'},barracks:{m:'militia',s:'spearman',e:'eagle',h:'huskarl'},
   range:{a:'archer',k:'skirmisher',h:'handcannon'},stable:{s:'scout',k:'knight'},
   siege:{r:'ram',s:'scorpion',m:'mangonel',b:'bombard'},
+  market:{t:'tradecart'},
   monastery:{m:'monk',i:'missionary'},castle:{d:'petard',t:'treb'},
   dock:{f:'fishing',c:'cog',t:'transport',g:'galley',i:'fireship',e:'demo',u:'longboat',r:'turtle',n:'cannongalleon'}};
 function keyFor(bldType,ut){
@@ -10032,6 +10147,10 @@ document.querySelectorAll('.diff button[data-d]').forEach(b=>{
 document.querySelectorAll('.diff button[data-n]').forEach(b=>{
   b.onclick=()=>{document.querySelectorAll('.diff button[data-n]').forEach(x=>x.classList.remove('sel'));
     b.classList.add('sel');playersSel=+b.dataset.n;};
+});
+document.querySelectorAll('.diff button[data-rg]').forEach(b=>{
+  b.onclick=()=>{document.querySelectorAll('.diff button[data-rg]').forEach(x=>x.classList.remove('sel'));
+    b.classList.add('sel');regicideSel=+b.dataset.rg;};
 });
 document.querySelectorAll('.diff button[data-tb]').forEach(b=>{
   b.onclick=()=>{document.querySelectorAll('.diff button[data-tb]').forEach(x=>x.classList.remove('sel'));
@@ -11650,7 +11769,7 @@ const R3={
      present actually draw — a typical scene runs 6-10 calls). The flag-based
      fallback exists so a future unit type added to UNITS renders as SOMETHING
      sensible before anyone thinks about its mesh. */
-  ARCHN:76,
+  ARCHN:78,
   UARCH:{
     villager:4, militia:0, spearman:1, archer:2, skirmisher:24, scout:25, knight:6,
     ram:10, petard:41, scorpion:13, mangonel:12, treb:11, bombard:14, handcannon:3,
@@ -11659,6 +11778,7 @@ const R3={
     samurai:32, jaguar:29, eagle:28, plumed:40, warwagon:9, conquistador:38, tarkan:37,
     fishing:15, cog:16, transport:16, galley:17, fireship:17, demo:16, longboat:17,
     turtle:18, cannongalleon:17, sheep:19, deer:20, boar:21,
+    tradecart:76, king:77,
   },
   /* attack-swing damping per archetype: 1 = full 51° chop (melee, treb throw,
      mangonel fling), small = recoil kick (guns, bolt throwers), 0 = the part
@@ -11666,7 +11786,8 @@ const R3={
   ATKF:[1,1,.7,.35,1,0, .9,.7,.8,0, 1,1,1,.3,.3, 0,0,0,.25, 0,0,0,
         1,1,1,.9,.8, 1,1,1,1,1, 1,1,1,.35,.7, .9,.3,.3,.7,0,
         1,1,1, 1,1, .35,.35, 1, .9,.9, .9, 1, 0,
-        .7,1,1,.7,1, 1,.9,.8,1,.35, .8,.3,1,1,1, .7,0,.3,.9,0, 0],
+        .7,1,1,.7,1, 1,.9,.8,1,.35, .8,.3,1,1,1, .7,0,.3,.9,0, 0,
+        0,0],
   /* Age-variant archetype per line unit, indexed by the OWNING PLAYER's age
      (0 Dark..3 Imperial). Chosen per frame in drawUnits — render side only.
      Unique units use the same table: their Imperial slot IS the elite,
@@ -12836,11 +12957,61 @@ const R3={
     bx(-.30,.25,-.13,.30,.28,-.10,DARK,0);          // dark iron plate seams
     bx(-.30,.25,.10,.30,.28,.13,DARK,0);
     seal(75);piv.push([.12,.26]);
+    // ---- 76 TRADE CART — two-wheel goods cart behind a plodding ox
+    mark();
+    bx(-.24,0,-.17,-.04,.22,-.13,DARK,2);           // wheels (rock as it rolls)
+    bx(-.24,0,.13,-.04,.22,.17,DARK,3);
+    bx(-.30,.20,-.14,.12,.28,.14,WOOD,0);           // bed
+    bx(-.30,.28,-.145,.12,.34,-.125,WOOD,0);        // side rails
+    bx(-.30,.28,.125,.12,.34,.145,WOOD,0);
+    lathe(-.20,-.05,[[.28,.048,.048],[.38,.062,.062],[.46,.028,.028]],CANV,0); // grain sacks
+    lathe(-.10,.06,[[.28,.045,.045],[.37,.058,.058],[.44,.026,.026]],STRAW,0);
+    bx(-.04,.28,-.07,.08,.38,.03,WOOD,0);           // gold chest
+    bx(-.045,.315,-.075,.085,.345,.035,GOLDC,0);    // gold band
+    bx(-.32,.34,-.12,-.14,.56,.12,CLOTH,0,1);       // team canopy over the rear
+    bx(-.33,.55,-.13,-.13,.585,.13,CLOTH,0,1);
+    oct(.13,0,-.05,.02,.02,.24,TAN,3,0,-.15);       // ox legs
+    oct(.13,0,.05,.02,.02,.24,TAN,2,0,-.15);
+    oct(.37,0,-.05,.02,.02,.24,TAN,2,0,-.15);
+    oct(.37,0,.05,.02,.02,.24,TAN,3,0,-.15);
+    latheX(.30,0,[[.12,.068,.060],[.24,.092,.082],[.38,.070,.062]],HIDE,0); // ox barrel
+    oct(.42,.24,0,.045,.04,.42,HIDE,1,0,.25);       // neck, head carried low
+    latheX(.38,0,[[.40,.038,.035],[.50,.026,.025]],HIDE,1);
+    bx(.42,.42,-.075,.47,.45,-.02,TUSK,1);          // horns
+    bx(.42,.42,.02,.47,.45,.075,TUSK,1);
+    bx(.10,.26,-.01,.16,.30,.01,WOOD,0);            // yoke pole
+    seal(76);piv.push([.11,.30]);
+    // ---- 77 KING — Regicide only: rich team robe, gold crown, scepter
+    mark();
+    lathe(0,0,[[.02,.078,.092],[.20,.070,.082],[.38,.061,.073],[.50,.052,.062]],CLOTH,0,1); // robe to the ground
+    oct(0,.295,0,.062,.076,.325,GOLDC,0);           // gold belt band
+    bx(.055,.33,-.02,.066,.50,.02,WHITE,0,.85);     // ermine front stripe
+    oct(0,.475,0,.026,.03,.515,SKIN,1);             // neck
+    lathe(0,0,[[.505,.030,.033],[.52,.043,.047],[.553,.051,.055],[.588,.053,.057],
+      [.623,.047,.051],[.65,.030,.033],[.66,.008,.008]],SKIN,1); // head
+    bx(.043,.562,-.032,.054,.584,-.012,EYE,1);
+    bx(.043,.562,.012,.054,.584,.032,EYE,1);
+    bx(.047,.535,-.011,.063,.572,.011,SKIN,1);      // nose
+    bx(.04,.502,-.028,.056,.556,.028,WOOL,1);       // white beard
+    lathe(0,0,[[.636,.050,.054],[.664,.048,.052]],GOLDC,1); // crown band
+    bx(-.05,.664,-.008,-.034,.706,.008,GOLDC,1);    // crown points
+    bx(.034,.664,-.008,.05,.706,.008,GOLDC,1);
+    bx(-.008,.664,-.05,.008,.706,-.034,GOLDC,1);
+    bx(-.008,.664,.034,.008,.706,.05,GOLDC,1);
+    bx(-.008,.664,-.008,.008,.72,.008,GOLDC,1);     // tall centre point
+    lathe(0,-.133,[[.36,.028,.030],[.42,.033,.035],[.475,.028,.030]],CLOTH,4,1); // sleeved arms
+    lathe(0,-.133,[[.29,.020,.022],[.335,.026,.028],[.372,.023,.025]],SKIN,4);
+    lathe(0,.133,[[.36,.028,.030],[.42,.033,.035],[.475,.028,.030]],CLOTH,6,1);
+    lathe(0,.133,[[.29,.020,.022],[.335,.026,.028],[.372,.023,.025]],SKIN,6);
+    bx(-.008,.30,.122,.008,.56,.138,GOLDC,6);       // scepter
+    lathe(0,.13,[[.555,.015,.015],[.578,.022,.022],[.598,.013,.013]],GOLDC,6); // orb
+    seal(77);piv.push([.27,.47]);
     }else{
       // no 32-bit indices: age and elite variants alias their base geometry
       const alias=b=>{off.push(off[b]);cnt.push(cnt[b]);piv.push(piv[b]);};
       [0,0,0, 1,1, 2,2, 24, 25,25, 6, 10, 17,
-       36,34,31,7,30,27,6,26,33,35,8,39,32,29,28,40,9,38,37,17,18].forEach(alias);
+       36,34,31,7,30,27,6,26,33,35,8,39,32,29,28,40,9,38,37,17,18,
+       9,5].forEach(alias);   // cart falls back to the wagon, king to the monk
     }
     const gl=this.gl;
     this.uvbo=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,this.uvbo);
@@ -13731,7 +13902,7 @@ requestAnimationFrame(frame);
 
 <script>
 (function(){
-  var BUILD = 'tq-v53';
+  var BUILD = 'tq-v54';
   addEventListener('load', function(){
     var ov = document.getElementById('startOverlay');
     if (!ov) return;
