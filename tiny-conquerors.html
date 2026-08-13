@@ -13200,6 +13200,52 @@ const R3={
       A[a].push(u.x, this.groundH(u.x,u.y), u.y, (u.hdg||0),
                 ph, 1.05, atk, amp, r, g2, b2, 0);   // +5% unit scale; 0 topple
     }
+    /* Garrison rendering — a ram's crew pushes at its flanks and garrisoned
+       soldiers man the castle deck and tower top, drawn as instances of their
+       own archetypes. Pure render: the sim's garrison arrays are untouched,
+       and the passengers ride the carrier's heading and walk phase. */
+    for(const u of G.units){
+      if(!u.gar||!u.gar.length||u.type!=='ram')continue;
+      if(!allied(u.p,localP)&&!tileVis(u.x,u.y))continue;
+      const moving=(u.spd||0)>0.05;
+      const ph=moving?(t*7.5+u.id*1.7):(t*0.9+u.id*1.7);
+      const cs=Math.cos(u.hdg||0),sn=Math.sin(u.hdg||0);
+      const g=this.groundH(u.x,u.y);
+      const OFF=[[-.50,-.14],[-.50,.14],[-.02,-.27],[-.02,.27]];
+      for(let i=0;i<Math.min(4,u.gar.length);i++){
+        const p2=u.gar[i];
+        const av=this.AGEV[p2.type];
+        const a2=av?av[(G.P[p2.p]&&G.P[p2.p].age)||0]:this.unitArch(p2.type);
+        const [ox,oz]=OFF[i];
+        const tc=teamColor(p2.p)||'#3b7bd4';
+        const r=parseInt(tc.slice(1,3),16)/255,g2=parseInt(tc.slice(3,5),16)/255,b2=parseInt(tc.slice(5,7),16)/255;
+        A[a2].push(u.x+ox*cs-oz*sn, g, u.y+ox*sn+oz*cs, (u.hdg||0),
+                   ph+i*.9, 0.95, 0, moving?1:0.12, r,g2,b2, 0);
+      }
+    }
+    for(const b of G.blds){
+      if(!b.gar||!b.gar.length||!b.built)continue;
+      if(b.type!=='castle'&&b.type!=='tower')continue;
+      if(!allied(b.p,localP)&&!b.seen)continue;
+      const s=b.size,inset=s*.10,hw=(s/2-inset)*this.BVS;
+      const cxm=b.tx+s/2,czm=b.ty+s/2;
+      const g=this.groundH(cxm,czm);
+      const H=(IHT[b.type]||18)*this.HS*this.BVS;
+      const top=g+H*(b.type==='castle'?.82:.74);   // the deck the parapet rings
+      // mid-edge posts — the castle's corner turrets swallow anything at a corner
+      const k=hw-.14;
+      const OFF=[[0,-k],[k,0],[0,k],[-k,0]];
+      for(let i=0;i<Math.min(4,b.gar.length);i++){
+        const p2=b.gar[i];
+        const av=this.AGEV[p2.type];
+        const a2=av?av[(G.P[p2.p]&&G.P[p2.p].age)||0]:this.unitArch(p2.type);
+        const [ox,oz]=OFF[i];
+        const tc=teamColor(p2.p)||'#3b7bd4';
+        const r=parseInt(tc.slice(1,3),16)/255,g2=parseInt(tc.slice(3,5),16)/255,b2=parseInt(tc.slice(5,7),16)/255;
+        A[a2].push(cxm+ox, top, czm+oz, (i%2?-.8:.8)+i,
+                   t*0.9+i*1.7, 0.9, 0, 0.12, r,g2,b2, 0);
+      }
+    }
     /* Fresh corpses play the death topple through this same pipeline: the
        unit's real mesh keels 90° sideways in SIX HARD POSES (the 2D corpse
        does exactly this — period sprite sheets ran ~12fps, don't smooth it),
@@ -13765,6 +13811,56 @@ function frame(now){
    window.__wx = {kind:'rain'|'snow', inten:0..1} overrides for testing. */
 const wxC=document.getElementById('wx'),wxCtx=wxC.getContext('2d');
 let wxWasClear=true;
+/* ---- storm audio -----------------------------------------------------------
+   One looping noise bed shaped per climate (rain = bright patter, snow = a
+   low wind), its gain chasing the visual intensity, plus thunder scheduled
+   off the SAME half-second lightning slots the flash uses — so the sound and
+   the sky always agree, on every peer. All render/audio side; the sim never
+   hears weather. */
+let wxAudio=null,wxThunderSlot=-1;
+function updateWeatherAudio(wx){
+  if(!AC||!masterG)return;
+  if(!wxAudio){
+    const len=2*AC.sampleRate|0,buf=AC.createBuffer(1,len,AC.sampleRate);
+    const ch=buf.getChannelData(0);
+    for(let i=0;i<len;i++)ch[i]=Math.random()*2-1;
+    const src=AC.createBufferSource();src.buffer=buf;src.loop=true;
+    const filt=AC.createBiquadFilter();filt.type='bandpass';
+    filt.frequency.value=3200;filt.Q.value=.55;
+    const gain=AC.createGain();gain.gain.value=0;
+    src.connect(filt);filt.connect(gain);gain.connect(masterG);
+    src.start();
+    wxAudio={gain,filt};
+  }
+  const target=(sndMuted||!G||G.over)?0:
+    (wx.kind==='rain'?.11:.045)*wx.inten;
+  wxAudio.filt.frequency.setTargetAtTime(wx.kind==='rain'?3200:480,AC.currentTime,.5);
+  wxAudio.gain.gain.setTargetAtTime(target,AC.currentTime,.45);
+}
+function sThunder(){
+  if(!AC||sndMuted)return;
+  const t0=AC.currentTime+.25+Math.random()*.7;   // the light arrives first
+  const len=2.6*AC.sampleRate|0,buf=AC.createBuffer(1,len,AC.sampleRate);
+  const ch=buf.getChannelData(0);
+  for(let i=0;i<len;i++){const e=Math.exp(-i/len*4.5);ch[i]=(Math.random()*2-1)*e;}
+  const src=AC.createBufferSource();src.buffer=buf;      // the long rumble
+  const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=140;lp.Q.value=.7;
+  const g=AC.createGain();g.gain.setValueAtTime(.0001,t0);
+  g.gain.exponentialRampToValueAtTime(.30,t0+.06);
+  g.gain.exponentialRampToValueAtTime(.001,t0+2.5);
+  src.connect(lp);lp.connect(g);g.connect(masterG);
+  src.start(t0);src.stop(t0+2.7);
+  const len2=.5*AC.sampleRate|0,b2=AC.createBuffer(1,len2,AC.sampleRate);
+  const c2=b2.getChannelData(0);
+  for(let i=0;i<len2;i++){const e=Math.exp(-i/len2*9);c2[i]=(Math.random()*2-1)*e;}
+  const s2=AC.createBufferSource();s2.buffer=b2;         // the crack on top
+  const bp=AC.createBiquadFilter();bp.type='bandpass';bp.frequency.value=900;bp.Q.value=.8;
+  const g2=AC.createGain();g2.gain.setValueAtTime(.0001,t0);
+  g2.gain.exponentialRampToValueAtTime(.14,t0+.02);
+  g2.gain.exponentialRampToValueAtTime(.001,t0+.5);
+  s2.connect(bp);bp.connect(g2);g2.connect(masterG);
+  s2.start(t0);s2.stop(t0+.6);
+}
 function weatherNow(){
   if(window.__wx)return window.__wx;
   if(!G||typeof gameSeed==='undefined')return {kind:'rain',inten:0};
@@ -13780,6 +13876,7 @@ function weatherNow(){
 }
 function drawWeather(){
   const wx=weatherNow();
+  updateWeatherAudio(wx);
   if(wx.inten<=0.01){
     if(!wxWasClear){wxCtx.clearRect(0,0,wxC.width,wxC.height);wxWasClear=true;}
     return;
@@ -13820,6 +13917,7 @@ function drawWeather(){
     if(inten>.72&&G){
       const sec=Math.floor(G.t*2);               // half-second slots
       if(hash2(gameSeed*31,sec)%44===0){
+        if(wxThunderSlot!==sec){wxThunderSlot=sec;sThunder();}   // one rumble per bolt
         const ph=(G.t*2)%1;
         const a=ph<.12?(.55-ph*3):(ph>.2&&ph<.3?(.35-(ph-.2)*2.4):0);
         if(a>0){g.fillStyle='rgba(240,244,255,'+a.toFixed(3)+')';g.fillRect(0,0,vw,vh);}
