@@ -6549,6 +6549,13 @@ function drawFlames(b){
   const pc=isoPt(b.tx+b.size/2,b.ty+b.size/2);
   pc.y-=elevTile(b.tx+b.size/2,b.ty+b.size/2)*10;
   const d=BLDS[b.type];
+  if(tier>=1){ // scorched ground creeping out from a burning building
+    const sc=Math.min(1,(1-r)*1.6);
+    ctx.globalAlpha=.16+.12*tier;
+    ctx.fillStyle='#191410';
+    ctx.beginPath();ctx.ellipse(pc.x,pc.y+b.size*6,b.size*13*sc,b.size*6.5*sc,0,0,7);
+    ctx.fill();ctx.globalAlpha=1;
+  }
   const BSv=d.thin||d.farm?1:BLD_VS2D;
   const roofH=(IHT[b.type]||18)*BSv;        // anchor heights track the drawn art
   const nA=1+tier;                          // 1..3 fire points
@@ -8744,6 +8751,15 @@ function drawCorpse(c){
   const big=!!(UNITS[c.type]&&UNITS[c.type].cav)||c.type==='elephant'||c.type==='ram';
   const sp=getCorpseSpr(c.p,big,st,c.type==='ram');
   const cp=isoE(c.x,c.y);
+  // blood pool — soaks in over the first seconds, fades with the corpse.
+  // Stateless off the corpse timer; never for ships (water) or the ram (machine).
+  if(!(UNITS[c.type]&&UNITS[c.type].ship)&&c.type!=='ram'&&age>.25){
+    const soak=Math.min(1,age/10),fade=Math.min(1,c.t/25);
+    ctx.globalAlpha=.28*soak*fade;
+    ctx.fillStyle='#5a1410';
+    ctx.beginPath();ctx.ellipse(cp.x,cp.y+1.5,(5.5+4.5*soak)*(big?1.6:1),(3+2.4*soak)*(big?1.6:1),0,0,7);
+    ctx.fill();ctx.globalAlpha=1;
+  }
   // DEATH: the living rig topples over 0.5s in 6 hard-stepped poses (period
   // sprite sheets ran ~12fps — stepping reads truer than a smooth tween),
   // then hands off to the corpse sprite. Ships/rams keep their wreck art.
@@ -11769,15 +11785,15 @@ const R3={
      present actually draw — a typical scene runs 6-10 calls). The flag-based
      fallback exists so a future unit type added to UNITS renders as SOMETHING
      sensible before anyone thinks about its mesh. */
-  ARCHN:78,
+  ARCHN:86,
   UARCH:{
     villager:4, militia:0, spearman:1, archer:2, skirmisher:24, scout:25, knight:6,
     ram:10, petard:41, scorpion:13, mangonel:12, treb:11, bombard:14, handcannon:3,
     monk:5, missionary:6, longbow:36, axeman:34, berserker:31, mangudai:7, teuton:30,
     woad:27, cataphract:6, mameluke:26, huskarl:33, chukonu:35, elephant:8, janissary:39,
     samurai:32, jaguar:29, eagle:28, plumed:40, warwagon:9, conquistador:38, tarkan:37,
-    fishing:15, cog:16, transport:16, galley:17, fireship:17, demo:16, longboat:17,
-    turtle:18, cannongalleon:17, sheep:19, deer:20, boar:21,
+    fishing:15, cog:16, transport:85, galley:17, fireship:78, demo:80, longboat:17,
+    turtle:18, cannongalleon:83, sheep:19, deer:20, boar:21,
     tradecart:76, king:77,
   },
   /* attack-swing damping per archetype: 1 = full 51° chop (melee, treb throw,
@@ -11787,14 +11803,15 @@ const R3={
         1,1,1,.9,.8, 1,1,1,1,1, 1,1,1,.35,.7, .9,.3,.3,.7,0,
         1,1,1, 1,1, .35,.35, 1, .9,.9, .9, 1, 0,
         .7,1,1,.7,1, 1,.9,.8,1,.35, .8,.3,1,1,1, .7,0,.3,.9,0, 0,
-        0,0],
+        0,0, 0,0,0,0,0,0,0,0],
   /* Age-variant archetype per line unit, indexed by the OWNING PLAYER's age
      (0 Dark..3 Imperial). Chosen per frame in drawUnits — render side only.
      Unique units use the same table: their Imperial slot IS the elite,
      matching statFor's elite-at-Imperial rule. */
   AGEV:{militia:[42,43,0,44], spearman:[45,45,1,46], archer:[2,2,47,48],
         skirmisher:[24,24,49,49], scout:[25,25,50,51], knight:[6,6,6,52],
-        ram:[10,10,10,53], galley:[17,17,17,54],
+        ram:[10,10,10,53], galley:[17,17,82,54],
+        fireship:[78,78,78,79], demo:[80,80,80,81], cannongalleon:[83,83,83,84],
         longbow:[36,36,36,55], axeman:[34,34,34,56], berserker:[31,31,31,57],
         mangudai:[7,7,7,58], teuton:[30,30,30,59], woad:[27,27,27,60],
         cataphract:[6,6,6,61], mameluke:[26,26,26,62], huskarl:[33,33,33,63],
@@ -13006,12 +13023,80 @@ const R3={
     bx(-.008,.30,.122,.008,.56,.138,GOLDC,6);       // scepter
     lathe(0,.13,[[.555,.015,.015],[.578,.022,.022],[.598,.013,.013]],GOLDC,6); // orb
     seal(77);piv.push([.27,.47]);
+    /* ---- 78+ SHIP TIERS — the roster's naval reads, split at last from the
+       two generic hulls. Fire/demo/cannon/transport get their own bodies and
+       the galley line gains its Castle tier. */
+    // ---- 78/79 FIRE SHIP / FAST FIRE SHIP — flame projector, scorched prow
+    const fireBody=(k)=>{
+      bx(-.30,-.03,-.13,.28,.15,.13,WOOD,0,0,-.28);  // squat aggressive hull
+      bx(-.28,.05,-.134,.26,.067,.134,DARK,0);
+      bx(-.26,.15,-.15,.24,.22,-.12,WOOD,0);         // low bulwarks
+      bx(-.26,.15,.12,.24,.22,.15,WOOD,0);
+      bx(.18,.03,-.06,.36,.15,.06,DARK,0,0,.3);      // scorched prow
+      bx(-.10,.15,-.03,-.04,.60,.03,WOOD,1);         // stub mast
+      bx(-.09,.30,-.11,-.05,.54,.11,CANV,0,1);       // small team sail
+      bx(-.02,.20,-.055,.08,.30,.055,IRON,0);        // brazier
+      lathe(.03,0,[[.30,.030,.030],[.37,.042,.042],[.44,.020,.020]],FLAME,0); // brazier fire
+      latheX(.24,0,[[.24,.026,.026],[.44,.032,.032]],IRON,0);  // projector nozzle
+      latheX(.24,0,[[.44,.036*k,.036*k],[.58,.058*k,.058*k],[.72+.06*(k-1),.024*k,.024*k]],FLAME,0); // the flame cone
+    };
+    mark();fireBody(1);seal(78);piv.push([.12,.24]);
+    mark();fireBody(1.35);
+    bx(-.33,.02,-.02,-.29,.10,.02,IRON,0);           // streamlined stern post
+    seal(79);piv.push([.12,.24]);
+    // ---- 80/81 DEMOLITION SHIP / HEAVY — the visible barrels ARE the read
+    const demoBody=(heavy)=>{
+      bx(-.24,-.03,-.11,.22,.11,.11,WOOD,0,0,-.26);  // low minimal hull
+      bx(-.22,.035,-.114,.20,.05,.114,DARK,0);
+      bx(-.25,.11,-.12,.23,.16,.12,WOOD,0);          // rail
+      const bar=(x,z)=>{
+        lathe(x,z,[[.14,.048,.048],[.30,.048,.048]],WOOD,0,0,8);
+        bx(x-.052,.165,z-.052,x+.052,.182,z+.052,heavy?IRON:DARK,0); // hoops
+        bx(x-.052,.245,z-.052,x+.052,.262,z+.052,heavy?IRON:DARK,0);
+      };
+      bar(-.10,-.055);bar(-.10,.055);bar(.03,0);
+      if(heavy){bar(.14,-.05);bar(.14,.05);}
+      lathe(-.035,0,[[.30,.048,.048],[.44,.048,.048]],WOOD,0,0,8); // top barrel
+      bx(-.05,.44,-.008,-.02,.50,.008,DARK,0);       // fuse
+      bx(-.055,.495,-.013,-.015,.522,.013,FLAME,0);  // spark
+    };
+    mark();demoBody(false);seal(80);piv.push([.10,.22]);
+    mark();demoBody(true);seal(81);piv.push([.10,.22]);
+    // ---- 82 WAR GALLEY (Castle tier) — a second shield row along the rail
+    mark();
+    warshipBody();
+    for(let i=0;i<3;i++){
+      bx(-.22+i*.16,.235,-.152,-.14+i*.16,.30,-.145,CLOTH,0,1);
+      bx(-.22+i*.16,.235,.145,-.14+i*.16,.30,.152,CLOTH,0,1);
+    }
+    seal(82);piv.push([.12,.24]);
+    // ---- 83/84 CANNON GALLEON / ELITE — forward cannon over the bow
+    const cannonBody=(k)=>{
+      warshipBody();
+      bx(.08,.235,-.055,.20,.31,.055,WOOD,0);        // gun carriage
+      latheX(.275,0,[[.12,.036*k,.036*k],[.42+.04*(k-1),.028*k,.028*k]],IRON,0);
+      bx(.40,.245,-.04,.44,.31,.04,DARK,0);          // muzzle band
+    };
+    mark();cannonBody(1);seal(83);piv.push([.12,.24]);
+    mark();cannonBody(1.3);
+    bx(.10,.31,-.05,.18,.335,.05,GOLDC,0);           // gilded breech band
+    seal(84);piv.push([.12,.24]);
+    // ---- 85 TRANSPORT — wide flat barge with a bow loading ramp
+    mark();
+    bx(-.34,-.04,-.18,.34,.16,.18,WOOD,0,0,-.22);
+    bx(-.32,.03,-.184,.32,.05,.184,DARK,0);
+    bx(-.36,.16,-.20,.36,.225,.20,WOOD,0);           // bulwark ring
+    bx(-.30,.16,-.155,.30,.175,.155,DECK,0);         // open cargo deck
+    bx(.30,.09,-.08,.50,.15,.08,DECK,0);             // the ramp
+    bx(-.06,.16,-.02,-.02,.64,.02,WOOD,1);           // modest mast, aft
+    bx(-.05,.30,-.14,-.03,.56,.14,CANV,0,1);         // team sail
+    seal(85);piv.push([.12,.26]);
     }else{
       // no 32-bit indices: age and elite variants alias their base geometry
       const alias=b=>{off.push(off[b]);cnt.push(cnt[b]);piv.push(piv[b]);};
       [0,0,0, 1,1, 2,2, 24, 25,25, 6, 10, 17,
        36,34,31,7,30,27,6,26,33,35,8,39,32,29,28,40,9,38,37,17,18,
-       9,5].forEach(alias);   // cart falls back to the wagon, king to the monk
+       9,5, 17,17,16,16,17,17,17,16].forEach(alias);   // cart→wagon, king→monk, ships→generic hulls
     }
     const gl=this.gl;
     this.uvbo=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,this.uvbo);
@@ -13354,6 +13439,36 @@ const R3={
         const g2=.56+.20*p;                        // pale woodsmoke, not soot
         bb(f2.ax+sway,f2.ay+.05+p*.55,f2.az+sway*.5,s,[g2,g2,g2*.98]);
       }
+    }
+    /* battle aftermath decals — blood soaking in under corpses, scorched
+       ground under burning buildings. Two ground quads 45° apart make an
+       eight-point star that reads as a rounded pool at blend alpha (the
+       double-covered centre darkens, which is what a pool should do).
+       Stateless off the corpse timers and hp like everything else here. */
+    const pool=(cx,cz,r,g,col)=>{
+      quadUp([cx-r,g,cz-r*.8],[cx+r,g,cz-r*.8],[cx+r,g,cz+r*.8],[cx-r,g,cz+r*.8],col);
+      const d=r*.9;
+      quadUp([cx,g,cz-d],[cx+d,g,cz],[cx,g,cz+d],[cx-d,g,cz],col);
+    };
+    for(const c of (G.corpses||[])){
+      if(UNITS[c.type]&&UNITS[c.type].ship)continue;
+      if(c.type==='ram')continue;
+      if(!tileVis(c.x,c.y))continue;
+      const age=c.max-c.t;if(age<.25)continue;
+      const soak=Math.min(1,age/10),fade=Math.min(1,c.t/25);
+      const big=!!(UNITS[c.type]&&UNITS[c.type].cav)||c.type==='elephant';
+      const r=(0.20+0.18*soak)*(big?1.5:1);
+      const g=this.groundH(c.x,c.y)+.012;
+      pool(c.x,c.y,r,g,[.30*fade+.05,.045*fade+.02,.035*fade+.02]);
+    }
+    for(const b of G.blds){
+      if(!b.built||!b.maxhp)continue;
+      const r2=b.hp/b.maxhp;if(r2>=.5)continue;
+      if(!allied(b.p,localP)&&!b.seen)continue;
+      const s=b.size,cxm=b.tx+s/2,czm=b.ty+s/2;
+      const g=this.groundH(cxm,czm)+.010;
+      const sc=s*.62*Math.min(1,(1-r2)*1.6);
+      pool(cxm,czm,sc,g,[.055,.045,.04]);
     }
     const gl=this.gl;
     if(!this.fxvbo){this.fxvbo=gl.createBuffer();this.fxibo=gl.createBuffer();}
@@ -13902,7 +14017,7 @@ requestAnimationFrame(frame);
 
 <script>
 (function(){
-  var BUILD = 'tq-v54';
+  var BUILD = 'tq-v55';
   addEventListener('load', function(){
     var ov = document.getElementById('startOverlay');
     if (!ov) return;
