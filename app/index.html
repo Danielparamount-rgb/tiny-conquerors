@@ -499,6 +499,10 @@
           <button data-mb="0" class="sel">Standard</button>
           <button data-mb="1">⚡ Turbo</button>
         </div>
+        <div class="diff">
+          <button data-mr="0" class="sel">Conquest</button>
+          <button data-mr="1">👑 Regicide</button>
+        </div>
         <button class="bigbtn" id="mpStart">⚔ &nbsp;Begin the Battle</button>
       </div>
       <p class="sub" id="mpWait" style="margin:10px 0 0">Waiting for the host to begin…</p>
@@ -2236,7 +2240,7 @@ function netBegin(m){
   NP=players.length+ai;
   playersSel=NP;
   mapSel=cfg.map|0;diffSel=cfg.diff==null?1:cfg.diff|0;turboSel=cfg.turbo|0;
-  teamSel=cfg.team|0;regicideSel=0;   // net games are conquest until the lobby carries the option
+  teamSel=cfg.team|0;regicideSel=cfg.rg|0;   // the lobby decides the mode — BOTH appliers must read it
   // Civs and teams come from the lobby, not from this machine's start screen,
   // so every peer builds the same players.
   netCivs=[];netTeams=null;
@@ -2276,7 +2280,7 @@ function netRejoin(m){
   const ai=Math.max(0,Math.min(8-players.length,cfg.ai|0));
   NP=players.length+ai;playersSel=NP;
   mapSel=cfg.map|0;diffSel=cfg.diff==null?1:cfg.diff|0;
-  turboSel=cfg.turbo|0;teamSel=cfg.team|0;regicideSel=0;
+  turboSel=cfg.turbo|0;teamSel=cfg.team|0;regicideSel=cfg.rg|0;
   netCivs=[];for(const p of players)netCivs[p.seat]=p.civ;
   localP=m.seat;
   civSel=netCivs[localP]!=null?netCivs[localP]:0;
@@ -10313,7 +10317,7 @@ document.getElementById('campBack').onclick=()=>{
   document.getElementById('campOverlay').style.display='none';
 };
 /* ================= multiplayer lobby ================= */
-let mpCfg={map:0,diff:1,turbo:0,ai:0,team:0};
+let mpCfg={map:0,diff:1,turbo:0,ai:0,team:0,rg:0};
 let mpCiv=0;
 const mpEl=id=>document.getElementById(id);
 function mpStatus(s){mpEl('mpStatus').textContent=s||'';}
@@ -10349,7 +10353,8 @@ function mpRenderLobby(){
     const c=netLobby.cfg;
     mpEl('mpWait').textContent='Waiting for the host to begin — '+MAPS[c.map|0].name
       +(c.ai?' · '+c.ai+' computer opponent'+(c.ai>1?'s':''):'')
-      +(c.turbo?' · Turbo':'');
+      +(c.turbo?' · Turbo':'')
+      +(c.rg?' · 👑 Regicide':'');
   }
 }
 (function(){
@@ -10382,6 +10387,7 @@ function mpHostBtnRow(sel,key,after){
 }
 mpHostBtnRow('data-mm','map');mpHostBtnRow('data-ma','ai');
 mpHostBtnRow('data-md','diff');mpHostBtnRow('data-mt','team');mpHostBtnRow('data-mb','turbo');
+mpHostBtnRow('data-mr','rg');
 mpEl('mpBtn').onclick=()=>{initAudio();mpShow();};
 mpEl('mpBack').onclick=()=>{netReset();resetNet();mpEl('mpOverlay').style.display='none';};
 mpEl('mpHost').onclick=()=>{
@@ -14317,7 +14323,7 @@ requestAnimationFrame(frame);
 
 <script>
 (function(){
-  var BUILD = 'tq-v60';
+  var BUILD = 'tq-v61';
   addEventListener('load', function(){
     var ov = document.getElementById('startOverlay');
     if (!ov) return;
