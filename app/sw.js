@@ -1,6 +1,6 @@
 ﻿// Tiny Conquerors service worker - offline-capable, but never stale.
 // Bump VERSION on every deploy; old caches are purged on activate.
-const VERSION = 'tq-v58';
+const VERSION = 'tq-v59';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {

@@ -4701,6 +4701,17 @@ function refreshTerrain(){
   const wd=new Uint8Array(MAP*MAP);
   for(const k2 in G.res){const r2=G.res[k2];if(r2.type==='wood')wd[r2.y*MAP+r2.x]=1;}
   const wAt=(x,y)=>x>=0&&y>=0&&x<MAP&&y<MAP&&wd[y*MAP+x]?1:0;
+  /* Edge shade is ROUND radial pools now, not iso canopy scallops. This was
+     the last iso-baked art in the texture: the scallops painted canopy
+     SILHOUETTES onto the ground, which lay flat and wrong the moment the 3D
+     camera tilted or turned. A direction-free ground stain is geometrically
+     valid at any yaw/pitch — it just foreshortens with the ground. One tiny
+     pre-rendered pool sprite, stamped per edge, keeps genMap cost flat. */
+  const poolC=document.createElement('canvas');poolC.width=poolC.height=20;
+  {const pg=poolC.getContext('2d');
+   const gr=pg.createRadialGradient(10,10,1,10,10,9.5);
+   gr.addColorStop(0,'rgba(14,25,9,.55)');gr.addColorStop(1,'rgba(14,25,9,0)');
+   pg.fillStyle=gr;pg.fillRect(0,0,20,20);}
   for(let y=0;y<MAP;y++)for(let x=0;x<MAP;x++){
     if(!wd[y*MAP+x])continue;
     const n=wAt(x,y-1)+wAt(x,y+1)+wAt(x-1,y)+wAt(x+1,y);
@@ -4710,14 +4721,11 @@ function refreshTerrain(){
     tctx.fillStyle='rgba(60,86,40,.14)';
     for(let s=0;s<3;s++)
       tctx.fillRect(px+2+((h>>>(s*3))%22),py+2+((h>>>(s*3+7))%22),2.2,2);
-    // ragged canopy scallops bleeding over the forest edge
-    tctx.fillStyle='rgba(14,25,9,.55)';
-    const fr=(ex,ey,horiz)=>{for(let s=0;s<5;s++){
-      const j=((h>>>(s*4))%9)-4,sr=3.5+((h>>>(s*2+1))%4);
-      tctx.beginPath();
-      if(horiz)tctx.ellipse(ex-10+s*5.5+j*.4,ey+j*.5,sr,sr*.72,0,0,7);
-      else tctx.ellipse(ex+j*.5,ey-10+s*5.5+j*.4,sr*.72,sr,0,0,7);
-      tctx.fill();}};
+    const fr=(ex,ey,horiz)=>{for(let s=0;s<3;s++){
+      const j=((h>>>(s*4))%9)-4,sz=13+((h>>>(s*2+1))%8);
+      const cx2=(horiz?ex-9+s*9:ex)+j*.5,cy2=(horiz?ey:ey-9+s*9)+j*.5;
+      tctx.drawImage(poolC,cx2-sz/2,cy2-sz/2,sz,sz);
+    }};
     if(!wAt(x,y-1))fr(px+TILE/2,py,true);
     if(!wAt(x,y+1))fr(px+TILE/2,py+TILE,true);
     if(!wAt(x-1,y))fr(px,py+TILE/2,false);
