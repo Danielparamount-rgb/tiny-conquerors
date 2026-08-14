@@ -10841,64 +10841,88 @@ const R3={
         tri(i0,i2,i1);                    // reversed — see winding audit above
       }
     };
+    /* SMOOTH helpers — shared ring vertices carrying true surface normals, so
+       the lambert term shades a continuous curve instead of facets (the same
+       trick that rounded the units). Winding follows prism/cone (into the
+       solid, safe under the tree pass's cullFace). No bottom caps — the
+       pitch clamp keeps undersides unseeable, same proof as the old cones. */
+    const ringV=(cx,cy,cz,r,seg,col,ny)=>{
+      const c=hex(col),ids=[];
+      for(let i=0;i<seg;i++){
+        const a=i/seg*6.283,ca=Math.cos(a),sa=Math.sin(a);
+        const L=Math.hypot(1,ny)||1;
+        ids.push(push([cx+ca*r,cy,cz+sa*r],[ca/L,ny/L,sa/L],c));
+      }
+      return ids;
+    };
+    const band=(r0,r1)=>{const seg=r0.length;
+      for(let i=0;i<seg;i++){const j=(i+1)%seg;
+        tri(r0[i],r0[j],r1[j]);tri(r0[i],r1[j],r1[i]);}};
+    const capTo=(ring,cx,cy,cz,col)=>{const seg=ring.length;
+      const ap=push([cx,cy,cz],[0,1,0],hex(col));
+      for(let i=0;i<seg;i++){const j=(i+1)%seg;tri(ring[i],ring[j],ap);}};
+    const scone=(y0,y1,r,seg,col,cx,cz)=>{cx=cx||0;cz=cz||0;
+      const ny=r/Math.max(.01,y1-y0);
+      capTo(ringV(cx,y0,cz,r,seg,col,ny),cx,y1,cz,col);
+    };
+    // smooth canopy ball, slightly squashed like the old blobs (sq .82)
+    const sblob=(cx,cy,cz,r,col)=>{
+      const sq=.82,seg=8,lats=[-.5,.15,.85];
+      const rings=lats.map(ph=>ringV(cx,cy+r*sq*Math.sin(ph),cz,
+        Math.max(.012,r*Math.cos(ph)),seg,col,Math.tan(ph)/sq));
+      for(let k=0;k<rings.length-1;k++)band(rings[k],rings[k+1]);
+      capTo(rings[rings.length-1],cx,cy+r*sq,cz,col);
+    };
     const off=[],cnt=[],hgt=[];
     const mark=()=>off.push(I.length);
     const seal=h=>{cnt.push(I.length-off[off.length-1]);hgt.push(h);};
     const P=this.TREE_PINE;
-    // ---- 0 PINE: tall, tiered, bare trunk at the base ----
+    // ---- 0 PINE: tall, tiered — the old silhouette, smooth-shaded ----
     mark();
     prism(0,.34,.10,5,P.trunk,.07);
-    cone(.22,.64,.60,7,P.light[1]);
-    cone(.42,.86,.47,7,P.light[2]);
-    cone(.62,1.05,.33,7,P.light[3]);
-    cone(.80,1.22,.19,7,P.light[4]);
+    scone(.22,.64,.60,8,P.light[1]);
+    scone(.42,.86,.47,8,P.light[2]);
+    scone(.62,1.05,.33,8,P.light[3]);
+    scone(.80,1.22,.19,8,P.light[4]);
     seal(1.22);
-    // ---- 1 OAK: stout tapered trunk, broad spreading crown ----
+    // ---- 1 OAK: stout tapered trunk, broad ROUND spreading crown ----
     mark();
     prism(0,.46,.16,6,'#4e3319',.11);
-    blob(0,.74,0,.60,'#2e6a1f',true);
-    blob(-.44,.80,-.18,.46,'#357a26',true);
-    blob(.42,.82,.20,.48,'#40882e',true);
-    blob(-.14,1.00,.28,.42,'#4c9838',true);
-    blob(.10,1.04,-.24,.44,'#57a641',true);
+    sblob(0,.74,0,.62,'#357a26');
+    sblob(-.40,.84,-.16,.45,'#2e6a1f');
+    sblob(.38,.88,.18,.47,'#4c9838');
     seal(1.3);
     // ---- 2 MAPLE, summer green: upright rounded crown ----
     mark();
     prism(0,.50,.11,5,'#5a3d20',.08);
-    blob(0,.86,0,.50,'#3f8f31',true);
-    blob(-.17,1.06,-.09,.38,'#4da03c',true);
-    blob(.15,1.04,.11,.40,'#59b048',true);
-    blob(0,1.22,0,.28,'#6ec25a',true);
+    sblob(0,.88,0,.52,'#3f8f31');
+    sblob(0,1.18,0,.33,'#59b048');
     seal(1.4);
     // ---- 3 MAPLE in autumn: same habit, fire colours ----
     mark();
     prism(0,.50,.11,5,'#5a3d20',.08);
-    blob(0,.86,0,.50,'#b0511d',true);
-    blob(-.17,1.06,-.09,.38,'#c96a24',true);
-    blob(.15,1.04,.11,.40,'#d98a2e',true);
-    blob(0,1.22,0,.28,'#e8a83c',true);
+    sblob(0,.88,0,.52,'#b0511d');
+    sblob(0,1.18,0,.33,'#d98a2e');
     seal(1.4);
     // ---- 4 BIRCH: slender WHITE trunk with dark bands, airy high crown ----
     mark();
     prism(0,.80,.072,5,'#e6e2d6',.055);
     prism(.20,.255,.076,5,'#4a4640',.074);
     prism(.46,.505,.073,5,'#4a4640',.068);
-    blob(0,1.00,0,.38,'#7fb95a',true);
-    blob(-.13,1.16,.08,.30,'#93c86b',true);
-    blob(.13,1.20,-.06,.28,'#a5d67d',true);
+    sblob(0,1.02,0,.40,'#7fb95a');
+    sblob(.10,1.24,-.05,.27,'#a5d67d');
     seal(1.5);
-    // ---- 5 BERRY BUSH (world-size): green mound studded with berries ----
+    // ---- 5 BERRY BUSH (world-size): soft green mound studded with berries ----
     mark();
-    blob(0,.15,0,.26,'#2e6b22',true);
-    blob(-.16,.18,.09,.19,'#3a7d2c',true);
-    blob(.15,.20,-.07,.18,'#4a8f38',true);
+    sblob(0,.15,0,.27,'#2e6b22');
+    sblob(-.15,.17,.09,.18,'#3a7d2c');
     blob(-.09,.28,-.12,.042,'#c22a20',false);
     blob(.13,.26,.09,.042,'#d43428',false);
     blob(0,.33,.02,.042,'#c22a20',false);
     blob(-.19,.16,-.02,.038,'#d43428',false);
     blob(.05,.20,-.18,.038,'#c22a20',false);
     seal(1);
-    // ---- 6 GOLD MINE (world-size): rock crags, gold caps, loose nuggets ----
+    // ---- 6 GOLD MINE (world-size): rock crags stay ANGULAR — rocks are rocks
     mark();
     cone(0,.34,.27,4,'#736b5f');
     cone(0,.48,.19,5,'#7e766a',.15,-.09);
@@ -10909,11 +10933,10 @@ const R3={
     blob(-.21,.05,-.06,.048,'#d9a92c',false);
     blob(-.04,.045,.24,.048,'#e3b23c',false);
     seal(1);
-    // ---- 7 CARCASS (world-size): low meat mound, pale rib hints ----
+    // ---- 7 CARCASS (world-size): low soft meat mound, pale rib hints ----
     mark();
-    blob(0,.075,0,.18,'#a24532',true);
-    blob(.11,.065,.07,.12,'#8f3a2a',true);
-    blob(-.12,.06,-.05,.11,'#b25340',true);
+    sblob(0,.08,0,.19,'#a24532');
+    sblob(.11,.07,.07,.12,'#8f3a2a');
     blob(.02,.13,.02,.045,'#e8e2d2',false);
     blob(-.06,.12,-.04,.04,'#e8e2d2',false);
     seal(1);
@@ -11483,13 +11506,36 @@ const R3={
       quad([x0,y1,zm-0.035],[x1,y1,zm-0.035],[x1,y1+0.02,zm+0.035],[x0,y1+0.02,zm+0.035],
            shade(col,1.12));
     };
+    /* smooth-shaded cone: one shared base ring with true cone normals, so
+       the roof shades as a curve instead of 8 flat facets */
     const cone=(cx,cz,r,y0,y1,col,seg)=>{
-      seg=seg||8;
+      seg=seg||12;
+      const ny=r/Math.max(.01,y1-y0),L=Math.hypot(1,ny);
+      const ring2=[];
       for(let i=0;i<seg;i++){
-        const a0=i/seg*6.283,a1=(i+1)/seg*6.283;
-        tri3([cx+Math.cos(a0)*r,y0,cz+Math.sin(a0)*r],
-             [cx+Math.cos(a1)*r,y0,cz+Math.sin(a1)*r],[cx,y1,cz],col);
+        const a=i/seg*6.283,ca=Math.cos(a),sa=Math.sin(a);
+        ring2.push(push([cx+ca*r,y0,cz+sa*r],[ca/L,ny/L,sa/L],col));
       }
+      const ap=push([cx,y1,cz],[0,1,0],col);
+      for(let i=0;i<seg;i++)I.push(ring2[i],ring2[(i+1)%seg],ap);
+    };
+    /* smooth tapered cylinder — round tower shafts and castle turrets.
+       Buildings are excluded from face culling, so only the normals matter,
+       and these are explicit outward ones. */
+    const cylS=(cx,cz,r0,r1,y0,y1,col,seg)=>{
+      seg=seg||12;
+      const ny=(r0-r1)/Math.max(.01,y1-y0),L=Math.hypot(1,ny);
+      const b0=[],t0=[];
+      for(let i=0;i<seg;i++){
+        const a=i/seg*6.283,ca=Math.cos(a),sa=Math.sin(a);
+        const n=[ca/L,ny/L,sa/L];
+        b0.push(push([cx+ca*r0,y0,cz+sa*r0],n,col));
+        t0.push(push([cx+ca*r1,y1,cz+sa*r1],n,col));
+      }
+      for(let i=0;i<seg;i++){const j=(i+1)%seg;
+        I.push(b0[i],b0[j],t0[j], b0[i],t0[j],t0[i]);}
+      const c2=push([cx,y1,cz],[0,1,0],col);
+      for(let i=0;i<seg;i++)I.push(t0[i],t0[(i+1)%seg],c2);
     };
     // thin octagonal collar hugging a cone — stacked, they read as the tile
     // courses of a real conical roof instead of a smooth party hat
@@ -11510,18 +11556,22 @@ const R3={
       ring(cx,cz,r*.55,y0+(y1-y0)*.52,(y1-y0)*.06,shade(col,0.88));
     };
     const dome=(cx,cz,r,y0,y1,col)=>{
-      const seg=10,ring=4;
-      for(let j=0;j<ring;j++){
-        const t0=j/ring,t1=(j+1)/ring;
-        const r0=r*Math.cos(t0*1.5708),r1=r*Math.cos(t1*1.5708);
-        const h0=y0+(y1-y0)*Math.sin(t0*1.5708),h1=y0+(y1-y0)*Math.sin(t1*1.5708);
+      // smooth-shaded: shared rings, radial hemisphere normals
+      const seg=12,ring=4,rings=[];
+      for(let j=0;j<=ring;j++){
+        const t=j/ring*1.5708,rr=Math.max(.01,r*Math.cos(t));
+        const y=y0+(y1-y0)*Math.sin(t),ids=[];
         for(let i=0;i<seg;i++){
-          const a0=i/seg*6.283,a1=(i+1)/seg*6.283;
-          quad([cx+Math.cos(a0)*r0,h0,cz+Math.sin(a0)*r0],
-               [cx+Math.cos(a1)*r0,h0,cz+Math.sin(a1)*r0],
-               [cx+Math.cos(a1)*r1,h1,cz+Math.sin(a1)*r1],
-               [cx+Math.cos(a0)*r1,h1,cz+Math.sin(a0)*r1],col);
+          const a=i/seg*6.283,ca=Math.cos(a),sa=Math.sin(a);
+          ids.push(push([cx+ca*rr,y,cz+sa*rr],
+            [ca*Math.cos(t),Math.sin(t),sa*Math.cos(t)],col));
         }
+        rings.push(ids);
+      }
+      for(let j=0;j<ring;j++)for(let i=0;i<seg;i++){
+        const k=(i+1)%seg;
+        I.push(rings[j][i],rings[j][k],rings[j+1][k],
+               rings[j][i],rings[j+1][k],rings[j+1][i]);
       }
     };
     let n=0;
@@ -11576,7 +11626,25 @@ const R3={
           win.push(a);
         }
       }
-      box(x0,z0,x1,z1,g,wh,wallC,style,b.id*7919,win);
+      if(b.type==='tower'&&b.built){
+        /* ROUND tower — a smooth tapered drum instead of a square keep.
+           The lambert gradient around the curve is the roundness read;
+           thin proud rings stand in for the stone courses. */
+        const R=hw*1.02,midx2=(x0+x1)/2,midz2=(z0+z1)/2;
+        cylS(midx2,midz2,R*1.08,R*.92,g,wh,wallC);
+        cylS(midx2,midz2,R*1.10,R*1.10,g,g+.06,shade(wallC,0.9));      // base course
+        for(const f of [.38,.68])
+          cylS(midx2,midz2,R*(1.09-.06*f),R*(1.09-.06*f),g+(wh-g)*f,g+(wh-g)*f+.028,shade(wallC,0.82));
+        // doorway sunk into the drum, facing the home camera
+        box(midx2+R*.72,midz2-.10,midx2+R*1.02,midz2+.10,g,g+.34,hex('#241a10'),'solid',b.id,null);
+        // arrow slits at the axis-aligned faces, barely proud of the curve —
+        // anywhere else an axis-aligned box juts off the drum like a plank
+        {const rr=R*(1.08-(1.08-.92)*.72)-.01,dk=hex('#241a10');
+         box(midx2+rr-.004,midz2-.030,midx2+rr+.024,midz2+.030,
+             g+(wh-g)*.60,g+(wh-g)*.84,dk,'solid',b.id,null);
+         box(midx2-.030,midz2+rr-.004,midx2+.030,midz2+rr+.024,
+             g+(wh-g)*.60,g+(wh-g)*.84,dk,'solid',b.id,null);}
+      }else box(x0,z0,x1,z1,g,wh,wallC,style,b.id*7919,win);
       const tcS=teamColor(b.p),tcv=hex(tcS&&tcS.length===7?tcS:'#3b7bd4');
       const midx=(x0+x1)/2,midz=(z0+z1)/2;
       // foundation plinth: a slightly proud stone course at the ground line.
@@ -11588,7 +11656,7 @@ const R3={
       }
       /* ---- per-type extras: the details that make each building itself ---- */
       if(b.built){
-        if(style==='stone'&&!BLDS[b.type].thin){
+        if(style==='stone'&&!BLDS[b.type].thin&&b.type!=='tower'){  // no quoins on a drum
           // quoins — alternating corner stones on real stone buildings
           for(const [qx,qz] of [[x0,z0],[x1,z0],[x0,z1],[x1,z1]])
             for(let k=0;k<4;k++){
@@ -11699,11 +11767,12 @@ const R3={
           mer(x0-lip,z0-lip,x0-lip,z1+lip,true);
           mer(x1+lip,z0-lip,x1+lip,z1+lip,true);
         }
-        if(M.turret){                       // castle: four spired corner turrets
+        if(M.turret){                       // castle: four ROUND spired turrets
           const tr=s*.19;
           for(const [ox,oz] of [[x0,z0],[x1,z0],[x0,z1],[x1,z1]]){
             const ty0=g,ty1=g+H*.92;
-            box(ox-tr,oz-tr,ox+tr,oz+tr,ty0,ty1,hex(M.w),'stone',b.id*31+ox*13,null);
+            cylS(ox,oz,tr*1.12,tr*.98,ty0,ty1,hex(M.w));
+            cylS(ox,oz,tr*1.16,tr*1.16,ty0+(ty1-ty0)*.55,ty0+(ty1-ty0)*.55+.03,shade(hex(M.w),0.82));
             coneTiled(ox,oz,tr*1.25,ty1,ty1+H*.34,hex(M.rc));
           }
         }
