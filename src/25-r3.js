@@ -3526,6 +3526,7 @@ function frame(now){
     acc+=dt;
     let guard=0;
     if(netMode){
+      netLagTick(now);   // RTT sampling for the adaptive scheduling horizon
       // A networked turn runs only when every peer's orders for it have landed.
       // Falling behind is not a reason to skip ahead — that is exactly the
       // divergence lockstep exists to prevent — so we wait, and say who for.

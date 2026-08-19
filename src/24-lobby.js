@@ -321,16 +321,35 @@ function netPrewarm(){
   try{fetch(netHttpUrl()+'/healthz',{mode:'no-cors',cache:'no-store'}).catch(()=>{});}catch(e){}
 }
 netPrewarm();
-/* Join-by-URL: ?room=CODE deep-links straight into the join flow — phones
-   share via messaging apps, and a tappable link beats reading a code aloud. */
+/* Challenge deep links — the link IS the invitation:
+   ?room=CODE  → straight into the join flow (live multiplayer)
+   ?seed=N     → seed box prefilled (fight a friend's exact battle)
+   ?daily=KEY  → today's Daily called out (or "that day has passed") */
 addEventListener('load',()=>{
   try{
-    const c=(new URLSearchParams(location.search).get('room')||'')
-      .toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4);
+    const q=new URLSearchParams(location.search);
+    const c=(q.get('room')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4);
     if(c.length===4&&netAvailable()){
       mpShow();
       mpEl('mpCode').value=c;
       mpStatus('Invited to room '+c+' — enter your name and press Join');
+      return;
+    }
+    const sd=(q.get('seed')||'').replace(/\D/g,'').slice(0,10);
+    if(sd){
+      const si=document.getElementById('seedIn');
+      if(si){si.value=sd;
+        toast('⚔️ Challenge accepted — seed '+sd+' is loaded. Press Begin the Conquest!');}
+      return;
+    }
+    const dk=(q.get('daily')||'').replace(/\D/g,'').slice(0,8);
+    if(dk){
+      const db=document.getElementById('dailyBlurb'),today=dailySeed().key;
+      if(+dk===today){
+        if(db)db.textContent='⚔️ A friend challenged you to TODAY\'S Daily — press 📅 Daily Challenge!';
+        const b=document.getElementById('dailyBtn');
+        if(b)b.style.boxShadow='0 0 0 3px #c9a227';
+      }else if(db)db.textContent='That challenge was for an earlier day — today\'s Daily awaits.';
     }
   }catch(e){}
 });

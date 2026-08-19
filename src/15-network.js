@@ -12,7 +12,33 @@
    Every second each peer posts stateHash(); the relay shouts if two disagree.
    A desync is a bug, not a hiccup, so the match halts loudly instead of
    drifting for ten minutes. */
-const NET_LAG=5;              // 250ms of scheduling slack
+const NET_LAG=5;              // 250ms of scheduling slack — the FLOOR (AoE's classic sweet spot)
+/* Adaptive scheduling horizon (the "1500 Archers" idea, adapted): the turn
+   length is fixed at 50ms, so the knob is how many turns ahead THIS peer
+   schedules its own orders. That is a purely local choice — the lockstep
+   contract (a turn runs when every list has arrived) is untouched, so peers
+   may run different horizons. A phone on a slow cell link raises its own
+   horizon so its orders still arrive before the others need them, trading its
+   OWN command latency for nobody stalling. Drifts one turn at a time on a
+   jitter-weighted RTT (design for the tails, not the mean), never jumps. */
+let netLagDyn=NET_LAG;        // [NET_LAG..12] turns (250..600ms)
+let netRttAvg=-1,netRttMax=0,netPingSentAt=0,netPingLast=0,netLagSaid=false,netLagCalm=0;
+function netLagTick(now){
+  if(!netSock||netSock.readyState!==1||netReplaying)return;
+  if(now-netPingLast<5000)return;
+  netPingLast=now;netPingSentAt=performance.now();
+  netSend({t:'ping'});
+}
+function netLagSample(rtt){
+  netRttAvg=netRttAvg<0?rtt:netRttAvg*.7+rtt*.3;
+  netRttMax=Math.max(netRttMax*.85,rtt);          // decaying peak ≈ the tail that matters
+  const need=Math.min(12,Math.max(NET_LAG,Math.ceil((netRttMax+120)/50)));
+  if(need>netLagDyn){netLagDyn++;netLagCalm=0;}    // one turn per 5s sample, never a jump
+  else if(need<netLagDyn&&++netLagCalm>=3){netLagCalm=0;netLagDyn--;} // descend after 15s calm per step
+  else if(need>=netLagDyn)netLagCalm=0;
+  if(netLagDyn>=8&&!netLagSaid){netLagSaid=true;
+    feed('Slow connection — your orders take a moment longer so nobody stalls');}
+}
 let netSock=null,netRoom='',netHost=false,netName='';
 let netTurn=0;                // the next turn to execute
 let netIn=new Map();          // turn -> {seat: cmds}
@@ -64,6 +90,7 @@ function netReset(){
   netSendFrom=0;netReplay=null;netReplaying=false;
   netInHash=2166136261>>>0;
   clearTimeout(netProbeT);clearTimeout(netRejoinT);netRejoinT=null;netRejoinN=99;
+  netLagDyn=NET_LAG;netRttAvg=-1;netRttMax=0;netPingSentAt=0;netPingLast=0;netLagSaid=false;netLagCalm=0;
   const ov=document.getElementById('netCatch');if(ov)ov.style.display='none';
 }
 function netConnect(then){
@@ -146,7 +173,9 @@ function netOn(m){
       bag[m.seat]=m.cmds;
       break;}
     case 'pong':
-      netPongAt=performance.now();break;
+      netPongAt=performance.now();
+      if(netPingSentAt){netLagSample(netPongAt-netPingSentAt);netPingSentAt=0;}
+      break;
     case 'desync':{
       /* The hash wire format is "<state>.<inputs>" — split it and say WHICH
          side disagreed. Inputs differing = the network layer delivered
@@ -197,6 +226,7 @@ function netBegin(m){
   netSendFrom=0;netHumanAt=new Map();
   netInHash=2166136261>>>0;
   clearTimeout(netRejoinT);netRejoinT=null;netRejoinN=99;
+  netLagDyn=NET_LAG;netRttAvg=-1;netRttMax=0;netPingSentAt=0;netPingLast=0;netLagSaid=false;netLagCalm=0;
   cmdQ=[];
   pendingSeed=m.seed>>>0;
   document.getElementById('mpOverlay').style.display='none';
@@ -241,6 +271,7 @@ function netRejoin(m){
   netTurn=0;netIn=new Map();netSent=-1;netStall=0;netStallSeat=-1;
   netInHash=2166136261>>>0;                 // the replay re-folds the same stream
   clearTimeout(netRejoinT);netRejoinT=null;netRejoinN=99;  // recovery succeeded — stop knocking
+  netLagDyn=NET_LAG;netRttAvg=-1;netRttMax=0;netPingSentAt=0;netPingLast=0;netLagSaid=false;netLagCalm=0;
   // Deliberately NOT seeded from the relay's current aiSeats: the journal's own
   // handovers rebuild this, and a seat that left, came back and left again would
   // otherwise end up mislabelled.
@@ -388,7 +419,7 @@ function netGoOffline(reason){
   const mine=[];
   for(const [turn,bag] of netIn)if(turn>=netTurn&&bag[localP])mine.push([turn,bag[localP]]);
   netMode=false;netClose();
-  for(let t=netTurn;mine.length&&t<netTurn+NET_LAG+2;t++){
+  for(let t=netTurn;mine.length&&t<netTurn+netLagDyn+2;t++){
     const hit=mine.find(x=>x[0]===t);
     if(hit)for(const c of hit[1])applyCmd(c);
   }
@@ -406,7 +437,7 @@ function netStore(seat,turn,cmds){
   bag[seat]=cmds;
 }
 function netTopUp(){
-  // keep the outbound window full: every turn up to netTurn+NET_LAG has been
+  // keep the outbound window full: every turn up to netTurn+netLagDyn has been
   // told what we intend to do, even if the answer is "nothing".
   // netSendFrom is the first turn this machine ANSWERS FOR. While the computer
   // holds our seat it is null and we say nothing at all — sending then would
@@ -414,7 +445,7 @@ function netTopUp(){
   // absence implies.
   if(netSendFrom===null)return;
   if(netSent<netSendFrom-1)netSent=netSendFrom-1;
-  const end=Math.max(netTurn,netSendFrom)+NET_LAG;
+  const end=Math.max(netTurn,netSendFrom)+netLagDyn;
   while(netSent<end){
     const turn=netSent+1;
     const cmds=takeCmds();

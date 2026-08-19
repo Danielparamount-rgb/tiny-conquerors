@@ -101,6 +101,19 @@
   body.lefty #chatWheel{right:auto;left:50px;}
   body.bigui .cmd{font-size:13px;}
   body.bigui #btnRow button.cmd{min-height:70px;}
+  /* Larger text: raises the HUD's smallest type above the ~11pt accessibility
+     floor (labels were 9px, costs 8.5px — the most-complained-about class of
+     accessibility gap). Banners keep ellipsis, so nothing overflows. */
+  body.bigtext .cmd b{font-size:11px;line-height:1.2;}
+  body.bigtext .cmd .cost{font-size:10.5px;}
+  body.bigtext .cmd.txt .cost,body.bigtext .cmd.go .cost,body.bigtext .cmd.warn .cost{font-size:11px;}
+  body.bigtext #hpTxt{font-size:11px;}
+  body.bigtext #statRows{font-size:12px;}
+  body.bigtext #scrollHint{font-size:12px;}
+  body.bigtext #selGrid .more{font-size:11.5px;}
+  body.bigtext .sub{font-size:13.5px;}
+  body.bigtext #feed{font-size:12.5px;}
+  body.bigtext #ticker{font-size:12px;}
   #boxBtn.armed{border-color:var(--gold);color:var(--gold);background:rgba(60,45,20,.9);}
   /* always-on deselect: dim when there's nothing to clear, red-hot when there is */
   #deselBtn{opacity:.4;transition:opacity .12s,border-color .12s,color .12s;}

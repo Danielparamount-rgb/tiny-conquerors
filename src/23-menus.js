@@ -101,13 +101,29 @@ document.getElementById('dailyBtn').onclick=()=>{
 {const db=document.getElementById('dailyBlurb');
  if(db){db.style.display='';
    db.textContent='Daily: one shared battle for every player, everywhere. Beat your friends’ time.';}}
+/* The share artifact does the marketing (the Wordle lesson): one tap, tells a
+   story, spoiler-free, and the link IS the challenge — ?daily= / ?seed= land
+   the friend one press from fighting the identical battle. */
 document.getElementById('shareSeedBtn').onclick=()=>{
   const btn=document.getElementById('shareSeedBtn');
   const m=Math.floor(G.t/60),s2=Math.floor(G.t%60);
-  const txt=(dailyRun?'Tiny Conquerors Daily '+dailyRun+' — ':'')
-    +(document.getElementById('endTitle').textContent==='Victory!'?'won':'fell')
-    +' in '+m+'m '+s2+'s on map seed '+gameSeed
-    +'. Play the same battle: tiny-conquerors.onrender.com → Map seed '+gameSeed;
+  const won=document.getElementById('endTitle').textContent==='Victory!';
+  const site='https://tiny-conquerors.onrender.com';
+  const time=m+'m '+(s2<10?'0':'')+s2+'s';
+  let txt;
+  if(dailyRun){
+    const k=String(dailyRun);
+    const nice=(+k.slice(6,8))+'.'+(+k.slice(4,6))+'.'+k.slice(0,4);
+    txt='⚔️ Tiny Conquerors Daily — '+nice+'\n'
+      +(won?'🏆 Victory in '+time:'💀 Fell after '+time)+'\n'
+      +'Everyone fights the same battle today. Beat me:\n'
+      +site+'/?daily='+k;
+  }else{
+    txt='⚔️ Tiny Conquerors — '+(won?'🏆 victory':'💀 defeat')+' in '+time
+      +' on seed '+gameSeed+'\n'
+      +'Fight the exact same battle:\n'
+      +site+'/?seed='+gameSeed;
+  }
   const done=ok=>{btn.textContent=ok?'✓ Copied — paste it anywhere':'Copy failed';
     setTimeout(()=>{if(btn.isConnected)btn.textContent='📋  Share this map';},2200);};
   try{navigator.clipboard.writeText(txt).then(()=>done(true),()=>done(false));}
@@ -143,6 +159,7 @@ document.getElementById('campBack').onclick=()=>{
 function applyBodyOpts(){
   document.body.classList.toggle('lefty',!!OPT.lefty);
   document.body.classList.toggle('bigui',!!OPT.bigui);
+  document.body.classList.toggle('bigtext',!!OPT.bigtext);
 }
 applyBodyOpts();
 function buildSettings(){
@@ -177,6 +194,7 @@ function buildSettings(){
   row('🔋 Battery saver (30 fps)',toggle('fps30',false));
   row('🫲 Left-handed layout',toggle('lefty',false,applyBodyOpts));
   row('🔍 Larger buttons',toggle('bigui',false,applyBodyOpts));
+  row('🔠 Larger text',toggle('bigtext',false,applyBodyOpts));
   row('✨ HD unit sprites (large download)',toggle('hdSprites',true,()=>{
     if(G&&!G.over)toast('Applies when you leave the battle');
     else{toast('Reloading with the new art…');setTimeout(()=>location.reload(),600);}

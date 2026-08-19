@@ -111,6 +111,19 @@
   body.lefty #chatWheel{right:auto;left:50px;}
   body.bigui .cmd{font-size:13px;}
   body.bigui #btnRow button.cmd{min-height:70px;}
+  /* Larger text: raises the HUD's smallest type above the ~11pt accessibility
+     floor (labels were 9px, costs 8.5px — the most-complained-about class of
+     accessibility gap). Banners keep ellipsis, so nothing overflows. */
+  body.bigtext .cmd b{font-size:11px;line-height:1.2;}
+  body.bigtext .cmd .cost{font-size:10.5px;}
+  body.bigtext .cmd.txt .cost,body.bigtext .cmd.go .cost,body.bigtext .cmd.warn .cost{font-size:11px;}
+  body.bigtext #hpTxt{font-size:11px;}
+  body.bigtext #statRows{font-size:12px;}
+  body.bigtext #scrollHint{font-size:12px;}
+  body.bigtext #selGrid .more{font-size:11.5px;}
+  body.bigtext .sub{font-size:13.5px;}
+  body.bigtext #feed{font-size:12.5px;}
+  body.bigtext #ticker{font-size:12px;}
   #boxBtn.armed{border-color:var(--gold);color:var(--gold);background:rgba(60,45,20,.9);}
   /* always-on deselect: dim when there's nothing to clear, red-hot when there is */
   #deselBtn{opacity:.4;transition:opacity .12s,border-color .12s,color .12s;}
@@ -2676,7 +2689,33 @@ const TAUNTS=['Yes','No','Attack now!','Defend the base!','I need food','I need 
    Every second each peer posts stateHash(); the relay shouts if two disagree.
    A desync is a bug, not a hiccup, so the match halts loudly instead of
    drifting for ten minutes. */
-const NET_LAG=5;              // 250ms of scheduling slack
+const NET_LAG=5;              // 250ms of scheduling slack — the FLOOR (AoE's classic sweet spot)
+/* Adaptive scheduling horizon (the "1500 Archers" idea, adapted): the turn
+   length is fixed at 50ms, so the knob is how many turns ahead THIS peer
+   schedules its own orders. That is a purely local choice — the lockstep
+   contract (a turn runs when every list has arrived) is untouched, so peers
+   may run different horizons. A phone on a slow cell link raises its own
+   horizon so its orders still arrive before the others need them, trading its
+   OWN command latency for nobody stalling. Drifts one turn at a time on a
+   jitter-weighted RTT (design for the tails, not the mean), never jumps. */
+let netLagDyn=NET_LAG;        // [NET_LAG..12] turns (250..600ms)
+let netRttAvg=-1,netRttMax=0,netPingSentAt=0,netPingLast=0,netLagSaid=false,netLagCalm=0;
+function netLagTick(now){
+  if(!netSock||netSock.readyState!==1||netReplaying)return;
+  if(now-netPingLast<5000)return;
+  netPingLast=now;netPingSentAt=performance.now();
+  netSend({t:'ping'});
+}
+function netLagSample(rtt){
+  netRttAvg=netRttAvg<0?rtt:netRttAvg*.7+rtt*.3;
+  netRttMax=Math.max(netRttMax*.85,rtt);          // decaying peak ≈ the tail that matters
+  const need=Math.min(12,Math.max(NET_LAG,Math.ceil((netRttMax+120)/50)));
+  if(need>netLagDyn){netLagDyn++;netLagCalm=0;}    // one turn per 5s sample, never a jump
+  else if(need<netLagDyn&&++netLagCalm>=3){netLagCalm=0;netLagDyn--;} // descend after 15s calm per step
+  else if(need>=netLagDyn)netLagCalm=0;
+  if(netLagDyn>=8&&!netLagSaid){netLagSaid=true;
+    feed('Slow connection — your orders take a moment longer so nobody stalls');}
+}
 let netSock=null,netRoom='',netHost=false,netName='';
 let netTurn=0;                // the next turn to execute
 let netIn=new Map();          // turn -> {seat: cmds}
@@ -2728,6 +2767,7 @@ function netReset(){
   netSendFrom=0;netReplay=null;netReplaying=false;
   netInHash=2166136261>>>0;
   clearTimeout(netProbeT);clearTimeout(netRejoinT);netRejoinT=null;netRejoinN=99;
+  netLagDyn=NET_LAG;netRttAvg=-1;netRttMax=0;netPingSentAt=0;netPingLast=0;netLagSaid=false;netLagCalm=0;
   const ov=document.getElementById('netCatch');if(ov)ov.style.display='none';
 }
 function netConnect(then){
@@ -2810,7 +2850,9 @@ function netOn(m){
       bag[m.seat]=m.cmds;
       break;}
     case 'pong':
-      netPongAt=performance.now();break;
+      netPongAt=performance.now();
+      if(netPingSentAt){netLagSample(netPongAt-netPingSentAt);netPingSentAt=0;}
+      break;
     case 'desync':{
       /* The hash wire format is "<state>.<inputs>" — split it and say WHICH
          side disagreed. Inputs differing = the network layer delivered
@@ -2861,6 +2903,7 @@ function netBegin(m){
   netSendFrom=0;netHumanAt=new Map();
   netInHash=2166136261>>>0;
   clearTimeout(netRejoinT);netRejoinT=null;netRejoinN=99;
+  netLagDyn=NET_LAG;netRttAvg=-1;netRttMax=0;netPingSentAt=0;netPingLast=0;netLagSaid=false;netLagCalm=0;
   cmdQ=[];
   pendingSeed=m.seed>>>0;
   document.getElementById('mpOverlay').style.display='none';
@@ -2905,6 +2948,7 @@ function netRejoin(m){
   netTurn=0;netIn=new Map();netSent=-1;netStall=0;netStallSeat=-1;
   netInHash=2166136261>>>0;                 // the replay re-folds the same stream
   clearTimeout(netRejoinT);netRejoinT=null;netRejoinN=99;  // recovery succeeded — stop knocking
+  netLagDyn=NET_LAG;netRttAvg=-1;netRttMax=0;netPingSentAt=0;netPingLast=0;netLagSaid=false;netLagCalm=0;
   // Deliberately NOT seeded from the relay's current aiSeats: the journal's own
   // handovers rebuild this, and a seat that left, came back and left again would
   // otherwise end up mislabelled.
@@ -3052,7 +3096,7 @@ function netGoOffline(reason){
   const mine=[];
   for(const [turn,bag] of netIn)if(turn>=netTurn&&bag[localP])mine.push([turn,bag[localP]]);
   netMode=false;netClose();
-  for(let t=netTurn;mine.length&&t<netTurn+NET_LAG+2;t++){
+  for(let t=netTurn;mine.length&&t<netTurn+netLagDyn+2;t++){
     const hit=mine.find(x=>x[0]===t);
     if(hit)for(const c of hit[1])applyCmd(c);
   }
@@ -3070,7 +3114,7 @@ function netStore(seat,turn,cmds){
   bag[seat]=cmds;
 }
 function netTopUp(){
-  // keep the outbound window full: every turn up to netTurn+NET_LAG has been
+  // keep the outbound window full: every turn up to netTurn+netLagDyn has been
   // told what we intend to do, even if the answer is "nothing".
   // netSendFrom is the first turn this machine ANSWERS FOR. While the computer
   // holds our seat it is null and we say nothing at all — sending then would
@@ -3078,7 +3122,7 @@ function netTopUp(){
   // absence implies.
   if(netSendFrom===null)return;
   if(netSent<netSendFrom-1)netSent=netSendFrom-1;
-  const end=Math.max(netTurn,netSendFrom)+NET_LAG;
+  const end=Math.max(netTurn,netSendFrom)+netLagDyn;
   while(netSent<end){
     const turn=netSent+1;
     const cmds=takeCmds();
@@ -11793,13 +11837,29 @@ document.getElementById('dailyBtn').onclick=()=>{
 {const db=document.getElementById('dailyBlurb');
  if(db){db.style.display='';
    db.textContent='Daily: one shared battle for every player, everywhere. Beat your friends’ time.';}}
+/* The share artifact does the marketing (the Wordle lesson): one tap, tells a
+   story, spoiler-free, and the link IS the challenge — ?daily= / ?seed= land
+   the friend one press from fighting the identical battle. */
 document.getElementById('shareSeedBtn').onclick=()=>{
   const btn=document.getElementById('shareSeedBtn');
   const m=Math.floor(G.t/60),s2=Math.floor(G.t%60);
-  const txt=(dailyRun?'Tiny Conquerors Daily '+dailyRun+' — ':'')
-    +(document.getElementById('endTitle').textContent==='Victory!'?'won':'fell')
-    +' in '+m+'m '+s2+'s on map seed '+gameSeed
-    +'. Play the same battle: tiny-conquerors.onrender.com → Map seed '+gameSeed;
+  const won=document.getElementById('endTitle').textContent==='Victory!';
+  const site='https://tiny-conquerors.onrender.com';
+  const time=m+'m '+(s2<10?'0':'')+s2+'s';
+  let txt;
+  if(dailyRun){
+    const k=String(dailyRun);
+    const nice=(+k.slice(6,8))+'.'+(+k.slice(4,6))+'.'+k.slice(0,4);
+    txt='⚔️ Tiny Conquerors Daily — '+nice+'\n'
+      +(won?'🏆 Victory in '+time:'💀 Fell after '+time)+'\n'
+      +'Everyone fights the same battle today. Beat me:\n'
+      +site+'/?daily='+k;
+  }else{
+    txt='⚔️ Tiny Conquerors — '+(won?'🏆 victory':'💀 defeat')+' in '+time
+      +' on seed '+gameSeed+'\n'
+      +'Fight the exact same battle:\n'
+      +site+'/?seed='+gameSeed;
+  }
   const done=ok=>{btn.textContent=ok?'✓ Copied — paste it anywhere':'Copy failed';
     setTimeout(()=>{if(btn.isConnected)btn.textContent='📋  Share this map';},2200);};
   try{navigator.clipboard.writeText(txt).then(()=>done(true),()=>done(false));}
@@ -11835,6 +11895,7 @@ document.getElementById('campBack').onclick=()=>{
 function applyBodyOpts(){
   document.body.classList.toggle('lefty',!!OPT.lefty);
   document.body.classList.toggle('bigui',!!OPT.bigui);
+  document.body.classList.toggle('bigtext',!!OPT.bigtext);
 }
 applyBodyOpts();
 function buildSettings(){
@@ -11869,6 +11930,7 @@ function buildSettings(){
   row('🔋 Battery saver (30 fps)',toggle('fps30',false));
   row('🫲 Left-handed layout',toggle('lefty',false,applyBodyOpts));
   row('🔍 Larger buttons',toggle('bigui',false,applyBodyOpts));
+  row('🔠 Larger text',toggle('bigtext',false,applyBodyOpts));
   row('✨ HD unit sprites (large download)',toggle('hdSprites',true,()=>{
     if(G&&!G.over)toast('Applies when you leave the battle');
     else{toast('Reloading with the new art…');setTimeout(()=>location.reload(),600);}
@@ -12364,16 +12426,35 @@ function netPrewarm(){
   try{fetch(netHttpUrl()+'/healthz',{mode:'no-cors',cache:'no-store'}).catch(()=>{});}catch(e){}
 }
 netPrewarm();
-/* Join-by-URL: ?room=CODE deep-links straight into the join flow — phones
-   share via messaging apps, and a tappable link beats reading a code aloud. */
+/* Challenge deep links — the link IS the invitation:
+   ?room=CODE  → straight into the join flow (live multiplayer)
+   ?seed=N     → seed box prefilled (fight a friend's exact battle)
+   ?daily=KEY  → today's Daily called out (or "that day has passed") */
 addEventListener('load',()=>{
   try{
-    const c=(new URLSearchParams(location.search).get('room')||'')
-      .toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4);
+    const q=new URLSearchParams(location.search);
+    const c=(q.get('room')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4);
     if(c.length===4&&netAvailable()){
       mpShow();
       mpEl('mpCode').value=c;
       mpStatus('Invited to room '+c+' — enter your name and press Join');
+      return;
+    }
+    const sd=(q.get('seed')||'').replace(/\D/g,'').slice(0,10);
+    if(sd){
+      const si=document.getElementById('seedIn');
+      if(si){si.value=sd;
+        toast('⚔️ Challenge accepted — seed '+sd+' is loaded. Press Begin the Conquest!');}
+      return;
+    }
+    const dk=(q.get('daily')||'').replace(/\D/g,'').slice(0,8);
+    if(dk){
+      const db=document.getElementById('dailyBlurb'),today=dailySeed().key;
+      if(+dk===today){
+        if(db)db.textContent='⚔️ A friend challenged you to TODAY\'S Daily — press 📅 Daily Challenge!';
+        const b=document.getElementById('dailyBtn');
+        if(b)b.style.boxShadow='0 0 0 3px #c9a227';
+      }else if(db)db.textContent='That challenge was for an earlier day — today\'s Daily awaits.';
     }
   }catch(e){}
 });
@@ -15931,6 +16012,7 @@ function frame(now){
     acc+=dt;
     let guard=0;
     if(netMode){
+      netLagTick(now);   // RTT sampling for the adaptive scheduling horizon
       // A networked turn runs only when every peer's orders for it have landed.
       // Falling behind is not a reason to skip ahead — that is exactly the
       // divergence lockstep exists to prevent — so we wait, and say who for.
@@ -16379,7 +16461,7 @@ requestAnimationFrame(frame);
 
 <script>
 (function(){
-  var BUILD = 'tq-v74';
+  var BUILD = 'tq-v75';
   // The game reads this for the multiplayer version gate (gameVer() falls back
   // to 'dev' when the wrapper is absent, i.e. local test.html / the artifact).
   window.GAMEVER = BUILD;
