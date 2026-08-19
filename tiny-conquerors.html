@@ -5045,7 +5045,7 @@ let fogDirty=true,lastTreeCount=0,grainPat=null,groundPat=null,dirtPatches=[];
    a trebuchet stone across the map is a murmur, one at your feet is a thump. */
 let shakeAmp=0;
 function shakeAt(wx,wy,pow){
-  if(OPT.reduceMotion||!G)return;
+  if(OPT.reduceMotion||OPT.r99||!G)return; // the '99 compositor never shook a screen
   const p=isoE(wx,wy);
   const sx=(p.x-G.cam.x)*G.cam.z,sy=(p.y-G.cam.y)*G.cam.z;
   const d=Math.hypot(sx-vw/2,sy-vh/2);
@@ -5878,6 +5878,108 @@ if(OPT.cbPal){
             ['#e69f00','#9c6c00','#f3c866']]; // amber
   CB.forEach((c,i)=>{TEAMS[i].main=c[0];TEAMS[i].dark=c[1];TEAMS[i].trim=c[2];});
 }
+/* ================= Classic '99 — PAL99 master palette + quantizer ==========
+   GFX99-PLAN Phase A (points 2-3). ONE 256-color indexed palette for
+   everything Classic mode draws; texture comes from ordered Bayer dither,
+   never gradients — dither IS the era's texture. The first 64 indices are 8
+   team ramps of 8 shades derived from TEAMS at boot, so team colour is a ramp
+   remap (the SC/AoE2 mechanism) and the colourblind palette flows through
+   automatically. Render-side only; the sim never sees any of this. */
+const R99={};
+(function(){
+  const P=[];
+  const hex=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
+  const L=(a,b,t)=>Math.round(a+(b-a)*t);
+  const ramp=(n,c0,c1)=>{const s=P.length;
+    for(let i=0;i<n;i++){const t=n===1?0:i/(n-1);
+      P.push([L(c0[0],c1[0],t),L(c0[1],c1[1],t),L(c0[2],c1[2],t)]);}
+    return s;};
+  for(let tI=0;tI<8;tI++){ // team ramps: deep shadow -> main -> trim highlight
+    const m=hex(TEAMS[tI].main),d=hex(TEAMS[tI].dark),tr=hex(TEAMS[tI].trim);
+    ramp(4,[Math.round(d[0]*.45),Math.round(d[1]*.45),Math.round(d[2]*.45)],m);
+    ramp(4,m,tr);
+  }
+  R99.GRASS =ramp(12,[38,52,22],[168,190,110]);   // meadow greens
+  R99.OLIVE =ramp(8,[52,58,30],[142,150,88]);     // dry olive grass
+  R99.EARTH =ramp(10,[54,38,20],[196,166,112]);   // earth browns
+  R99.SAND  =ramp(8,[120,96,58],[228,206,158]);
+  R99.STONE =ramp(10,[52,52,58],[200,200,206]);
+  R99.TIMBER=ramp(8,[58,38,20],[168,126,74]);
+  R99.LEAF  =ramp(10,[14,26,10],[96,128,58]);     // deep foliage / forest floor
+  R99.WATER =ramp(8,[18,46,78],[110,178,210]);    // THE cycled ramp
+  R99.FIRE  =ramp(8,[96,20,8],[255,238,170]);     // ember -> white heart
+  R99.SKIN99=ramp(6,[96,62,40],[232,190,150]);
+  R99.STEEL =ramp(6,[70,74,86],[214,220,232]);
+  R99.GOLD99=ramp(6,[110,74,18],[244,214,120]);
+  R99.BONE  =ramp(8,[40,32,22],[240,230,205]);    // bone / parchment / cloth
+  R99.TERRA9=ramp(6,[130,44,32],[235,150,120]);
+  R99.DARKS =ramp(6,[10,8,6],[74,66,52]);         // outlines, night, fog hue
+  R99.BACK  =ramp(4,[16,22,8],[60,70,40]);        // backdrop greens
+  R99.N=P.length;                                 // real colors; the pad below is never matched
+  while(P.length<256)P.push([255,0,255]);
+  R99.P=P;
+  let LUT=null;
+  R99.lut=()=>{                                   // 32^3 nearest-index cache, built once (~30ms)
+    if(LUT)return LUT;
+    LUT=new Uint8Array(32768);
+    for(let ri=0;ri<32;ri++)for(let gi=0;gi<32;gi++)for(let bi=0;bi<32;bi++){
+      const r=ri*8+4,g=gi*8+4,b=bi*8+4;let best=0,bd=1e9;
+      for(let i=0;i<R99.N;i++){const c=P[i];
+        const dr=r-c[0],dg=g-c[1],db=b-c[2];
+        const d=dr*dr*2+dg*dg*4+db*db;            // green-weighted, the eye's own bias
+        if(d<bd){bd=d;best=i;}}
+      LUT[ri<<10|gi<<5|bi]=best;}
+    return LUT;};
+  const BAYER=[0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5];
+  /* In-place indexed + Bayer-dithered region of any canvas. Alpha goes 1-bit
+     (the hard-pixel contract): <128 is gone, everything else is solid. */
+  R99.quant=(c,x0,y0,w,h,amp)=>{
+    const g=c.getContext('2d');
+    x0=Math.max(0,x0|0);y0=Math.max(0,y0|0);
+    w=Math.min(Math.ceil(w),c.width-x0);h=Math.min(Math.ceil(h),c.height-y0);
+    if(w<=0||h<=0)return;
+    const im=g.getImageData(x0,y0,w,h),d=im.data,LU=R99.lut();
+    const A=amp===undefined?18:amp;
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+      const o=(y*w+x)*4;
+      if(d[o+3]<128){d[o+3]=0;continue;}
+      const bb=(BAYER[((y+y0)&3)*4+((x+x0)&3)]/15-.5)*A;
+      const r=Math.max(0,Math.min(255,d[o]+bb));
+      const gg=Math.max(0,Math.min(255,d[o+1]+bb));
+      const b2=Math.max(0,Math.min(255,d[o+2]+bb));
+      const pc=P[LU[(r>>3)<<10|(gg>>3)<<5|(b2>>3)]];
+      d[o]=pc[0];d[o+1]=pc[1];d[o+2]=pc[2];d[o+3]=255;
+    }
+    g.putImageData(im,x0,y0);};
+  /* Palette-cycled water: four pre-built tile diamonds — CALM dark water
+     (two near-identical shades broken by dither) with sparse sparkles that
+     walk the ramp per frame. The era's water was mostly flat and dark; the
+     life was in a few travelling glints, never in stripes. */
+  let WT=null;
+  R99.waterTile=f=>{
+    if(!WT){
+      WT=[];
+      const col=i=>{const pc=P[R99.WATER+i];return 'rgb('+pc[0]+','+pc[1]+','+pc[2]+')';};
+      for(let fr=0;fr<4;fr++){
+        const c=document.createElement('canvas');c.width=IW*2;c.height=IH*2;
+        const g=c.getContext('2d');
+        g.beginPath();g.moveTo(IW,0);g.lineTo(IW*2,IH);g.lineTo(IW,IH*2);g.lineTo(0,IH);g.closePath();g.clip();
+        g.fillStyle=col(2);g.fillRect(0,0,IW*2,IH*2);          // the calm base
+        g.fillStyle=col(3);                                     // dithered near-shade
+        for(let y=0;y<IH*2;y++)for(let x=(y&1);x<IW*2;x+=2)
+          if(((x*7+y*13)>>2)%3===0)g.fillRect(x,y,1,1);
+        // a handful of glints whose position walks with the frame
+        for(let s=0;s<4;s++){
+          const gx=(s*17+fr*6+3)%(IW*2-6),gy=(s*9+fr*3+2)%(IH*2-2);
+          g.fillStyle=col(s===0?6:5);
+          g.fillRect(gx,gy,s===0?4:3,1);
+        }
+        WT.push(c);
+      }
+    }
+    return WT[f&3];};
+  R99.zoomSnap=z=>[.5,.7,1,1.4,2].reduce((a,b)=>Math.abs(b-z)<Math.abs(a-z)?b:a);
+})();
 // no black outlines — forms read through value contrast; edges are a soft warm
 // shadow tone (late-90s pre-rendered look: warm key upper-left, cool ambient fill)
 const OUT='rgba(50,33,17,.72)',SKIN='#e0b78e'; // a notch darker/crisper, still warm — the reference sprites pop harder
@@ -6051,6 +6153,7 @@ function stampWorn(b){
     tctx.fillRect(px,py,2.2+rw()*2,2+rw()*1.8);
   }
   tctx.globalAlpha=1;
+  if(OPT.r99)R99.quant(terrain,(cx-r)*TREZT,(cy-r)*TREZT,r*2*TREZT,r*2*TREZT); // mid-game stamps stay indexed
 }
 function stampCleared(x,y){
   // felled forest tile -> leaf-litter clearing + stump (refreshTerrain only runs
@@ -6074,6 +6177,7 @@ function stampCleared(x,y){
   tctx.beginPath();tctx.ellipse(sx,sy-2,2.6,1.5,0,0,7);tctx.fill();
   tctx.strokeStyle='#8a6a3a';tctx.lineWidth=.7;
   tctx.beginPath();tctx.ellipse(sx,sy-2,1.4,.8,0,0,7);tctx.stroke();
+  if(OPT.r99)R99.quant(terrain,(px-2)*TREZT,(py-2)*TREZT,(TILE+4)*TREZT,(TILE+4)*TREZT); // felled tiles stay indexed
 }
 // (render-side version counters are declared above genMap — see there)
 function refreshTerrain(){
@@ -6547,6 +6651,11 @@ function refreshTerrain(){
     }
     tctx.lineCap='butt';
   }
+  /* Classic '99: the whole painted ground — shores, forest floor, doodads,
+     hills — passes through PAL99 + Bayer in one deterministic post-pass.
+     Every gradient becomes dither; every colour becomes one of 256. One-time
+     cost behind the Start press (~150-400ms), like the rest of genMap. */
+  if(OPT.r99)R99.quant(terrain,0,0,terrain.width,terrain.height);
   miniResDirty=true; // dirtPatches feed the cached minimap layer
 }
 /* ---------- resource sprites (billboards, y-sorted with units) ---------- */
@@ -10607,8 +10716,13 @@ function draw(){
   ctx.fillStyle='#12160b';ctx.fillRect(0,0,vw,vh);
   const z=G.cam.z;
   ctx.save();
-  ctx.scale(z,z);ctx.translate(-G.cam.x,-G.cam.y);
-  ctx.imageSmoothingEnabled=true;
+  ctx.scale(z,z);
+  // Classic '99 hard-pixel contract: the camera snaps to whole SCREEN pixels
+  // (render-side rounding at the transform — G.cam itself is never touched)
+  // and nothing is smoothed. Fractional sampling is the #1 modern tell.
+  if(OPT.r99)ctx.translate(-Math.round(G.cam.x*z)/z,-Math.round(G.cam.y*z)/z);
+  else ctx.translate(-G.cam.x,-G.cam.y);
+  ctx.imageSmoothingEnabled=!OPT.r99;
   // terrain skewed into the isometric plane
   ctx.save();
   ctx.transform(IW/(TILE*TREZT),IH/(TILE*TREZT),-IW/(TILE*TREZT),IH/(TILE*TREZT),0,0);
@@ -10629,7 +10743,20 @@ function draw(){
      sweeps across neighbouring tiles instead of each tile twinkling alone.
      Shore tiles (w.e) get a lapping foam arc on a slower third phase. All of
      it is render-side cosmetics on G.t; the sim never looks at any of this. */
-  if(G.waterList)for(const w of G.waterList){
+  /* Classic '99 water: the palette cycle. Four pre-built diamonds whose bands
+     walk the water ramp are blitted over visible sea tiles — the whole water
+     shimmers by index rotation, the era's own trick. Wall-clock like the 3D
+     water (rain keeps falling in pause); min zoom keeps the baked frame. */
+  if(OPT.r99&&G.waterList&&!RIG_LOD){
+    const wf=(performance.now()/140)|0;
+    for(const w of G.waterList){
+      const p=isoPt(w.x,w.y);
+      if(p.x<vx0-IW||p.x>vx1+IW||p.y<vy0||p.y>vy1)continue;
+      if(!tileKnown(w.x,w.y))continue;
+      ctx.drawImage(R99.waterTile(wf+((w.x+w.y*3)&3)),p.x-IW,p.y);
+    }
+  }
+  else if(!OPT.r99&&G.waterList)for(const w of G.waterList){
     const p=isoPt(w.x+.5,w.y+.5);
     if(p.x<vx0||p.x>vx1||p.y<vy0||p.y>vy1)continue;
     // two swell trains crossing at an angle, world-coherent
@@ -10806,13 +10933,19 @@ function draw(){
   if(fogDirty)renderFogCanvas();
   ctx.save();
   ctx.transform(IW,IH,-IW,IH,0,0);
-  ctx.drawImage(fogS,0,0,MAP,MAP);
-  // Slow-drifting mist, clipped to unexplored ground — shared with the 3D
-  // fog pass, which finally draws it too (it was a known 3D gap).
-  updateWisps();
-  ctx.globalAlpha=.35;
-  ctx.drawImage(wispC,0,0,MAP,MAP);
-  ctx.globalAlpha=1;
+  /* Classic '99 fog: blit the raw tile-resolution fog canvas with smoothing
+     off — inside the iso transform each fog cell lands as a HARD DIAMOND,
+     exactly the era's tile fog. Alphas untouched (phone-visibility gotcha);
+     the smooth 512px upscale and the drifting mist are the modern look. */
+  ctx.drawImage(OPT.r99?fogC:fogS,0,0,MAP,MAP);
+  if(!OPT.r99){
+    // Slow-drifting mist, clipped to unexplored ground — shared with the 3D
+    // fog pass, which finally draws it too (it was a known 3D gap).
+    updateWisps();
+    ctx.globalAlpha=.35;
+    ctx.drawImage(wispC,0,0,MAP,MAP);
+    ctx.globalAlpha=1;
+  }
   ctx.restore();
   ctx.restore();
   if(selBox){
@@ -10823,7 +10956,7 @@ function draw(){
     ctx.strokeStyle='rgba(255,224,130,.95)';ctx.lineWidth=1.5;
     ctx.setLineDash([6,4]);ctx.strokeRect(bx,by,bw,bh);ctx.setLineDash([]);
   }
-  if(vig&&vig.width&&vig.height)ctx.drawImage(vig,0,0,vw,vh);
+  if(!OPT.r99&&vig&&vig.width&&vig.height)ctx.drawImage(vig,0,0,vw,vh); // no soft vignette in '99
   if(G.ageFx>0){ // age-up bloom: warm wash that fades from the screen edges
     const a=Math.min(1,G.ageFx/1.4);
     const gr=ctx.createRadialGradient(vw/2,vh/2,Math.min(vw,vh)*.2,vw/2,vh/2,Math.hypot(vw,vh)*.55);
@@ -11064,6 +11197,9 @@ function bindView(el){
 bindView(view);bindView(view3);
 function zoomAt(nz,cx,cy){
   lastCamTouch=performance.now();
+  // Classic '99: zoom is STEPPED (integer-ish scales keep pixels crisp);
+  // continuous zoom is a modern tell. 3D keeps its free zoom.
+  if(OPT.r99&&!use3D)nz=R99.zoomSnap(nz);
   if(use3D){
     // keep the world point under the cursor fixed while zooming. sd2t scales
     // as 1/z, so d MUST be computed before G.cam.z changes.
@@ -12224,6 +12360,22 @@ document.getElementById('campBack').onclick=()=>{
   document.getElementById('campOverlay').style.display='none';
 };
 /* ================= settings ================= */
+/* Classic '99 toggle: regenerate the world's paintwork in the chosen look.
+   Both directions work mid-game — refreshTerrain repaints from scratch, so
+   leaving Classic restores the modern ground cleanly. Render-side only. */
+function apply99(){
+  document.body.classList.toggle('r99',!!OPT.r99);
+  if(G){
+    try{
+      refreshTerrain();
+      fogDirty=true;
+      wxWasClear=false;   // the weather glass repaints (grade back on, or off)
+      if(OPT.r99)G.cam.z=R99.zoomSnap(G.cam.z);
+      clampCam();
+    }catch(e){}
+  }
+}
+apply99();
 function applyBodyOpts(){
   document.body.classList.toggle('lefty',!!OPT.lefty);
   document.body.classList.toggle('bigui',!!OPT.bigui);
@@ -12262,6 +12414,7 @@ function buildSettings(){
   row('🌤 Reduce motion (no weather / sway)',toggle('reduceMotion',false));
   row('🔋 Battery saver (30 fps)',toggle('fps30',false));
   row('🫲 Left-handed layout',toggle('lefty',false,applyBodyOpts));
+  row('🕹 Classic \'99 graphics (Phase A/C — evolving)',toggle('r99',false,apply99));
   row('🔍 Larger buttons',toggle('bigui',false,applyBodyOpts));
   row('🔠 Larger text',toggle('bigtext',false,applyBodyOpts));
   row('🗺 Larger minimap (phones)',toggle('bigmap',false,applyBodyOpts));
@@ -16571,6 +16724,10 @@ function drawGrade(){
 let wxGrads=[];
 function drawWeather(){
   if(wxC.width!==vw||wxC.height!==vh){wxC.width=vw;wxC.height=vh;gradeKey='';wxWasClear=false;}
+  if(OPT.r99){ // Classic '99: no weather washes, no colour grade — a bare, honest sky
+    if(!wxWasClear){wxCtx.clearRect(0,0,wxC.width,wxC.height);wxWasClear=true;}
+    return;
+  }
   if(OPT.reduceMotion){ // settings: a calm sky for motion-sensitive players
     if(!wxWasClear){wxCtx.clearRect(0,0,wxC.width,wxC.height);drawGrade();wxWasClear=true;}
     return;

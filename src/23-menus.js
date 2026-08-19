@@ -228,6 +228,22 @@ document.getElementById('campBack').onclick=()=>{
   document.getElementById('campOverlay').style.display='none';
 };
 /* ================= settings ================= */
+/* Classic '99 toggle: regenerate the world's paintwork in the chosen look.
+   Both directions work mid-game — refreshTerrain repaints from scratch, so
+   leaving Classic restores the modern ground cleanly. Render-side only. */
+function apply99(){
+  document.body.classList.toggle('r99',!!OPT.r99);
+  if(G){
+    try{
+      refreshTerrain();
+      fogDirty=true;
+      wxWasClear=false;   // the weather glass repaints (grade back on, or off)
+      if(OPT.r99)G.cam.z=R99.zoomSnap(G.cam.z);
+      clampCam();
+    }catch(e){}
+  }
+}
+apply99();
 function applyBodyOpts(){
   document.body.classList.toggle('lefty',!!OPT.lefty);
   document.body.classList.toggle('bigui',!!OPT.bigui);
@@ -266,6 +282,7 @@ function buildSettings(){
   row('🌤 Reduce motion (no weather / sway)',toggle('reduceMotion',false));
   row('🔋 Battery saver (30 fps)',toggle('fps30',false));
   row('🫲 Left-handed layout',toggle('lefty',false,applyBodyOpts));
+  row('🕹 Classic \'99 graphics (Phase A/C — evolving)',toggle('r99',false,apply99));
   row('🔍 Larger buttons',toggle('bigui',false,applyBodyOpts));
   row('🔠 Larger text',toggle('bigtext',false,applyBodyOpts));
   row('🗺 Larger minimap (phones)',toggle('bigmap',false,applyBodyOpts));

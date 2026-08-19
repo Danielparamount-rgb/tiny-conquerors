@@ -135,6 +135,9 @@ function bindView(el){
 bindView(view);bindView(view3);
 function zoomAt(nz,cx,cy){
   lastCamTouch=performance.now();
+  // Classic '99: zoom is STEPPED (integer-ish scales keep pixels crisp);
+  // continuous zoom is a modern tell. 3D keeps its free zoom.
+  if(OPT.r99&&!use3D)nz=R99.zoomSnap(nz);
   if(use3D){
     // keep the world point under the cursor fixed while zooming. sd2t scales
     // as 1/z, so d MUST be computed before G.cam.z changes.

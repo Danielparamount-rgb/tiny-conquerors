@@ -119,6 +119,10 @@ function drawGrade(){
 let wxGrads=[];
 function drawWeather(){
   if(wxC.width!==vw||wxC.height!==vh){wxC.width=vw;wxC.height=vh;gradeKey='';wxWasClear=false;}
+  if(OPT.r99){ // Classic '99: no weather washes, no colour grade — a bare, honest sky
+    if(!wxWasClear){wxCtx.clearRect(0,0,wxC.width,wxC.height);wxWasClear=true;}
+    return;
+  }
   if(OPT.reduceMotion){ // settings: a calm sky for motion-sensitive players
     if(!wxWasClear){wxCtx.clearRect(0,0,wxC.width,wxC.height);drawGrade();wxWasClear=true;}
     return;

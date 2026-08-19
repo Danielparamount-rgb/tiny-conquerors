@@ -6,7 +6,7 @@ let fogDirty=true,lastTreeCount=0,grainPat=null,groundPat=null,dirtPatches=[];
    a trebuchet stone across the map is a murmur, one at your feet is a thump. */
 let shakeAmp=0;
 function shakeAt(wx,wy,pow){
-  if(OPT.reduceMotion||!G)return;
+  if(OPT.reduceMotion||OPT.r99||!G)return; // the '99 compositor never shook a screen
   const p=isoE(wx,wy);
   const sx=(p.x-G.cam.x)*G.cam.z,sy=(p.y-G.cam.y)*G.cam.z;
   const d=Math.hypot(sx-vw/2,sy-vh/2);
