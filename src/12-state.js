@@ -122,13 +122,85 @@ function genMapHighlands(){
   placeRes('gold',MAP*.22|0,MAP*.72|0,4);placeRes('gold',MAP*.78|0,MAP*.28|0,4);
   placeRes('food',MAP*.38|0,MAP*.3|0,5);placeRes('food',MAP*.62|0,MAP*.7|0,5);
 }
+function genMapIslands(){
+  /* An ocean world: every lord on his own isle, and no road to the enemy —
+     the navy IS the war. This is the map that finally makes the whole ship
+     roster (and the AI's new Transport landings) load-bearing. */
+  G.map=Array.from({length:MAP},()=>Array(MAP).fill(1));   // 1 = blocked: it is all sea
+  G.water={};G.ford={};
+  for(let y=0;y<MAP;y++)for(let x=0;x<MAP;x++)G.water[x+','+y]=1;
+  G.elev=new Uint8Array(MAP*MAP);
+  const rng=(n)=>SRi(n);
+  const carveIsle=(cx,cy,r)=>{   // organic land blob out of the sea
+    for(let y=Math.floor(cy-r-2);y<=cy+r+2;y++)for(let x=Math.floor(cx-r-2);x<=cx+r+2;x++){
+      if(x<1||y<1||x>=MAP-1||y>=MAP-1)continue;
+      if(hyp(x-cx,y-cy)<=r-.4+((x*7+y*13)%3)*.55){G.map[y][x]=0;delete G.water[x+','+y];}
+    }};
+  const C=MAP/2;
+  const R=Math.max(9,Math.round(MAP*.09));   // home isle radius: ~9 at 96, ~11.5 at 128
+  for(const [bx,by] of START){
+    carveIsle(bx+1,by+1,R);
+    // a lobe leaning toward the centre — coastline variety and a natural harbour
+    const a=dAtan2(C-(by+1),C-(bx+1));
+    carveIsle(Math.round(bx+1+dCos(a)*R*.7),Math.round(by+1+dSin(a)*R*.7),R*.55);
+  }
+  carveIsle(C,C,Math.max(6,Math.round(MAP*.058)));   // the contested centre isle
+  // four small treasure isles on the axes, halfway out — landing practice
+  const T=Math.round(MAP*.2);
+  for(const [tx2,ty2] of [[C+T,C],[C-T,C],[C,C+T],[C,C-T]])carveIsle(tx2,ty2,4.5);
+  // low hills on the home isles (the +25% rule still matters ashore)
+  for(const [bx,by] of START){
+    const hx=bx+1+((bx*7+by)%2?4:-4),hy=by+1+((by*5+bx)%2?4:-4),hr=2;
+    for(let y=hy-hr;y<=hy+hr;y++)for(let x=hx-hr;x<=hx+hr;x++){
+      if(x<1||y<1||x>=MAP-1||y>=MAP-1)continue;
+      if(G.water[x+','+y])continue;
+      if(hyp(x-hx,y-hy)<=hr-.2+((x*7+y*13)%2)*.5)G.elev[y*MAP+x]=1;
+    }
+  }
+  const placeRes=(type,cx,cy,n)=>{let placed=0,tries=0;
+    while(placed<n&&tries++<220){const x=cx+rng(5)-2,y=cy+rng(5)-2;
+      if(x<1||y<1||x>=MAP-1||y>=MAP-1)continue;const k=x+','+y;
+      if(G.map[y][x]||G.res[k])continue;   // water tiles are map=1, so the sea rejects itself
+      G.res[k]={type,amt:RES_META[type].amt,x,y};G.map[y][x]=1;placed++;}};
+  for(const [bx,by] of START){
+    const dx=Math.sign(C-bx)||1,dy=Math.sign(C-by)||1;
+    placeRes('food',bx+4*dx,by-3*dy,6);
+    placeRes('food',bx-3*dx,by+4*dy,4);
+    placeRes('gold',bx+6*dx,by+6*dy,5);
+    // woods at the isle rim, away from the town's building ground — ships cost
+    // wood, so the woodlines are generous
+    placeForest(bx+1-6*dx,by+1-2*dy,26+rng(14),5);
+    placeForest(bx+1-2*dx,by+1-6*dy,26+rng(14),5);
+    placeRes('wood',bx-5*dx,by-5*dy,8);
+  }
+  // the centre isle: the richest gold on the map, worth a contested landing
+  placeRes('gold',C|0,C|0,8);placeRes('food',(C-3)|0,(C+3)|0,4);
+  for(const [tx2,ty2] of [[C+T,C],[C-T,C],[C,C+T],[C,C-T]]){
+    placeRes('gold',tx2,ty2,4);placeRes('food',tx2,ty2,3);
+  }
+  // fish everywhere a dock can reach: schools ringing every isle, plus deep-sea
+  const dropFish=(x,y)=>{const k=x+','+y;
+    if(x<2||y<2||x>=MAP-2||y>=MAP-2)return;
+    if(!G.water[k]||G.res[k])return;
+    G.res[k]={type:'fish',amt:RES_META.fish.amt,x,y};};
+  for(const [bx,by] of START)for(let i=0;i<6;i++){
+    const a=SR()*6.283,r=R+2+SR()*4;
+    dropFish(Math.round(bx+1+dCos(a)*r),Math.round(by+1+dSin(a)*r));
+  }
+  for(let i=0;i<8;i++){
+    const a=SR()*6.283,r=MAP*.09+SR()*3;
+    dropFish(Math.round(C+dCos(a)*r),Math.round(C+dSin(a)*r));
+  }
+  for(let i=0,nD=Math.round(MAP*MAP/900);i<nD;i++)dropFish(3+rng(MAP-6),3+rng(MAP-6));
+}
 const MAPS=[
   {name:'River Crossing',blurb:'A river divides the land — armies must cross at the sandy fords.'},
   {name:'Black Forest',blurb:'Endless dark woodland. Narrow trails link the clearings — wall a chokepoint, turtle up, and strike when ready. Wood is everywhere; gold is contested.'},
   {name:'Hallowed Ground',blurb:'Open steppe strewn with holy relics — every lord starts with a Monastery and a Monk. Claim the relics for gold, or hoard them all and win outright.'},
   {name:'Arena',blurb:'Every lord begins behind a ring of stone. Boom in safety, then batter your way out — the centre holds the gold worth fighting for.'},
   {name:'Highlands',blurb:'Rolling open hills and scattered woods. No water, no walls to hide behind — high ground is the only fortress here.'},
-  {name:'Surprise me',blurb:'The battlefield is drawn from the match seed — nobody knows until the fog lifts.'}];
+  {name:'Surprise me',blurb:'The battlefield is drawn from the match seed — nobody knows until the fog lifts.'},
+  {name:'Islands',blurb:'Every lord rules his own isle and no road leads to the enemy. Fish the seas, raise a navy — the war arrives by Transport, and the centre isle holds the richest gold.'}];
 let mission=null;
 /* Mission setups run in begin(), right after newGame() — the map exists, the
    Town Halls stand, nothing has moved yet. These two helpers keep the setups
@@ -521,6 +593,7 @@ function genMap(){
   else if(mapRealSel===2)genMapHallowed();
   else if(mapRealSel===3)genMapArena();
   else if(mapRealSel===4)genMapHighlands();
+  else if(mapRealSel===6)genMapIslands();   // 5 is 'Surprise me' and stays 0-4: old seeds must reproduce
   else genMapRiver();
   // Belt and braces: no generator may leave anything inside a Town Hall's
   // footprint or hard against it. Cheaper than auditing every placement path.
@@ -626,6 +699,9 @@ function placeRelics(){
       if(spots.some(([sx,sy])=>hyp(x-sx,y-sy)<7))continue;
       spots.push([x,y]);
     }
+  }else if(mapRealSel===6){ // Islands: the relics live on the contested centre isle
+    const c=MAP/2|0;
+    spots=[[c,c-3],[c-3,c],[c+3,c],[c,c+3]];
   }else spots=mapRealSel===1
     ?[[32,32],[13,13],[MAP-14,MAP-14],[32,44]]
     :[[MAP*.3|0,MAP*.55|0],[MAP*.7|0,MAP*.45|0],[MAP*.2|0,MAP*.15|0],[MAP*.85|0,MAP*.8|0]];

@@ -50,8 +50,9 @@ function aiThink(p,ai){
     if(nT<2){aiPlace('tower',undefined,undefined,p);ai.perst=nT+1;}
   }
   // a dock on the stretch of river nearest the base (checked on a cooldown —
-  // canPlaceDock flood-fills, so don't hammer it every think tick)
-  if(st.age>=1&&st.w>=220&&G.t>=(ai.dockNext||0)
+  // canPlaceDock flood-fills, so don't hammer it every think tick).
+  // On a sea map the dock is not a luxury, it is the road — build it sooner.
+  if(st.age>=1&&st.w>=(ai.sea?150:220)&&G.t>=(ai.dockNext||0)
      &&!myBld('dock').length&&!G.blds.some(b=>b.p===p&&!b.built&&b.type==='dock')){
     ai.dockNext=G.t+25;
     let bestW=null,bd2=1e9;
@@ -210,10 +211,17 @@ function aiThink(p,ai){
     &&(st.f<(nextAge.f||0)+150||st.g<(nextAge.g||0)+80);
   const ramCount=G.units.filter(u=>u.p===p&&u.type==='ram').length;
   const nOf=tt=>G.units.filter(u=>u.p===p&&u.type===tt&&u.hp>0).length;
+  /* The sea war cannot be fought without a fleet. While the road is water and
+     no Transport floats, the dock and its ships spend FIRST: the army loop
+     leaves wood for them, and age-banking never freezes the shipyard. Without
+     this the AI banked for Imperial with 55 soldiers stranded on the beach —
+     the wave block retried every 20s for the rest of the game. */
+  const fleetNeed=!!ai.sea&&nOf('transport')<1;
   for(const b of G.blds){
     // banking for an age-up halts MILITARY spending — but the market only
-    // trains trade carts, which are what earns the gold being banked for
-    if(saveForAge&&b.type!=='market')continue;
+    // trains trade carts, which are what earns the gold being banked for,
+    // and a needed invasion fleet outranks the bank
+    if(saveForAge&&b.type!=='market'&&!(fleetNeed&&b.type==='dock'))continue;
     if(b.p!==p||!b.built)continue;const def=BLDS[b.type];
     if(!def.trains||b.type==='tc')continue;
     const baseTrains=trainsFor(b,p);
@@ -226,7 +234,10 @@ function aiThink(p,ai){
       if(tt==='treb'&&nOf(tt)>=2)return false;   // SAMPLEAI keeps a small treb park
       if(tt==='monk'&&nOf('monk')>=[1,2,4][diffSel])return false; // monks scale with difficulty
       if(tt==='petard'||tt==='missionary')return false; // AI keeps it simple
-      if(tt==='transport'||tt==='fireship'||tt==='demo')return false;
+      if(tt==='fireship'||tt==='demo')return false;
+      // Transports only matter when no road leads to the enemy (ai.sea) — on
+      // every connected map this stays the old blanket exclusion
+      if(tt==='transport'&&(!ai.sea||nOf('transport')>=2))return false;
       // traders need a trade PARTNER; without one the unit would idle forever
       if(tt==='cog'&&(nOf('cog')>=1||!G.blds.some(b2=>b2.p!==p&&b2.type==='dock'&&b2.built)))return false;
       if(tt==='tradecart'&&(nOf('tradecart')>=2||!G.blds.some(b2=>b2.p!==p&&b2.type==='market'&&b2.built)))return false;
@@ -235,8 +246,12 @@ function aiThink(p,ai){
       return true;});
     if(!opts.length)continue;
     ai.trainSeq=(ai.trainSeq||0)+1;
-    const ut=opts[ai.trainSeq%opts.length];
+    // a needed transport jumps the dock's rotation — it IS the war effort
+    const ut=(fleetNeed&&b.type==='dock'&&opts.includes('transport'))
+      ?'transport':opts[ai.trainSeq%opts.length];
     const uc=unitCostOf(p,ut);
+    // while a fleet is needed, land units leave wood on the pile for the dock
+    if(fleetNeed&&b.type!=='dock'&&(uc.w||0)>0&&st.w<280)continue;
     if(b.queue.length<1&&canAfford(p,uc)&&popUsed(p)<popCap(p))
       {pay(p,uc);b.queue.push(ut);}
   }
@@ -299,6 +314,25 @@ function aiThink(p,ai){
     const k=nearestRes(sh,'fish');
     if(k)cmdGather(sh,k);
   }
+  /* Sea war? Decided ONCE, after the opening: can our army WALK to the nearest
+     enemy? If not (an island world) the waves below go by Transport. The check
+     is A*-only — no RNG, no writes — and on every connected map it finds a
+     path and leaves ai.sea=false, so nothing there changes. Dry maps skip the
+     A* outright. The G.t>150 gate is the same discipline that kept smarter-ai
+     and the personalities off the determinism baselines. */
+  if(ai.sea===undefined&&G.t>150){
+    ai.sea=false;
+    if(G.waterList&&G.waterList.length>40){
+      const foe=nearestEnemyBld(tc,p);
+      if(foe){
+        const fc=bldCenter(foe.ent);
+        const from=nearFree(tc.tx+1,tc.ty+1,4),to=nearFree(Math.round(fc.x),Math.round(fc.y),6);
+        if(from&&to&&!findPath(from.x,from.y,to.x,to.y,p))ai.sea=true;
+      }
+    }
+  }
+  // a crossing in progress is driven every think, ahead of new decisions
+  if(ai.inv)aiInvasionTick(p,ai);
   // attack waves
   if(G.t>=ai.nextAtk){
     // temperament shapes the drumbeat — but only after the opening (persOn)
@@ -307,23 +341,136 @@ function aiThink(p,ai){
     const need=Math.min(Math.max(3,Math.round((4+ai.wave*cfg.waveGrow)*nMul)),24);
     if(army.length>=need){
       const tgt=nearestEnemyBld(tc,p);
-      if(tgt){
+      if(tgt&&ai.sea&&!ai.inv){
+        // the war goes by sea: load the army instead of marching it
+        if(aiLaunchInvasion(p,ai,tc,army,tgt)){
+          ai.wave++;ai.nextAtk=G.t+cfg.waveEvery*wMul;ai.attacking=true;ai.tgtId=tgt.ent.id;
+          if(tgt.ent.p===localP){feed('Warning! An invasion fleet sets sail for your island!',true);snd('horn');
+            const pgs=G.pings||(G.pings=[]);pgs.push({x:ai.inv.lx,y:ai.inv.ly,t:G.t});if(pgs.length>6)pgs.shift();}
+          else if(allied(tgt.ent.p,localP))feed('An invasion fleet sails for your ally!',true);
+        } else ai.nextAtk=G.t+20;   // no transports afloat yet — soon
+      }else if(tgt&&!ai.sea){
         ai.wave++;ai.nextAtk=G.t+cfg.waveEvery*wMul;ai.attacking=true;ai.tgtId=tgt.ent.id;
         for(const a of army){a.wave=tgt.ent.id;cmdAttack(a,tgt.ent,tgt.bld);}
         if(tgt.ent.p===localP){feed('Warning! An enemy army marches on your town!',true);snd('horn');
           const wc=tgt.bld?bldCenter(tgt.ent):tgt.ent;
           const pgs=G.pings||(G.pings=[]);pgs.push({x:wc.x,y:wc.y,t:G.t});if(pgs.length>6)pgs.shift();}
         else if(allied(tgt.ent.p,localP))feed('Your ally is under attack!',true);
-      }
+      }else if(!tgt)ai.nextAtk=G.t+25;
     } else ai.nextAtk=G.t+25;
   }
-  // idle military regroup / rejoin the current offensive
-  for(const a of army){
+  // idle military regroup / rejoin the current offensive. During a sea war this
+  // only gathers soldiers already NEAR the target (the landed party) — snatching
+  // the home garrison would send it pathing hopelessly at open water; and while
+  // an invasion is boarding, the crossing owns its soldiers.
+  if(!ai.inv)for(const a of army){
     if(a.state!=='idle')continue;
     if(ai.attacking){
       const tb=G.blds.find(b=>b.id===ai.tgtId);
-      if(tb){a.wave=tb.id;cmdAttack(a,tb,true);}
+      if(tb){
+        if(ai.sea){const c=bldCenter(tb);if(hyp(a.x-c.x,a.y-c.y)>26)continue;}
+        a.wave=tb.id;cmdAttack(a,tb,true);
+      }
       else ai.attacking=false;
+    }
+  }
+}
+/* ---- the sea war: Transport landings ----
+   All of it lives on plain fields of G.ais[p] (ai.sea / ai.inv), so it rides
+   saves and rebuilds identically on every lockstep peer. Everything below is
+   direct cmd* calls, the same authority the rest of aiThink uses — under
+   lockstep each peer reproduces these decisions locally. */
+function aiShoreNear(fx,fy,tx,ty){
+  /* Flood the island that (fx,fy) stands on and keep its coast tiles (walkable
+     land with deep water beside it); return the one facing (tx,ty). Because it
+     floods from the town, it can never pick a different island's beach, and
+     every candidate is provably walkable from the town — troops landed there
+     can always march on it. Fixed pop/neighbour order = deterministic. */
+  const sx=Math.round(fx),sy=Math.round(fy);
+  const seed=passable(sx,sy)?{x:sx,y:sy}:nearFree(sx,sy,4);
+  if(!seed)return null;
+  const seen=new Set([seed.x+','+seed.y]),stack=[[seed.x,seed.y]];
+  let best=null,bd=1e9,guard=0;
+  while(stack.length&&guard++<2600){
+    const [x,y]=stack.pop();
+    let wx=-1,wy=-1;
+    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx=x+dx,ny=y+dy,k=nx+','+ny;
+      if(passableW(nx,ny)){if(wx<0){wx=nx;wy=ny;}continue;}
+      if(nx<1||ny<1||nx>=MAP-1||ny>=MAP-1||seen.has(k))continue;
+      if(!passable(nx,ny))continue;
+      seen.add(k);stack.push([nx,ny]);
+    }
+    if(wx>=0){const d=hyp(x-tx,y-ty);if(d<bd){bd=d;best={lx:x,ly:y,wx,wy};}}
+  }
+  return best;
+}
+function aiLaunchInvasion(p,ai,tc,army,tgt){
+  const trs=G.units.filter(u=>u.p===p&&u.type==='transport'&&u.hp>0);
+  if(!trs.length)return false;
+  const cap=trs.reduce((s,t)=>s+(UNITS.transport.garCap-(t.gar?t.gar.length:0)),0);
+  if(cap<4)return false;
+  const fc=bldCenter(tgt.ent);
+  const stage=aiShoreNear(tc.tx+1,tc.ty+1,fc.x,fc.y);          // our coast, facing them
+  const land =aiShoreNear(Math.round(fc.x),Math.round(fc.y),tc.tx+1,tc.ty+1); // their coast, facing us
+  if(!stage||!land)return false;
+  // march the party to the staging beach; sail the fleet alongside
+  const party=[];
+  for(const u of army){                     // G.units order — identical on every peer
+    if(party.length>=cap)break;
+    if(UNITS[u.type].ship||UNITS[u.type].treb)continue;   // a packed treb misses its setup
+    party.push(u.id);cmdMove(u,stage.lx,stage.ly);
+  }
+  if(party.length<3)return false;
+  for(const tr of trs)cmdMove(tr,stage.wx,stage.wy);
+  ai.inv={ph:0,t0:G.t,tid:tgt.ent.id,
+    sx:stage.lx,sy:stage.ly,swx:stage.wx,swy:stage.wy,
+    lx:land.lx,ly:land.ly,lwx:land.wx,lwy:land.wy,
+    party,trs:trs.map(t=>t.id)};
+  return true;
+}
+function aiInvasionTick(p,ai){
+  const inv=ai.inv;if(!inv)return;
+  const trs=inv.trs.map(id=>G.units.find(u=>u.id===id&&u.hp>0)).filter(Boolean);
+  if(!trs.length){ai.inv=null;return;}                 // fleet sunk — regroup at home
+  const aboard=trs.reduce((s,t)=>s+(t.gar?t.gar.length:0),0);
+  if(inv.ph===0){                                       // boarding at the staging beach
+    let alive=0;
+    for(const id of inv.party){
+      const u=G.units.find(x=>x.id===id&&x.hp>0);
+      if(!u)continue;
+      alive++;
+      if(u.state==='toGarU')continue;
+      const tr=trs.find(t=>(t.gar?t.gar.length:0)<UNITS.transport.garCap);
+      if(tr&&hyp(tr.x-u.x,tr.y-u.y)<7)cmdGarrisonRam(u,tr);
+      else if(u.state==='idle')cmdMove(u,inv.sx,inv.sy);   // keep walking to the beach
+    }
+    // a boarded soldier leaves G.units, so `alive` counts only those still
+    // walking to the beach — everyone aboard (or dead) reads as alive===0
+    const full=aboard>0&&trs.every(t=>(t.gar?t.gar.length:0)>=UNITS.transport.garCap);
+    if((aboard>0&&alive===0)||full||(G.t-inv.t0>50&&aboard>=3)){   // sail with what we have
+      inv.ph=1;inv.t1=G.t;
+      for(const tr of trs)if(tr.gar&&tr.gar.length)cmdMove(tr,inv.lwx,inv.lwy);
+      // idle warships escort the crossing
+      for(const w of G.units)
+        if(w.p===p&&w.hp>0&&UNITS[w.type].ship&&!UNITS[w.type].fisher
+           &&w.type!=='transport'&&w.state==='idle')cmdMove(w,inv.lwx,inv.lwy);
+    }
+    else if(G.t-inv.t0>90&&aboard===0)ai.inv=null;      // nothing boarded; try again later
+  }else if(inv.ph===1){                                 // the crossing
+    for(const tr of trs){
+      if(!tr.gar||!tr.gar.length)continue;
+      if(hyp(tr.x-(inv.lwx+.5),tr.y-(inv.lwy+.5))<3.4)CMDS.unload({id:tr.id,p});
+      else if(tr.state==='idle')cmdMove(tr,inv.lwx,inv.lwy);   // re-push a stalled sail
+    }
+    if(trs.every(t=>!t.gar||!t.gar.length)){
+      // everyone is ashore. ai.attacking/tgtId are already set, so the idle
+      // regroup above sends the landed party at the target next think.
+      for(const tr of trs)cmdMove(tr,inv.swx,inv.swy);  // the fleet sails home for the next wave
+      ai.inv=null;
+    }else if(G.t-inv.t1>140){                           // a crossing that cannot land
+      for(const tr of trs)if(tr.gar&&tr.gar.length)CMDS.unload({id:tr.id,p});
+      ai.inv=null;
     }
   }
 }

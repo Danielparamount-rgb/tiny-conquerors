@@ -406,6 +406,7 @@
       <button data-m="2">Hallowed Ground</button>
       <button data-m="3">Arena</button>
       <button data-m="4">Highlands</button>
+      <button data-m="6">🏝 Islands</button>
       <button data-m="5">🎲 Surprise me</button>
     </div>
     <p class="sub" id="mapBlurb" style="margin:6px 0 0;text-align:center">A river divides the land — armies must cross at the sandy fords.</p>
@@ -581,6 +582,7 @@
           <button data-mm="2">Hallowed</button>
           <button data-mm="3">Arena</button>
           <button data-mm="4">Highlands</button>
+          <button data-mm="6">🏝 Islands</button>
           <button data-mm="5">🎲 Surprise</button>
         </div>
         <p style="text-align:center;margin:7px 0 0"><b>Computer opponents</b></p>
@@ -1219,13 +1221,85 @@ function genMapHighlands(){
   placeRes('gold',MAP*.22|0,MAP*.72|0,4);placeRes('gold',MAP*.78|0,MAP*.28|0,4);
   placeRes('food',MAP*.38|0,MAP*.3|0,5);placeRes('food',MAP*.62|0,MAP*.7|0,5);
 }
+function genMapIslands(){
+  /* An ocean world: every lord on his own isle, and no road to the enemy —
+     the navy IS the war. This is the map that finally makes the whole ship
+     roster (and the AI's new Transport landings) load-bearing. */
+  G.map=Array.from({length:MAP},()=>Array(MAP).fill(1));   // 1 = blocked: it is all sea
+  G.water={};G.ford={};
+  for(let y=0;y<MAP;y++)for(let x=0;x<MAP;x++)G.water[x+','+y]=1;
+  G.elev=new Uint8Array(MAP*MAP);
+  const rng=(n)=>SRi(n);
+  const carveIsle=(cx,cy,r)=>{   // organic land blob out of the sea
+    for(let y=Math.floor(cy-r-2);y<=cy+r+2;y++)for(let x=Math.floor(cx-r-2);x<=cx+r+2;x++){
+      if(x<1||y<1||x>=MAP-1||y>=MAP-1)continue;
+      if(hyp(x-cx,y-cy)<=r-.4+((x*7+y*13)%3)*.55){G.map[y][x]=0;delete G.water[x+','+y];}
+    }};
+  const C=MAP/2;
+  const R=Math.max(9,Math.round(MAP*.09));   // home isle radius: ~9 at 96, ~11.5 at 128
+  for(const [bx,by] of START){
+    carveIsle(bx+1,by+1,R);
+    // a lobe leaning toward the centre — coastline variety and a natural harbour
+    const a=dAtan2(C-(by+1),C-(bx+1));
+    carveIsle(Math.round(bx+1+dCos(a)*R*.7),Math.round(by+1+dSin(a)*R*.7),R*.55);
+  }
+  carveIsle(C,C,Math.max(6,Math.round(MAP*.058)));   // the contested centre isle
+  // four small treasure isles on the axes, halfway out — landing practice
+  const T=Math.round(MAP*.2);
+  for(const [tx2,ty2] of [[C+T,C],[C-T,C],[C,C+T],[C,C-T]])carveIsle(tx2,ty2,4.5);
+  // low hills on the home isles (the +25% rule still matters ashore)
+  for(const [bx,by] of START){
+    const hx=bx+1+((bx*7+by)%2?4:-4),hy=by+1+((by*5+bx)%2?4:-4),hr=2;
+    for(let y=hy-hr;y<=hy+hr;y++)for(let x=hx-hr;x<=hx+hr;x++){
+      if(x<1||y<1||x>=MAP-1||y>=MAP-1)continue;
+      if(G.water[x+','+y])continue;
+      if(hyp(x-hx,y-hy)<=hr-.2+((x*7+y*13)%2)*.5)G.elev[y*MAP+x]=1;
+    }
+  }
+  const placeRes=(type,cx,cy,n)=>{let placed=0,tries=0;
+    while(placed<n&&tries++<220){const x=cx+rng(5)-2,y=cy+rng(5)-2;
+      if(x<1||y<1||x>=MAP-1||y>=MAP-1)continue;const k=x+','+y;
+      if(G.map[y][x]||G.res[k])continue;   // water tiles are map=1, so the sea rejects itself
+      G.res[k]={type,amt:RES_META[type].amt,x,y};G.map[y][x]=1;placed++;}};
+  for(const [bx,by] of START){
+    const dx=Math.sign(C-bx)||1,dy=Math.sign(C-by)||1;
+    placeRes('food',bx+4*dx,by-3*dy,6);
+    placeRes('food',bx-3*dx,by+4*dy,4);
+    placeRes('gold',bx+6*dx,by+6*dy,5);
+    // woods at the isle rim, away from the town's building ground — ships cost
+    // wood, so the woodlines are generous
+    placeForest(bx+1-6*dx,by+1-2*dy,26+rng(14),5);
+    placeForest(bx+1-2*dx,by+1-6*dy,26+rng(14),5);
+    placeRes('wood',bx-5*dx,by-5*dy,8);
+  }
+  // the centre isle: the richest gold on the map, worth a contested landing
+  placeRes('gold',C|0,C|0,8);placeRes('food',(C-3)|0,(C+3)|0,4);
+  for(const [tx2,ty2] of [[C+T,C],[C-T,C],[C,C+T],[C,C-T]]){
+    placeRes('gold',tx2,ty2,4);placeRes('food',tx2,ty2,3);
+  }
+  // fish everywhere a dock can reach: schools ringing every isle, plus deep-sea
+  const dropFish=(x,y)=>{const k=x+','+y;
+    if(x<2||y<2||x>=MAP-2||y>=MAP-2)return;
+    if(!G.water[k]||G.res[k])return;
+    G.res[k]={type:'fish',amt:RES_META.fish.amt,x,y};};
+  for(const [bx,by] of START)for(let i=0;i<6;i++){
+    const a=SR()*6.283,r=R+2+SR()*4;
+    dropFish(Math.round(bx+1+dCos(a)*r),Math.round(by+1+dSin(a)*r));
+  }
+  for(let i=0;i<8;i++){
+    const a=SR()*6.283,r=MAP*.09+SR()*3;
+    dropFish(Math.round(C+dCos(a)*r),Math.round(C+dSin(a)*r));
+  }
+  for(let i=0,nD=Math.round(MAP*MAP/900);i<nD;i++)dropFish(3+rng(MAP-6),3+rng(MAP-6));
+}
 const MAPS=[
   {name:'River Crossing',blurb:'A river divides the land — armies must cross at the sandy fords.'},
   {name:'Black Forest',blurb:'Endless dark woodland. Narrow trails link the clearings — wall a chokepoint, turtle up, and strike when ready. Wood is everywhere; gold is contested.'},
   {name:'Hallowed Ground',blurb:'Open steppe strewn with holy relics — every lord starts with a Monastery and a Monk. Claim the relics for gold, or hoard them all and win outright.'},
   {name:'Arena',blurb:'Every lord begins behind a ring of stone. Boom in safety, then batter your way out — the centre holds the gold worth fighting for.'},
   {name:'Highlands',blurb:'Rolling open hills and scattered woods. No water, no walls to hide behind — high ground is the only fortress here.'},
-  {name:'Surprise me',blurb:'The battlefield is drawn from the match seed — nobody knows until the fog lifts.'}];
+  {name:'Surprise me',blurb:'The battlefield is drawn from the match seed — nobody knows until the fog lifts.'},
+  {name:'Islands',blurb:'Every lord rules his own isle and no road leads to the enemy. Fish the seas, raise a navy — the war arrives by Transport, and the centre isle holds the richest gold.'}];
 let mission=null;
 /* Mission setups run in begin(), right after newGame() — the map exists, the
    Town Halls stand, nothing has moved yet. These two helpers keep the setups
@@ -1618,6 +1692,7 @@ function genMap(){
   else if(mapRealSel===2)genMapHallowed();
   else if(mapRealSel===3)genMapArena();
   else if(mapRealSel===4)genMapHighlands();
+  else if(mapRealSel===6)genMapIslands();   // 5 is 'Surprise me' and stays 0-4: old seeds must reproduce
   else genMapRiver();
   // Belt and braces: no generator may leave anything inside a Town Hall's
   // footprint or hard against it. Cheaper than auditing every placement path.
@@ -1723,6 +1798,9 @@ function placeRelics(){
       if(spots.some(([sx,sy])=>hyp(x-sx,y-sy)<7))continue;
       spots.push([x,y]);
     }
+  }else if(mapRealSel===6){ // Islands: the relics live on the contested centre isle
+    const c=MAP/2|0;
+    spots=[[c,c-3],[c-3,c],[c+3,c],[c,c+3]];
   }else spots=mapRealSel===1
     ?[[32,32],[13,13],[MAP-14,MAP-14],[32,44]]
     :[[MAP*.3|0,MAP*.55|0],[MAP*.7|0,MAP*.45|0],[MAP*.2|0,MAP*.15|0],[MAP*.85|0,MAP*.8|0]];
@@ -4438,8 +4516,9 @@ function aiThink(p,ai){
     if(nT<2){aiPlace('tower',undefined,undefined,p);ai.perst=nT+1;}
   }
   // a dock on the stretch of river nearest the base (checked on a cooldown —
-  // canPlaceDock flood-fills, so don't hammer it every think tick)
-  if(st.age>=1&&st.w>=220&&G.t>=(ai.dockNext||0)
+  // canPlaceDock flood-fills, so don't hammer it every think tick).
+  // On a sea map the dock is not a luxury, it is the road — build it sooner.
+  if(st.age>=1&&st.w>=(ai.sea?150:220)&&G.t>=(ai.dockNext||0)
      &&!myBld('dock').length&&!G.blds.some(b=>b.p===p&&!b.built&&b.type==='dock')){
     ai.dockNext=G.t+25;
     let bestW=null,bd2=1e9;
@@ -4598,10 +4677,17 @@ function aiThink(p,ai){
     &&(st.f<(nextAge.f||0)+150||st.g<(nextAge.g||0)+80);
   const ramCount=G.units.filter(u=>u.p===p&&u.type==='ram').length;
   const nOf=tt=>G.units.filter(u=>u.p===p&&u.type===tt&&u.hp>0).length;
+  /* The sea war cannot be fought without a fleet. While the road is water and
+     no Transport floats, the dock and its ships spend FIRST: the army loop
+     leaves wood for them, and age-banking never freezes the shipyard. Without
+     this the AI banked for Imperial with 55 soldiers stranded on the beach —
+     the wave block retried every 20s for the rest of the game. */
+  const fleetNeed=!!ai.sea&&nOf('transport')<1;
   for(const b of G.blds){
     // banking for an age-up halts MILITARY spending — but the market only
-    // trains trade carts, which are what earns the gold being banked for
-    if(saveForAge&&b.type!=='market')continue;
+    // trains trade carts, which are what earns the gold being banked for,
+    // and a needed invasion fleet outranks the bank
+    if(saveForAge&&b.type!=='market'&&!(fleetNeed&&b.type==='dock'))continue;
     if(b.p!==p||!b.built)continue;const def=BLDS[b.type];
     if(!def.trains||b.type==='tc')continue;
     const baseTrains=trainsFor(b,p);
@@ -4614,7 +4700,10 @@ function aiThink(p,ai){
       if(tt==='treb'&&nOf(tt)>=2)return false;   // SAMPLEAI keeps a small treb park
       if(tt==='monk'&&nOf('monk')>=[1,2,4][diffSel])return false; // monks scale with difficulty
       if(tt==='petard'||tt==='missionary')return false; // AI keeps it simple
-      if(tt==='transport'||tt==='fireship'||tt==='demo')return false;
+      if(tt==='fireship'||tt==='demo')return false;
+      // Transports only matter when no road leads to the enemy (ai.sea) — on
+      // every connected map this stays the old blanket exclusion
+      if(tt==='transport'&&(!ai.sea||nOf('transport')>=2))return false;
       // traders need a trade PARTNER; without one the unit would idle forever
       if(tt==='cog'&&(nOf('cog')>=1||!G.blds.some(b2=>b2.p!==p&&b2.type==='dock'&&b2.built)))return false;
       if(tt==='tradecart'&&(nOf('tradecart')>=2||!G.blds.some(b2=>b2.p!==p&&b2.type==='market'&&b2.built)))return false;
@@ -4623,8 +4712,12 @@ function aiThink(p,ai){
       return true;});
     if(!opts.length)continue;
     ai.trainSeq=(ai.trainSeq||0)+1;
-    const ut=opts[ai.trainSeq%opts.length];
+    // a needed transport jumps the dock's rotation — it IS the war effort
+    const ut=(fleetNeed&&b.type==='dock'&&opts.includes('transport'))
+      ?'transport':opts[ai.trainSeq%opts.length];
     const uc=unitCostOf(p,ut);
+    // while a fleet is needed, land units leave wood on the pile for the dock
+    if(fleetNeed&&b.type!=='dock'&&(uc.w||0)>0&&st.w<280)continue;
     if(b.queue.length<1&&canAfford(p,uc)&&popUsed(p)<popCap(p))
       {pay(p,uc);b.queue.push(ut);}
   }
@@ -4687,6 +4780,25 @@ function aiThink(p,ai){
     const k=nearestRes(sh,'fish');
     if(k)cmdGather(sh,k);
   }
+  /* Sea war? Decided ONCE, after the opening: can our army WALK to the nearest
+     enemy? If not (an island world) the waves below go by Transport. The check
+     is A*-only — no RNG, no writes — and on every connected map it finds a
+     path and leaves ai.sea=false, so nothing there changes. Dry maps skip the
+     A* outright. The G.t>150 gate is the same discipline that kept smarter-ai
+     and the personalities off the determinism baselines. */
+  if(ai.sea===undefined&&G.t>150){
+    ai.sea=false;
+    if(G.waterList&&G.waterList.length>40){
+      const foe=nearestEnemyBld(tc,p);
+      if(foe){
+        const fc=bldCenter(foe.ent);
+        const from=nearFree(tc.tx+1,tc.ty+1,4),to=nearFree(Math.round(fc.x),Math.round(fc.y),6);
+        if(from&&to&&!findPath(from.x,from.y,to.x,to.y,p))ai.sea=true;
+      }
+    }
+  }
+  // a crossing in progress is driven every think, ahead of new decisions
+  if(ai.inv)aiInvasionTick(p,ai);
   // attack waves
   if(G.t>=ai.nextAtk){
     // temperament shapes the drumbeat — but only after the opening (persOn)
@@ -4695,23 +4807,136 @@ function aiThink(p,ai){
     const need=Math.min(Math.max(3,Math.round((4+ai.wave*cfg.waveGrow)*nMul)),24);
     if(army.length>=need){
       const tgt=nearestEnemyBld(tc,p);
-      if(tgt){
+      if(tgt&&ai.sea&&!ai.inv){
+        // the war goes by sea: load the army instead of marching it
+        if(aiLaunchInvasion(p,ai,tc,army,tgt)){
+          ai.wave++;ai.nextAtk=G.t+cfg.waveEvery*wMul;ai.attacking=true;ai.tgtId=tgt.ent.id;
+          if(tgt.ent.p===localP){feed('Warning! An invasion fleet sets sail for your island!',true);snd('horn');
+            const pgs=G.pings||(G.pings=[]);pgs.push({x:ai.inv.lx,y:ai.inv.ly,t:G.t});if(pgs.length>6)pgs.shift();}
+          else if(allied(tgt.ent.p,localP))feed('An invasion fleet sails for your ally!',true);
+        } else ai.nextAtk=G.t+20;   // no transports afloat yet — soon
+      }else if(tgt&&!ai.sea){
         ai.wave++;ai.nextAtk=G.t+cfg.waveEvery*wMul;ai.attacking=true;ai.tgtId=tgt.ent.id;
         for(const a of army){a.wave=tgt.ent.id;cmdAttack(a,tgt.ent,tgt.bld);}
         if(tgt.ent.p===localP){feed('Warning! An enemy army marches on your town!',true);snd('horn');
           const wc=tgt.bld?bldCenter(tgt.ent):tgt.ent;
           const pgs=G.pings||(G.pings=[]);pgs.push({x:wc.x,y:wc.y,t:G.t});if(pgs.length>6)pgs.shift();}
         else if(allied(tgt.ent.p,localP))feed('Your ally is under attack!',true);
-      }
+      }else if(!tgt)ai.nextAtk=G.t+25;
     } else ai.nextAtk=G.t+25;
   }
-  // idle military regroup / rejoin the current offensive
-  for(const a of army){
+  // idle military regroup / rejoin the current offensive. During a sea war this
+  // only gathers soldiers already NEAR the target (the landed party) — snatching
+  // the home garrison would send it pathing hopelessly at open water; and while
+  // an invasion is boarding, the crossing owns its soldiers.
+  if(!ai.inv)for(const a of army){
     if(a.state!=='idle')continue;
     if(ai.attacking){
       const tb=G.blds.find(b=>b.id===ai.tgtId);
-      if(tb){a.wave=tb.id;cmdAttack(a,tb,true);}
+      if(tb){
+        if(ai.sea){const c=bldCenter(tb);if(hyp(a.x-c.x,a.y-c.y)>26)continue;}
+        a.wave=tb.id;cmdAttack(a,tb,true);
+      }
       else ai.attacking=false;
+    }
+  }
+}
+/* ---- the sea war: Transport landings ----
+   All of it lives on plain fields of G.ais[p] (ai.sea / ai.inv), so it rides
+   saves and rebuilds identically on every lockstep peer. Everything below is
+   direct cmd* calls, the same authority the rest of aiThink uses — under
+   lockstep each peer reproduces these decisions locally. */
+function aiShoreNear(fx,fy,tx,ty){
+  /* Flood the island that (fx,fy) stands on and keep its coast tiles (walkable
+     land with deep water beside it); return the one facing (tx,ty). Because it
+     floods from the town, it can never pick a different island's beach, and
+     every candidate is provably walkable from the town — troops landed there
+     can always march on it. Fixed pop/neighbour order = deterministic. */
+  const sx=Math.round(fx),sy=Math.round(fy);
+  const seed=passable(sx,sy)?{x:sx,y:sy}:nearFree(sx,sy,4);
+  if(!seed)return null;
+  const seen=new Set([seed.x+','+seed.y]),stack=[[seed.x,seed.y]];
+  let best=null,bd=1e9,guard=0;
+  while(stack.length&&guard++<2600){
+    const [x,y]=stack.pop();
+    let wx=-1,wy=-1;
+    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx=x+dx,ny=y+dy,k=nx+','+ny;
+      if(passableW(nx,ny)){if(wx<0){wx=nx;wy=ny;}continue;}
+      if(nx<1||ny<1||nx>=MAP-1||ny>=MAP-1||seen.has(k))continue;
+      if(!passable(nx,ny))continue;
+      seen.add(k);stack.push([nx,ny]);
+    }
+    if(wx>=0){const d=hyp(x-tx,y-ty);if(d<bd){bd=d;best={lx:x,ly:y,wx,wy};}}
+  }
+  return best;
+}
+function aiLaunchInvasion(p,ai,tc,army,tgt){
+  const trs=G.units.filter(u=>u.p===p&&u.type==='transport'&&u.hp>0);
+  if(!trs.length)return false;
+  const cap=trs.reduce((s,t)=>s+(UNITS.transport.garCap-(t.gar?t.gar.length:0)),0);
+  if(cap<4)return false;
+  const fc=bldCenter(tgt.ent);
+  const stage=aiShoreNear(tc.tx+1,tc.ty+1,fc.x,fc.y);          // our coast, facing them
+  const land =aiShoreNear(Math.round(fc.x),Math.round(fc.y),tc.tx+1,tc.ty+1); // their coast, facing us
+  if(!stage||!land)return false;
+  // march the party to the staging beach; sail the fleet alongside
+  const party=[];
+  for(const u of army){                     // G.units order — identical on every peer
+    if(party.length>=cap)break;
+    if(UNITS[u.type].ship||UNITS[u.type].treb)continue;   // a packed treb misses its setup
+    party.push(u.id);cmdMove(u,stage.lx,stage.ly);
+  }
+  if(party.length<3)return false;
+  for(const tr of trs)cmdMove(tr,stage.wx,stage.wy);
+  ai.inv={ph:0,t0:G.t,tid:tgt.ent.id,
+    sx:stage.lx,sy:stage.ly,swx:stage.wx,swy:stage.wy,
+    lx:land.lx,ly:land.ly,lwx:land.wx,lwy:land.wy,
+    party,trs:trs.map(t=>t.id)};
+  return true;
+}
+function aiInvasionTick(p,ai){
+  const inv=ai.inv;if(!inv)return;
+  const trs=inv.trs.map(id=>G.units.find(u=>u.id===id&&u.hp>0)).filter(Boolean);
+  if(!trs.length){ai.inv=null;return;}                 // fleet sunk — regroup at home
+  const aboard=trs.reduce((s,t)=>s+(t.gar?t.gar.length:0),0);
+  if(inv.ph===0){                                       // boarding at the staging beach
+    let alive=0;
+    for(const id of inv.party){
+      const u=G.units.find(x=>x.id===id&&x.hp>0);
+      if(!u)continue;
+      alive++;
+      if(u.state==='toGarU')continue;
+      const tr=trs.find(t=>(t.gar?t.gar.length:0)<UNITS.transport.garCap);
+      if(tr&&hyp(tr.x-u.x,tr.y-u.y)<7)cmdGarrisonRam(u,tr);
+      else if(u.state==='idle')cmdMove(u,inv.sx,inv.sy);   // keep walking to the beach
+    }
+    // a boarded soldier leaves G.units, so `alive` counts only those still
+    // walking to the beach — everyone aboard (or dead) reads as alive===0
+    const full=aboard>0&&trs.every(t=>(t.gar?t.gar.length:0)>=UNITS.transport.garCap);
+    if((aboard>0&&alive===0)||full||(G.t-inv.t0>50&&aboard>=3)){   // sail with what we have
+      inv.ph=1;inv.t1=G.t;
+      for(const tr of trs)if(tr.gar&&tr.gar.length)cmdMove(tr,inv.lwx,inv.lwy);
+      // idle warships escort the crossing
+      for(const w of G.units)
+        if(w.p===p&&w.hp>0&&UNITS[w.type].ship&&!UNITS[w.type].fisher
+           &&w.type!=='transport'&&w.state==='idle')cmdMove(w,inv.lwx,inv.lwy);
+    }
+    else if(G.t-inv.t0>90&&aboard===0)ai.inv=null;      // nothing boarded; try again later
+  }else if(inv.ph===1){                                 // the crossing
+    for(const tr of trs){
+      if(!tr.gar||!tr.gar.length)continue;
+      if(hyp(tr.x-(inv.lwx+.5),tr.y-(inv.lwy+.5))<3.4)CMDS.unload({id:tr.id,p});
+      else if(tr.state==='idle')cmdMove(tr,inv.lwx,inv.lwy);   // re-push a stalled sail
+    }
+    if(trs.every(t=>!t.gar||!t.gar.length)){
+      // everyone is ashore. ai.attacking/tgtId are already set, so the idle
+      // regroup above sends the landed party at the target next think.
+      for(const tr of trs)cmdMove(tr,inv.swx,inv.swy);  // the fleet sails home for the next wave
+      ai.inv=null;
+    }else if(G.t-inv.t1>140){                           // a crossing that cannot land
+      for(const tr of trs)if(tr.gar&&tr.gar.length)CMDS.unload({id:tr.id,p});
+      ai.inv=null;
     }
   }
 }
@@ -16476,7 +16701,7 @@ requestAnimationFrame(frame);
 
 <script>
 (function(){
-  var BUILD = 'tq-v77';
+  var BUILD = 'tq-v78';
   // The game reads this for the multiplayer version gate (gameVer() falls back
   // to 'dev' when the wrapper is absent, i.e. local test.html / the artifact).
   window.GAMEVER = BUILD;
