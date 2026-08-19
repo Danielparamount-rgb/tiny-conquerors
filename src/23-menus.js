@@ -44,10 +44,59 @@ document.getElementById('startBtn').onclick=()=>{
   initAudio();
   if(AC&&AC.state==='suspended')AC.resume();
   resetNet();
-  mission=null;REC.play=null;
+  mission=null;REC.play=null;dailyRun=null;
+  // a typed seed reproduces a friend's exact map — determinism does the rest
+  const si=document.getElementById('seedIn');
+  if(si&&si.value.trim()){
+    let sv=si.value.trim(),n=0;
+    if(/^\d+$/.test(sv))n=(+sv)>>>0;
+    else{n=2166136261;for(let i=0;i<sv.length;i++){n^=sv.charCodeAt(i);n=Math.imul(n,16777619);}n>>>=0;}
+    pendingSeed=n||1;
+    toast('Playing seed '+pendingSeed);
+  }
   document.getElementById('startOverlay').style.display='none';
   begin();
   TUT.begin();     // first battle ever? walk them in
+};
+/* ---- daily challenge: one seed per calendar day, the SAME for everyone.
+   Fixed rules (4 lords, free-for-all, Knight, standard pace, the date picks
+   your civ and the battlefield) so times are comparable — determinism means
+   every player on earth fights the identical battle today. */
+let dailyRun=null;
+function dailySeed(){
+  const d=new Date();
+  const key=d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate();
+  let n=2166136261^key;n=Math.imul(n,16777619);n^=n>>>13;n=Math.imul(n,16777619);
+  return {seed:n>>>0,key};
+}
+document.getElementById('dailyBtn').onclick=()=>{
+  initAudio();
+  if(AC&&AC.state==='suspended')AC.resume();
+  resetNet();
+  mission=null;REC.play=null;
+  const D=dailySeed();
+  dailyRun=D.key;
+  pendingSeed=D.seed;
+  mapSel=D.seed%3;playersSel=4;teamSel=0;diffSel=1;turboSel=0;regicideSel=0;
+  civSel=D.seed%CIVS.length;
+  document.getElementById('startOverlay').style.display='none';
+  begin();
+  toast('📅 Daily Challenge — everyone fights this exact battle today. Civ: '+CIVS[civSel].name);
+};
+{const db=document.getElementById('dailyBlurb');
+ if(db){db.style.display='';
+   db.textContent='Daily: one shared battle for every player, everywhere. Beat your friends’ time.';}}
+document.getElementById('shareSeedBtn').onclick=()=>{
+  const btn=document.getElementById('shareSeedBtn');
+  const m=Math.floor(G.t/60),s2=Math.floor(G.t%60);
+  const txt=(dailyRun?'Tiny Conquerors Daily '+dailyRun+' — ':'')
+    +(document.getElementById('endTitle').textContent==='Victory!'?'won':'fell')
+    +' in '+m+'m '+s2+'s on map seed '+gameSeed
+    +'. Play the same battle: tiny-conquerors.onrender.com → Map seed '+gameSeed;
+  const done=ok=>{btn.textContent=ok?'✓ Copied — paste it anywhere':'Copy failed';
+    setTimeout(()=>{if(btn.isConnected)btn.textContent='📋  Share this map';},2200);};
+  try{navigator.clipboard.writeText(txt).then(()=>done(true),()=>done(false));}
+  catch(e){done(false);}
 };
 const loadFrom=key=>{
   initAudio();

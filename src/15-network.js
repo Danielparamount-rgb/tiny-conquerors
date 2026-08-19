@@ -153,6 +153,7 @@ function netBegin(m){
   }
   mission=null;
   netMode=true;
+  try{dailyRun=null;}catch(e){}   // a lockstep match is never the daily
   netTurn=0;netIn=new Map();netSent=-1;netStall=0;
   netSendFrom=0;netHumanAt=new Map();
   cmdQ=[];
@@ -194,6 +195,7 @@ function netRejoin(m){
     for(let q=0;q<NP;q++)netTeams[q]=humanSlots.includes(q)?0:1;
   }
   mission=null;netMode=true;
+  try{dailyRun=null;}catch(e){}   // a lockstep match is never the daily
   netTurn=0;netIn=new Map();netSent=-1;netStall=0;netStallSeat=-1;
   // Deliberately NOT seeded from the relay's current aiSeats: the journal's own
   // handovers rebuild this, and a seat that left, came back and left again would

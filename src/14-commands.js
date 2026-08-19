@@ -130,6 +130,7 @@ let cmdQ=[];         // commands issued this turn, not yet applied
 function resetNet(){
   netMode=false;localP=0;humanSlots=[0];netCivs=null;netTeams=null;cmdQ=[];
   netSendFrom=0;netReplay=null;netReplaying=false;
+  try{dailyRun=null;}catch(e){}  // a fresh start is not the daily unless the daily button says so
 }
 function issue(k,d){
   if(REC.play)return null;      // a replay is watched, not commanded

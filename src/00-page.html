@@ -413,6 +413,12 @@
       <button data-rg="0" class="sel">Conquest</button>
       <button data-rg="1">👑 Regicide</button>
     </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:9px">
+      <input id="seedIn" placeholder="Map seed (optional)" inputmode="numeric" autocomplete="off" aria-label="Map seed"
+        style="flex:1;min-width:0;padding:8px 10px;border-radius:8px;border:2px solid #6b5330;background:#efe2bd;color:#241a10;font:inherit;font-size:13px;text-align:center">
+      <button class="bigbtn alt" id="dailyBtn" style="width:auto;margin:0;padding:9px 13px">📅 Daily Challenge</button>
+    </div>
+    <p class="sub" id="dailyBlurb" style="margin:4px 0 0;text-align:center;display:none"></p>
     </div>
     <button class="bigbtn" id="startBtn">⚔ &nbsp;Begin the Conquest</button>
     <button class="bigbtn alt" id="campBtn">📜 &nbsp;Campaign</button>
@@ -457,6 +463,7 @@
     <button class="bigbtn" id="againBtn">Play Again</button>
     <button class="bigbtn alt" id="rematchBtn">⚔ &nbsp;Rematch — same foes</button>
     <button class="bigbtn alt" id="saveRepBtn">🎬 &nbsp;Save replay</button>
+    <button class="bigbtn alt" id="shareSeedBtn">📋 &nbsp;Share this map</button>
   </div>
 </div>
 

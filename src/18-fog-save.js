@@ -213,13 +213,28 @@ function endGame(win){
   document.getElementById('endTitle').textContent=REC.play?'Replay finished':win?'Victory!':'Defeat';
   document.getElementById('endTitle').className=win?'win':'lose';
   document.getElementById('endSub').textContent=sub;
+  let daily='';
+  if(typeof dailyRun!=='undefined'&&dailyRun){
+    // record the day's best time locally; the share button carries it to friends
+    try{
+      const dd=JSON.parse(localStorage.getItem('tq_daily')||'{}');
+      const sec=Math.round(G.t);
+      if(win&&(!dd[dailyRun]||sec<dd[dailyRun])){dd[dailyRun]=sec;
+        localStorage.setItem('tq_daily',JSON.stringify(dd));
+        daily=' · <b>📅 Daily best!</b>';}
+      else if(win)daily=' · 📅 Daily (best '+Math.floor(dd[dailyRun]/60)+'m'+dd[dailyRun]%60+'s)';
+    }catch(e){}
+  }
   document.getElementById('endStats').innerHTML=
     'Battle length: <b>'+m+'m '+s+'s</b> · Age reached: <b>'+AGES[G.P[localP].age]+'</b><br>'+
-    'Soldiers trained: <b>'+G.stats.trained+'</b> · Enemy buildings razed: <b>'+G.stats.razed+'</b>';
+    'Soldiers trained: <b>'+G.stats.trained+'</b> · Enemy buildings razed: <b>'+G.stats.razed+'</b><br>'+
+    'Map seed: <b>'+gameSeed+'</b>'+daily;
   drawEndSummary();
   // rematch makes no sense after a lockstep match ends the socket; replays of replays neither
   document.getElementById('rematchBtn').style.display=(wasNet||REC.play)?'none':'';
   document.getElementById('saveRepBtn').style.display=(REC.last&&!REC.play)?'':'none';
+  const ssb=document.getElementById('shareSeedBtn');
+  if(ssb)ssb.style.display=REC.play?'none':'';
   document.getElementById('saveRepBtn').textContent='🎬  Save replay';
   profileRecord(win,wasNet);
   if(typeof tm==='function')tm('game_end',{win:win?1:0,dur:Math.round(G.t),age:G.P[localP].age});
