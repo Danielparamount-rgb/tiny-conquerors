@@ -156,6 +156,30 @@ function leave(ws) {
    Memory only; a redeploy empties the box, which is fine for a mailbox. */
 const REPORT_CAP = 30, REPORT_MAX = 32 * 1024;
 const reports = [];
+/* Daily Challenge leaderboard: same philosophy as the mailbox — tiny, in
+   memory, wiped on redeploy (a day's board only matters for a day; three are
+   kept so late-night stragglers still see yesterday). One row per name per
+   day, best time wins, top 50 kept. It's a friendly board among friends, not
+   an anti-cheat problem: the relay only clamps the obviously absurd. */
+const dailyBoards = new Map();  // day (int) -> [{n, ms}] sorted ascending
+function dailyPost(day, name, ms) {
+  if (!Number.isInteger(day) || String(day).length !== 8) return false;
+  if (!Number.isInteger(ms) || ms < 15000 || ms > 6 * 3600 * 1000) return false;
+  const n = cleanName(name);
+  let rows = dailyBoards.get(day);
+  if (!rows) { rows = []; dailyBoards.set(day, rows); }
+  const mine = rows.find(r => r.n === n);
+  if (mine) { if (ms < mine.ms) mine.ms = ms; }
+  else rows.push({ n, ms });
+  rows.sort((a, b) => a.ms - b.ms);
+  if (rows.length > 50) rows.length = 50;
+  // keep only the three most recent days
+  if (dailyBoards.size > 3) {
+    const days = [...dailyBoards.keys()].sort((a, b) => b - a);
+    for (const d of days.slice(3)) dailyBoards.delete(d);
+  }
+  return true;
+}
 const CORS = {
   'access-control-allow-origin': '*',
   'access-control-allow-methods': 'GET, POST, OPTIONS',
@@ -165,6 +189,31 @@ const server = http.createServer((req, res) => {
   if (req.url === '/healthz') {
     res.writeHead(200, { 'content-type': 'text/plain' });
     return res.end('ok');
+  }
+  if (req.url.startsWith('/daily')) {
+    if (req.method === 'OPTIONS') { res.writeHead(204, CORS); return res.end(); }
+    if (req.method === 'POST') {
+      let body = '', dead = false;
+      req.on('data', c => {
+        if (dead) return;
+        body += c;
+        if (body.length > 4096) { dead = true; res.writeHead(413, CORS); res.end(); req.destroy(); }
+      });
+      req.on('end', () => {
+        if (dead) return;
+        let m = null; try { m = JSON.parse(body); } catch (_) {}
+        const ok = m && dailyPost(m.day | 0, m.name, m.ms | 0);
+        res.writeHead(ok ? 200 : 400, { ...CORS, 'content-type': 'text/plain' });
+        res.end(ok ? 'ok' : 'no');
+      });
+      return;
+    }
+    if (req.method === 'GET') {
+      const day = +(new URL(req.url, 'http://x').searchParams.get('day') || 0);
+      res.writeHead(200, { ...CORS, 'content-type': 'application/json' });
+      return res.end(JSON.stringify(dailyBoards.get(day) || []));
+    }
+    res.writeHead(405, CORS); return res.end();
   }
   if (req.url === '/report' || req.url === '/reports') {
     if (req.method === 'OPTIONS') { res.writeHead(204, CORS); return res.end(); }

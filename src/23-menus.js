@@ -129,6 +129,78 @@ document.getElementById('shareSeedBtn').onclick=()=>{
   try{navigator.clipboard.writeText(txt).then(()=>done(true),()=>done(false));}
   catch(e){done(false);}
 };
+/* ---- Daily Challenge leaderboard (relay-backed, in-memory, friendly) ----
+   Everyone on earth fights the same battle today; this shows who fought it
+   fastest. Wins only — times are comparable, defeats are not. Fire-and-forget:
+   offline, the artifact sandbox, or a sleeping relay just leave the board
+   hidden, never an error in the player's face. */
+function dailyFmt(ms){const s=Math.round(ms/1000);return Math.floor(s/60)+'m '+String(s%60).padStart(2,'0')+'s';}
+function dailySubmit(day,ms){
+  if(!netAvailable())return Promise.resolve();
+  const name=(localStorage.getItem('tq_name')||'A Conqueror').trim()||'A Conqueror';
+  try{
+    return fetch(netHttpUrl()+'/daily',{method:'POST',body:JSON.stringify({day,name,ms})}).catch(()=>{});
+  }catch(e){return Promise.resolve();}
+}
+function dailyBoardRender(day,myMs){
+  const el=document.getElementById('dailyBoard');
+  if(!el||!netAvailable())return;
+  const me=(localStorage.getItem('tq_name')||'A Conqueror').trim()||'A Conqueror';
+  const go=()=>fetch(netHttpUrl()+'/daily?day='+day).then(r=>r.json()).then(rows=>{
+    if(!Array.isArray(rows)||!rows.length)return;
+    let html='<b>📅 Today\'s fastest conquerors</b><br>';
+    rows.slice(0,8).forEach((r,i)=>{
+      const mine=r.n===me;
+      html+=(i+1)+'. '+(mine?'<b>':'')+r.n.replace(/[<>&]/g,'')+' — '+dailyFmt(r.ms)+(mine?' ◀ you</b>':'')+'<br>';
+    });
+    const rank=rows.findIndex(r=>r.n===me);
+    if(rank>=8)html+='…<br>'+(rank+1)+'. <b>'+me.replace(/[<>&]/g,'')+' — '+dailyFmt(rows[rank].ms)+' ◀ you</b><br>';
+    el.innerHTML=html;el.style.display='';
+  }).catch(()=>{});
+  // submit first so our own time is on the board we then read
+  (myMs?dailySubmit(day,myMs):Promise.resolve()).then(go,go);
+}
+/* ---- progress backup (the Wordle lesson: localStorage dies with cleared
+   browser data and never crosses devices — a copy-paste code fixes both) ---- */
+const PROG_KEYS=['tq_save','tq_camp2','tq_daily','tq_profile','tq_opts','tq_name','tq_tut','tq_seenver','tq_replays'];
+function progressExport(){
+  const o={};
+  for(const k of PROG_KEYS){const v=localStorage.getItem(k);if(v!=null)o[k]=v;}
+  return 'TQ1.'+btoa(unescape(encodeURIComponent(JSON.stringify(o))));
+}
+function progressImport(code){
+  try{
+    code=String(code||'').replace(/\s+/g,'');
+    if(!code.startsWith('TQ1.'))return 'That is not a Tiny Conquerors progress code.';
+    const o=JSON.parse(decodeURIComponent(escape(atob(code.slice(4)))));
+    if(!o||typeof o!=='object')return 'That code did not decode.';
+    let n=0;
+    for(const k of PROG_KEYS)if(typeof o[k]==='string'){localStorage.setItem(k,o[k]);n++;}
+    return n?null:'The code held nothing to restore.';
+  }catch(e){return 'That code did not decode.';}
+}
+function showImport(){
+  let ov=document.getElementById('impOv');
+  if(!ov){
+    ov=document.createElement('div');ov.id='impOv';ov.className='overlay';ov.style.display='none';
+    ov.innerHTML='<div class="scroll" style="max-width:420px">'
+      +'<h1 style="font-size:20px">Restore progress</h1>'
+      +'<p class="sub">Paste a progress code from another device. This OVERWRITES this device\'s saves and records.</p>'
+      +'<textarea id="impTxt" aria-label="Progress code" style="width:100%;height:110px;padding:8px;border-radius:8px;border:2px solid #6b5330;background:#efe2bd;color:#241a10;font:12px monospace"></textarea>'
+      +'<p class="sub" id="impMsg" style="color:#8a2f27;min-height:16px;margin:6px 0"></p>'
+      +'<button class="bigbtn" id="impGo">Restore &amp; reload</button>'
+      +'<button class="bigbtn alt" id="impBack">Cancel</button></div>';
+    document.body.appendChild(ov);
+    ov.querySelector('#impBack').onclick=()=>{ov.style.display='none';};
+    ov.querySelector('#impGo').onclick=()=>{
+      const err=progressImport(ov.querySelector('#impTxt').value);
+      if(err)ov.querySelector('#impMsg').textContent=err;
+      else location.reload();   // options and caches apply at boot
+    };
+  }
+  ov.querySelector('#impTxt').value='';ov.querySelector('#impMsg').textContent='';
+  ov.style.display='flex';
+}
 const loadFrom=key=>{
   initAudio();
   if(AC&&AC.state==='suspended')AC.resume();
@@ -160,6 +232,7 @@ function applyBodyOpts(){
   document.body.classList.toggle('lefty',!!OPT.lefty);
   document.body.classList.toggle('bigui',!!OPT.bigui);
   document.body.classList.toggle('bigtext',!!OPT.bigtext);
+  document.body.classList.toggle('bigmap',!!OPT.bigmap);
 }
 applyBodyOpts();
 function buildSettings(){
@@ -195,6 +268,21 @@ function buildSettings(){
   row('🫲 Left-handed layout',toggle('lefty',false,applyBodyOpts));
   row('🔍 Larger buttons',toggle('bigui',false,applyBodyOpts));
   row('🔠 Larger text',toggle('bigtext',false,applyBodyOpts));
+  row('🗺 Larger minimap (phones)',toggle('bigmap',false,applyBodyOpts));
+  // progress backup: copy a code out, paste a code in
+  const ex=document.createElement('button');ex.className='bigbtn alt';
+  ex.style.cssText='width:auto;padding:7px 12px;margin:0';ex.textContent='📤 Copy code';
+  ex.onclick=()=>{
+    const done=ok=>{ex.textContent=ok?'✓ Copied':'Copy failed';
+      setTimeout(()=>{if(ex.isConnected)ex.textContent='📤 Copy code';},1800);};
+    try{navigator.clipboard.writeText(progressExport()).then(()=>done(true),()=>done(false));}
+    catch(e){done(false);}
+  };
+  row('💾 Back up progress (saves, records)',ex);
+  const im=document.createElement('button');im.className='bigbtn alt';
+  im.style.cssText='width:auto;padding:7px 12px;margin:0';im.textContent='📥 Paste code';
+  im.onclick=()=>{document.getElementById('setOverlay').style.display='none';showImport();};
+  row('♻ Restore progress from a code',im);
   row('✨ HD unit sprites (large download)',toggle('hdSprites',true,()=>{
     if(G&&!G.over)toast('Applies when you leave the battle');
     else{toast('Reloading with the new art…');setTimeout(()=>location.reload(),600);}
@@ -309,6 +397,7 @@ const TUT={
     if(localStorage.getItem('tq_tut')==='done')return;
     if(mission||netMode||REC.play)return;
     this.step=0;this.active=true;this.show();
+    tm('tut_start',{});   // funnel head — step-level drop-off is the FTUE number that matters
   },
   bar(){return document.getElementById('tutBar');},
   show(){
@@ -322,24 +411,26 @@ const TUT={
       const sk=document.createElement('button');
       sk.textContent='Skip';sk.setAttribute('aria-label','Skip tutorial');
       sk.style.cssText='padding:5px 10px;border-radius:7px;border:1px solid #6a6355;background:rgba(30,26,20,.8);color:#cbb98a;font:inherit;font-size:11px';
-      sk.onclick=()=>{TUT.finish();};
+      sk.onclick=()=>{TUT.finish(true);};
       b.appendChild(tx);b.appendChild(sk);
       document.body.appendChild(b);
     }
     b.style.display='flex';
     document.getElementById('tutTxt').textContent=(this.step+1)+'/'+this.steps.length+' — '+this.steps[this.step].txt;
   },
-  finish(){
+  finish(skipped){
     this.active=false;
     localStorage.setItem('tq_tut','done');
     const b=this.bar();if(b)b.style.display='none';
     toast('Tutorial complete — the rest is conquest');buzz(20);
+    tm(skipped?'tut_skip':'tut_done',{at:this.step});
   },
   tick(){
     if(!this.active||!G||G.over){const b=this.bar();if(b&&!this.active)b.style.display='none';return;}
     try{
       if(this.steps[this.step].done()){
         this.step++;
+        tm('tut_step',{n:this.step});   // reached step N — the funnel is these events
         if(this.step>=this.steps.length)this.finish();
         else{this.show();snd('done');}
       }

@@ -59,8 +59,10 @@ let netLeftName='';           // who dropped, for the message when the stall run
    simulations computed differently. That split is the single most useful fact
    a desync report can carry. */
 let netInHash=2166136261>>>0;
+let netCmdLog=[];   // last ~50 applied turns, kept for the desync forensic report
 function netFoldCmds(arr){
   const s=JSON.stringify(arr);   // JSON round-trips key order + float text identically on every engine
+  if(arr.some(a=>a&&a.length)){netCmdLog.push(netTurn+':'+s);if(netCmdLog.length>50)netCmdLog.shift();} // non-empty turns only — the window should hold minutes, not seconds
   let h=netInHash;
   for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}
   netInHash=h>>>0;
@@ -90,7 +92,7 @@ function netReset(){
   netSendFrom=0;netReplay=null;netReplaying=false;
   netInHash=2166136261>>>0;
   clearTimeout(netProbeT);clearTimeout(netRejoinT);netRejoinT=null;netRejoinN=99;
-  netLagDyn=NET_LAG;netRttAvg=-1;netRttMax=0;netPingSentAt=0;netPingLast=0;netLagSaid=false;netLagCalm=0;
+  netLagDyn=NET_LAG;netRttAvg=-1;netRttMax=0;netPingSentAt=0;netPingLast=0;netLagSaid=false;netLagCalm=0;netCmdLog=[];
   const ov=document.getElementById('netCatch');if(ov)ov.style.display='none';
 }
 function netConnect(then){
@@ -190,6 +192,7 @@ function netOn(m){
           else if(st.size>1)why='The players received identical orders but computed different worlds — a simulation bug (possibly device math). Please report which phones were playing.';
         }
       }catch(e){}
+      netDesyncReport(m);
       netHalt('The battle has drifted apart',
         'Turn '+m.turn+' — the players stopped agreeing on the state of the world.',why);
       break;}
@@ -226,7 +229,7 @@ function netBegin(m){
   netSendFrom=0;netHumanAt=new Map();
   netInHash=2166136261>>>0;
   clearTimeout(netRejoinT);netRejoinT=null;netRejoinN=99;
-  netLagDyn=NET_LAG;netRttAvg=-1;netRttMax=0;netPingSentAt=0;netPingLast=0;netLagSaid=false;netLagCalm=0;
+  netLagDyn=NET_LAG;netRttAvg=-1;netRttMax=0;netPingSentAt=0;netPingLast=0;netLagSaid=false;netLagCalm=0;netCmdLog=[];
   cmdQ=[];
   pendingSeed=m.seed>>>0;
   document.getElementById('mpOverlay').style.display='none';
@@ -271,7 +274,7 @@ function netRejoin(m){
   netTurn=0;netIn=new Map();netSent=-1;netStall=0;netStallSeat=-1;
   netInHash=2166136261>>>0;                 // the replay re-folds the same stream
   clearTimeout(netRejoinT);netRejoinT=null;netRejoinN=99;  // recovery succeeded — stop knocking
-  netLagDyn=NET_LAG;netRttAvg=-1;netRttMax=0;netPingSentAt=0;netPingLast=0;netLagSaid=false;netLagCalm=0;
+  netLagDyn=NET_LAG;netRttAvg=-1;netRttMax=0;netPingSentAt=0;netPingLast=0;netLagSaid=false;netLagCalm=0;netCmdLog=[];
   // Deliberately NOT seeded from the relay's current aiSeats: the journal's own
   // handovers rebuild this, and a seat that left, came back and left again would
   // otherwise end up mislabelled.
@@ -507,6 +510,23 @@ function netHalt(title,sub,body){
   document.getElementById('netHaltSub').textContent=sub||'';
   document.getElementById('netHaltBody').textContent=body||'';
   document.getElementById('netHalt').style.display='flex';
+}
+/* A desync from two friends' phones used to be unreproducible hearsay. Now
+   both peers mail the relay's report box a forensic snapshot: build, seed,
+   settings, the split hashes from every seat, this peer's own hash pair, and
+   the last ~50 non-empty command turns. Read them back with GET /reports.
+   Gated on the crash-report setting (default on), fire-and-forget. */
+function netDesyncReport(m){
+  if(OPT.crashRep===false)return;
+  try{
+    const body=('DS '+gameVer()+' | seat '+localP+' turn '+m.turn
+      +' | seed '+gameSeed+' map '+mapRealSel+' np '+NP+' lag '+netLagDyn
+      +' | mine '+stateHash()+'.'+netInHash.toString(16)
+      +' | all '+JSON.stringify(m.hashes||{})
+      +' | ua '+navigator.userAgent.slice(0,120)
+      +' | cmds '+netCmdLog.join(';')).slice(0,28000);
+    fetch(netHttpUrl()+'/report',{method:'POST',body}).catch(()=>{});
+  }catch(e){}
 }
 /* ---- foreground recovery (phones) ----
    iOS kills a backgrounded page's WebSocket without firing close — the object

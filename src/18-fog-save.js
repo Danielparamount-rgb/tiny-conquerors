@@ -227,6 +227,7 @@ function endGame(win){
   document.getElementById('endTitle').className=win?'win':'lose';
   document.getElementById('endSub').textContent=sub;
   let daily='';
+  {const db=document.getElementById('dailyBoard');if(db)db.style.display='none';} // only a daily shows a board
   if(typeof dailyRun!=='undefined'&&dailyRun){
     // record the day's best time locally; the share button carries it to friends
     try{
@@ -237,6 +238,8 @@ function endGame(win){
         daily=' · <b>📅 Daily best!</b>';}
       else if(win)daily=' · 📅 Daily (best '+Math.floor(dd[dailyRun]/60)+'m'+dd[dailyRun]%60+'s)';
     }catch(e){}
+    // the relay's board: everyone fought the same battle — see who fought it fastest
+    try{dailyBoardRender(dailyRun,win?Math.round(G.t*1000):0);}catch(e){}
   }
   document.getElementById('endStats').innerHTML=
     'Battle length: <b>'+m+'m '+s+'s</b> · Age reached: <b>'+AGES[G.P[localP].age]+'</b><br>'+

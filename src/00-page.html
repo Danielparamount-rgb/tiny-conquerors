@@ -98,6 +98,12 @@
   button:focus-visible{outline:2px solid var(--gold);outline-offset:1px;}
   body.lefty #zoomBtns{right:auto;left:8px;}
   body.lefty #minimap{right:auto;left:8px;}
+  /* Larger minimap (phones): miniToTile normalises taps by the element's
+     on-screen rect, so a pure CSS resize keeps tap-to-jump exact. Floating
+     layout only — the ≥760px panel dock has its own fixed column. */
+  @media (max-width:759px){
+    body.bigmap #minimap{width:170px;height:99px;}
+  }
   body.lefty #chatWheel{right:auto;left:50px;}
   body.bigui .cmd{font-size:13px;}
   body.bigui #btnRow button.cmd{min-height:70px;}
@@ -476,6 +482,7 @@
     <h1 id="endTitle">Victory</h1>
     <p class="sub" id="endSub"></p>
     <p id="endStats" style="text-align:center"></p>
+    <div id="dailyBoard" style="display:none;max-width:320px;margin:6px auto;font-size:12.5px;text-align:left;background:rgba(107,83,48,.12);border:1px solid rgba(107,83,48,.4);border-radius:8px;padding:7px 12px"></div>
     <canvas id="endGraph" width="440" height="150" style="width:100%;max-width:440px;display:block;margin:6px auto;border-radius:8px" aria-label="Score over time"></canvas>
     <div id="endTable" style="font-size:11.5px;overflow-x:auto"></div>
     <button class="bigbtn" id="againBtn">Play Again</button>

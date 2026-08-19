@@ -108,6 +108,12 @@
   button:focus-visible{outline:2px solid var(--gold);outline-offset:1px;}
   body.lefty #zoomBtns{right:auto;left:8px;}
   body.lefty #minimap{right:auto;left:8px;}
+  /* Larger minimap (phones): miniToTile normalises taps by the element's
+     on-screen rect, so a pure CSS resize keeps tap-to-jump exact. Floating
+     layout only — the ≥760px panel dock has its own fixed column. */
+  @media (max-width:759px){
+    body.bigmap #minimap{width:170px;height:99px;}
+  }
   body.lefty #chatWheel{right:auto;left:50px;}
   body.bigui .cmd{font-size:13px;}
   body.bigui #btnRow button.cmd{min-height:70px;}
@@ -486,6 +492,7 @@
     <h1 id="endTitle">Victory</h1>
     <p class="sub" id="endSub"></p>
     <p id="endStats" style="text-align:center"></p>
+    <div id="dailyBoard" style="display:none;max-width:320px;margin:6px auto;font-size:12.5px;text-align:left;background:rgba(107,83,48,.12);border:1px solid rgba(107,83,48,.4);border-radius:8px;padding:7px 12px"></div>
     <canvas id="endGraph" width="440" height="150" style="width:100%;max-width:440px;display:block;margin:6px auto;border-radius:8px" aria-label="Score over time"></canvas>
     <div id="endTable" style="font-size:11.5px;overflow-x:auto"></div>
     <button class="bigbtn" id="againBtn">Play Again</button>
@@ -2814,8 +2821,10 @@ let netLeftName='';           // who dropped, for the message when the stall run
    simulations computed differently. That split is the single most useful fact
    a desync report can carry. */
 let netInHash=2166136261>>>0;
+let netCmdLog=[];   // last ~50 applied turns, kept for the desync forensic report
 function netFoldCmds(arr){
   const s=JSON.stringify(arr);   // JSON round-trips key order + float text identically on every engine
+  if(arr.some(a=>a&&a.length)){netCmdLog.push(netTurn+':'+s);if(netCmdLog.length>50)netCmdLog.shift();} // non-empty turns only — the window should hold minutes, not seconds
   let h=netInHash;
   for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}
   netInHash=h>>>0;
@@ -2845,7 +2854,7 @@ function netReset(){
   netSendFrom=0;netReplay=null;netReplaying=false;
   netInHash=2166136261>>>0;
   clearTimeout(netProbeT);clearTimeout(netRejoinT);netRejoinT=null;netRejoinN=99;
-  netLagDyn=NET_LAG;netRttAvg=-1;netRttMax=0;netPingSentAt=0;netPingLast=0;netLagSaid=false;netLagCalm=0;
+  netLagDyn=NET_LAG;netRttAvg=-1;netRttMax=0;netPingSentAt=0;netPingLast=0;netLagSaid=false;netLagCalm=0;netCmdLog=[];
   const ov=document.getElementById('netCatch');if(ov)ov.style.display='none';
 }
 function netConnect(then){
@@ -2945,6 +2954,7 @@ function netOn(m){
           else if(st.size>1)why='The players received identical orders but computed different worlds — a simulation bug (possibly device math). Please report which phones were playing.';
         }
       }catch(e){}
+      netDesyncReport(m);
       netHalt('The battle has drifted apart',
         'Turn '+m.turn+' — the players stopped agreeing on the state of the world.',why);
       break;}
@@ -2981,7 +2991,7 @@ function netBegin(m){
   netSendFrom=0;netHumanAt=new Map();
   netInHash=2166136261>>>0;
   clearTimeout(netRejoinT);netRejoinT=null;netRejoinN=99;
-  netLagDyn=NET_LAG;netRttAvg=-1;netRttMax=0;netPingSentAt=0;netPingLast=0;netLagSaid=false;netLagCalm=0;
+  netLagDyn=NET_LAG;netRttAvg=-1;netRttMax=0;netPingSentAt=0;netPingLast=0;netLagSaid=false;netLagCalm=0;netCmdLog=[];
   cmdQ=[];
   pendingSeed=m.seed>>>0;
   document.getElementById('mpOverlay').style.display='none';
@@ -3026,7 +3036,7 @@ function netRejoin(m){
   netTurn=0;netIn=new Map();netSent=-1;netStall=0;netStallSeat=-1;
   netInHash=2166136261>>>0;                 // the replay re-folds the same stream
   clearTimeout(netRejoinT);netRejoinT=null;netRejoinN=99;  // recovery succeeded — stop knocking
-  netLagDyn=NET_LAG;netRttAvg=-1;netRttMax=0;netPingSentAt=0;netPingLast=0;netLagSaid=false;netLagCalm=0;
+  netLagDyn=NET_LAG;netRttAvg=-1;netRttMax=0;netPingSentAt=0;netPingLast=0;netLagSaid=false;netLagCalm=0;netCmdLog=[];
   // Deliberately NOT seeded from the relay's current aiSeats: the journal's own
   // handovers rebuild this, and a seat that left, came back and left again would
   // otherwise end up mislabelled.
@@ -3262,6 +3272,23 @@ function netHalt(title,sub,body){
   document.getElementById('netHaltSub').textContent=sub||'';
   document.getElementById('netHaltBody').textContent=body||'';
   document.getElementById('netHalt').style.display='flex';
+}
+/* A desync from two friends' phones used to be unreproducible hearsay. Now
+   both peers mail the relay's report box a forensic snapshot: build, seed,
+   settings, the split hashes from every seat, this peer's own hash pair, and
+   the last ~50 non-empty command turns. Read them back with GET /reports.
+   Gated on the crash-report setting (default on), fire-and-forget. */
+function netDesyncReport(m){
+  if(OPT.crashRep===false)return;
+  try{
+    const body=('DS '+gameVer()+' | seat '+localP+' turn '+m.turn
+      +' | seed '+gameSeed+' map '+mapRealSel+' np '+NP+' lag '+netLagDyn
+      +' | mine '+stateHash()+'.'+netInHash.toString(16)
+      +' | all '+JSON.stringify(m.hashes||{})
+      +' | ua '+navigator.userAgent.slice(0,120)
+      +' | cmds '+netCmdLog.join(';')).slice(0,28000);
+    fetch(netHttpUrl()+'/report',{method:'POST',body}).catch(()=>{});
+  }catch(e){}
 }
 /* ---- foreground recovery (phones) ----
    iOS kills a backgrounded page's WebSocket without firing close — the object
@@ -5249,6 +5276,7 @@ function endGame(win){
   document.getElementById('endTitle').className=win?'win':'lose';
   document.getElementById('endSub').textContent=sub;
   let daily='';
+  {const db=document.getElementById('dailyBoard');if(db)db.style.display='none';} // only a daily shows a board
   if(typeof dailyRun!=='undefined'&&dailyRun){
     // record the day's best time locally; the share button carries it to friends
     try{
@@ -5259,6 +5287,8 @@ function endGame(win){
         daily=' · <b>📅 Daily best!</b>';}
       else if(win)daily=' · 📅 Daily (best '+Math.floor(dd[dailyRun]/60)+'m'+dd[dailyRun]%60+'s)';
     }catch(e){}
+    // the relay's board: everyone fought the same battle — see who fought it fastest
+    try{dailyBoardRender(dailyRun,win?Math.round(G.t*1000):0);}catch(e){}
   }
   document.getElementById('endStats').innerHTML=
     'Battle length: <b>'+m+'m '+s+'s</b> · Age reached: <b>'+AGES[G.P[localP].age]+'</b><br>'+
@@ -12105,6 +12135,78 @@ document.getElementById('shareSeedBtn').onclick=()=>{
   try{navigator.clipboard.writeText(txt).then(()=>done(true),()=>done(false));}
   catch(e){done(false);}
 };
+/* ---- Daily Challenge leaderboard (relay-backed, in-memory, friendly) ----
+   Everyone on earth fights the same battle today; this shows who fought it
+   fastest. Wins only — times are comparable, defeats are not. Fire-and-forget:
+   offline, the artifact sandbox, or a sleeping relay just leave the board
+   hidden, never an error in the player's face. */
+function dailyFmt(ms){const s=Math.round(ms/1000);return Math.floor(s/60)+'m '+String(s%60).padStart(2,'0')+'s';}
+function dailySubmit(day,ms){
+  if(!netAvailable())return Promise.resolve();
+  const name=(localStorage.getItem('tq_name')||'A Conqueror').trim()||'A Conqueror';
+  try{
+    return fetch(netHttpUrl()+'/daily',{method:'POST',body:JSON.stringify({day,name,ms})}).catch(()=>{});
+  }catch(e){return Promise.resolve();}
+}
+function dailyBoardRender(day,myMs){
+  const el=document.getElementById('dailyBoard');
+  if(!el||!netAvailable())return;
+  const me=(localStorage.getItem('tq_name')||'A Conqueror').trim()||'A Conqueror';
+  const go=()=>fetch(netHttpUrl()+'/daily?day='+day).then(r=>r.json()).then(rows=>{
+    if(!Array.isArray(rows)||!rows.length)return;
+    let html='<b>📅 Today\'s fastest conquerors</b><br>';
+    rows.slice(0,8).forEach((r,i)=>{
+      const mine=r.n===me;
+      html+=(i+1)+'. '+(mine?'<b>':'')+r.n.replace(/[<>&]/g,'')+' — '+dailyFmt(r.ms)+(mine?' ◀ you</b>':'')+'<br>';
+    });
+    const rank=rows.findIndex(r=>r.n===me);
+    if(rank>=8)html+='…<br>'+(rank+1)+'. <b>'+me.replace(/[<>&]/g,'')+' — '+dailyFmt(rows[rank].ms)+' ◀ you</b><br>';
+    el.innerHTML=html;el.style.display='';
+  }).catch(()=>{});
+  // submit first so our own time is on the board we then read
+  (myMs?dailySubmit(day,myMs):Promise.resolve()).then(go,go);
+}
+/* ---- progress backup (the Wordle lesson: localStorage dies with cleared
+   browser data and never crosses devices — a copy-paste code fixes both) ---- */
+const PROG_KEYS=['tq_save','tq_camp2','tq_daily','tq_profile','tq_opts','tq_name','tq_tut','tq_seenver','tq_replays'];
+function progressExport(){
+  const o={};
+  for(const k of PROG_KEYS){const v=localStorage.getItem(k);if(v!=null)o[k]=v;}
+  return 'TQ1.'+btoa(unescape(encodeURIComponent(JSON.stringify(o))));
+}
+function progressImport(code){
+  try{
+    code=String(code||'').replace(/\s+/g,'');
+    if(!code.startsWith('TQ1.'))return 'That is not a Tiny Conquerors progress code.';
+    const o=JSON.parse(decodeURIComponent(escape(atob(code.slice(4)))));
+    if(!o||typeof o!=='object')return 'That code did not decode.';
+    let n=0;
+    for(const k of PROG_KEYS)if(typeof o[k]==='string'){localStorage.setItem(k,o[k]);n++;}
+    return n?null:'The code held nothing to restore.';
+  }catch(e){return 'That code did not decode.';}
+}
+function showImport(){
+  let ov=document.getElementById('impOv');
+  if(!ov){
+    ov=document.createElement('div');ov.id='impOv';ov.className='overlay';ov.style.display='none';
+    ov.innerHTML='<div class="scroll" style="max-width:420px">'
+      +'<h1 style="font-size:20px">Restore progress</h1>'
+      +'<p class="sub">Paste a progress code from another device. This OVERWRITES this device\'s saves and records.</p>'
+      +'<textarea id="impTxt" aria-label="Progress code" style="width:100%;height:110px;padding:8px;border-radius:8px;border:2px solid #6b5330;background:#efe2bd;color:#241a10;font:12px monospace"></textarea>'
+      +'<p class="sub" id="impMsg" style="color:#8a2f27;min-height:16px;margin:6px 0"></p>'
+      +'<button class="bigbtn" id="impGo">Restore &amp; reload</button>'
+      +'<button class="bigbtn alt" id="impBack">Cancel</button></div>';
+    document.body.appendChild(ov);
+    ov.querySelector('#impBack').onclick=()=>{ov.style.display='none';};
+    ov.querySelector('#impGo').onclick=()=>{
+      const err=progressImport(ov.querySelector('#impTxt').value);
+      if(err)ov.querySelector('#impMsg').textContent=err;
+      else location.reload();   // options and caches apply at boot
+    };
+  }
+  ov.querySelector('#impTxt').value='';ov.querySelector('#impMsg').textContent='';
+  ov.style.display='flex';
+}
 const loadFrom=key=>{
   initAudio();
   if(AC&&AC.state==='suspended')AC.resume();
@@ -12136,6 +12238,7 @@ function applyBodyOpts(){
   document.body.classList.toggle('lefty',!!OPT.lefty);
   document.body.classList.toggle('bigui',!!OPT.bigui);
   document.body.classList.toggle('bigtext',!!OPT.bigtext);
+  document.body.classList.toggle('bigmap',!!OPT.bigmap);
 }
 applyBodyOpts();
 function buildSettings(){
@@ -12171,6 +12274,21 @@ function buildSettings(){
   row('🫲 Left-handed layout',toggle('lefty',false,applyBodyOpts));
   row('🔍 Larger buttons',toggle('bigui',false,applyBodyOpts));
   row('🔠 Larger text',toggle('bigtext',false,applyBodyOpts));
+  row('🗺 Larger minimap (phones)',toggle('bigmap',false,applyBodyOpts));
+  // progress backup: copy a code out, paste a code in
+  const ex=document.createElement('button');ex.className='bigbtn alt';
+  ex.style.cssText='width:auto;padding:7px 12px;margin:0';ex.textContent='📤 Copy code';
+  ex.onclick=()=>{
+    const done=ok=>{ex.textContent=ok?'✓ Copied':'Copy failed';
+      setTimeout(()=>{if(ex.isConnected)ex.textContent='📤 Copy code';},1800);};
+    try{navigator.clipboard.writeText(progressExport()).then(()=>done(true),()=>done(false));}
+    catch(e){done(false);}
+  };
+  row('💾 Back up progress (saves, records)',ex);
+  const im=document.createElement('button');im.className='bigbtn alt';
+  im.style.cssText='width:auto;padding:7px 12px;margin:0';im.textContent='📥 Paste code';
+  im.onclick=()=>{document.getElementById('setOverlay').style.display='none';showImport();};
+  row('♻ Restore progress from a code',im);
   row('✨ HD unit sprites (large download)',toggle('hdSprites',true,()=>{
     if(G&&!G.over)toast('Applies when you leave the battle');
     else{toast('Reloading with the new art…');setTimeout(()=>location.reload(),600);}
@@ -12285,6 +12403,7 @@ const TUT={
     if(localStorage.getItem('tq_tut')==='done')return;
     if(mission||netMode||REC.play)return;
     this.step=0;this.active=true;this.show();
+    tm('tut_start',{});   // funnel head — step-level drop-off is the FTUE number that matters
   },
   bar(){return document.getElementById('tutBar');},
   show(){
@@ -12298,24 +12417,26 @@ const TUT={
       const sk=document.createElement('button');
       sk.textContent='Skip';sk.setAttribute('aria-label','Skip tutorial');
       sk.style.cssText='padding:5px 10px;border-radius:7px;border:1px solid #6a6355;background:rgba(30,26,20,.8);color:#cbb98a;font:inherit;font-size:11px';
-      sk.onclick=()=>{TUT.finish();};
+      sk.onclick=()=>{TUT.finish(true);};
       b.appendChild(tx);b.appendChild(sk);
       document.body.appendChild(b);
     }
     b.style.display='flex';
     document.getElementById('tutTxt').textContent=(this.step+1)+'/'+this.steps.length+' — '+this.steps[this.step].txt;
   },
-  finish(){
+  finish(skipped){
     this.active=false;
     localStorage.setItem('tq_tut','done');
     const b=this.bar();if(b)b.style.display='none';
     toast('Tutorial complete — the rest is conquest');buzz(20);
+    tm(skipped?'tut_skip':'tut_done',{at:this.step});
   },
   tick(){
     if(!this.active||!G||G.over){const b=this.bar();if(b&&!this.active)b.style.display='none';return;}
     try{
       if(this.steps[this.step].done()){
         this.step++;
+        tm('tut_step',{n:this.step});   // reached step N — the funnel is these events
         if(this.step>=this.steps.length)this.finish();
         else{this.show();snd('done');}
       }
@@ -16697,11 +16818,87 @@ requestAnimationFrame(frame);
   }
   addEventListener('load',()=>setTimeout(run,500));
 })();
+/* ================= long benchmark — open /?bench=long =======================
+   The 20-second bench cannot see THERMAL THROTTLING, which begins 60-90s in on
+   budget phones and 15-25 minutes in on flagships. This one plays a real
+   worst-case match through the NORMAL frame loop (so the load is honest),
+   sampling the displayed frame rate in 30-second windows; the first-window vs
+   last-window sag IS the throttle. Duration override for testing: &bmin=N. */
+(function(){
+  if(!/[?&]bench=long\b/.test(location.search))return;
+  const bm=/[?&]bmin=([\d.]+)/.exec(location.search);
+  const MINUTES=bm?Math.max(.1,+bm[1]):20;
+  const relayHttp=()=>(location.hostname==='localhost'||location.hostname==='127.0.0.1')
+    ?'http://localhost:8080':'https://tiny-conquerors-relay.onrender.com';
+  const chip=document.createElement('div');
+  chip.style.cssText='position:fixed;left:8px;top:44px;z-index:30;padding:6px 10px;'
+    +'background:rgba(30,24,16,.92);border:1px solid #c9a227;border-radius:8px;'
+    +'color:#f0e2bd;font:12px system-ui;pointer-events:none;white-space:pre-wrap;max-width:70vw';
+  const windows=[];
+  let frames=0,winStart=0,deltas=[],lastT=0,hiddenMs=0,hidT=0,restarts=0;
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden)hidT=performance.now();
+    else if(hidT){hiddenMs+=performance.now()-hidT;hidT=0;}
+  });
+  function startScene(){
+    mission=null;resetNet();
+    diffSel=2;civSel=0;turboSel=0;teamSel=1;mapSel=1;playersSel=8;
+    pendingSeed=0;   // fresh seed each (re)start — the load matters, not the battle
+    begin();
+    G.vis.fill(2);fogDirty=true;renderFogCanvas();
+    const p=isoPt(MAP/2,MAP/2);
+    G.cam.z=1;G.cam.x=p.x-vw/G.cam.z/2;G.cam.y=p.y-vh/G.cam.z/2;
+  }
+  function sampler(t){
+    if(G&&G.over){restarts++;startScene();}   // a decided battle idles the GPU — keep the fire lit
+    if(!winStart)winStart=t;
+    if(lastT){deltas.push(t-lastT);frames++;}
+    lastT=t;
+    if(t-winStart>=30000){
+      deltas.sort((a,b)=>a-b);
+      windows.push({fps:Math.round(frames*1000/(t-winStart)),med:+((deltas[deltas.length>>1]||0).toFixed(1))});
+      frames=0;deltas=[];winStart=t;
+      chip.textContent='🔥 long bench '+(windows.length/2)+' / '+MINUTES+' min — keep the screen ON\n'
+        +'fps per 30s: '+windows.map(w=>w.fps).join(' ');
+      if(windows.length>=MINUTES*2)return finish();
+    }
+    requestAnimationFrame(sampler);
+  }
+  function finish(){
+    const first=windows[0]||{fps:0},last=windows[windows.length-1]||{fps:0};
+    const minW=windows.reduce((m2,w)=>Math.min(m2,w.fps),1e9);
+    const sag=first.fps?Math.round(100*(first.fps-last.fps)/first.fps):0;
+    const report={kind:'benchlong',minutes:MINUTES,restarts,
+      hiddenSec:Math.round(hiddenMs/1000),fps30:!!OPT.fps30,
+      ua:navigator.userAgent,dpr:devicePixelRatio,windows};
+    let sent='not sent';
+    fetch(relayHttp()+'/report',{method:'POST',body:JSON.stringify(report)})
+      .then(r=>{sent=r.ok?'sent to the workshop ✓':'upload failed — screenshot this';done();},
+            ()=>{sent='upload failed — screenshot this';done();});
+    function done(){
+      chip.style.pointerEvents='auto';
+      chip.textContent='🔥 Long bench finished — '+MINUTES+' min\n'
+        +'first 30s: '+first.fps+' fps · last 30s: '+last.fps+' fps · worst window: '+minW+' fps\n'
+        +(sag>10?'Thermal sag: ~'+sag+'% — the phone is throttling on long matches.'
+                :'Sag '+sag+'% — this device holds its pace. ')
+        +(hiddenMs>3000?'\n⚠ screen was off/hidden '+Math.round(hiddenMs/1000)+'s — numbers are suspect':'')
+        +'\n'+sent+'\nTap here to return to the game.';
+      chip.onclick=()=>location.replace(location.pathname);
+    }
+  }
+  addEventListener('load',()=>setTimeout(()=>{
+    document.getElementById('startOverlay').style.display='none';
+    startScene();
+    document.body.appendChild(chip);
+    chip.textContent='🔥 long bench warming up — keep the screen ON';
+    requestAnimationFrame(sampler);
+  },500));
+})();
 </script>
 
 <script>
 (function(){
-  var BUILD = 'tq-v78';
+  var BUILD = 'tq-v79';
   // The game reads this for the multiplayer version gate (gameVer() falls back
   // to 'dev' when the wrapper is absent, i.e. local test.html / the artifact).
   window.GAMEVER = BUILD;

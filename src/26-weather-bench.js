@@ -356,4 +356,80 @@ requestAnimationFrame(frame);
   }
   addEventListener('load',()=>setTimeout(run,500));
 })();
+/* ================= long benchmark — open /?bench=long =======================
+   The 20-second bench cannot see THERMAL THROTTLING, which begins 60-90s in on
+   budget phones and 15-25 minutes in on flagships. This one plays a real
+   worst-case match through the NORMAL frame loop (so the load is honest),
+   sampling the displayed frame rate in 30-second windows; the first-window vs
+   last-window sag IS the throttle. Duration override for testing: &bmin=N. */
+(function(){
+  if(!/[?&]bench=long\b/.test(location.search))return;
+  const bm=/[?&]bmin=([\d.]+)/.exec(location.search);
+  const MINUTES=bm?Math.max(.1,+bm[1]):20;
+  const relayHttp=()=>(location.hostname==='localhost'||location.hostname==='127.0.0.1')
+    ?'http://localhost:8080':'https://tiny-conquerors-relay.onrender.com';
+  const chip=document.createElement('div');
+  chip.style.cssText='position:fixed;left:8px;top:44px;z-index:30;padding:6px 10px;'
+    +'background:rgba(30,24,16,.92);border:1px solid #c9a227;border-radius:8px;'
+    +'color:#f0e2bd;font:12px system-ui;pointer-events:none;white-space:pre-wrap;max-width:70vw';
+  const windows=[];
+  let frames=0,winStart=0,deltas=[],lastT=0,hiddenMs=0,hidT=0,restarts=0;
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden)hidT=performance.now();
+    else if(hidT){hiddenMs+=performance.now()-hidT;hidT=0;}
+  });
+  function startScene(){
+    mission=null;resetNet();
+    diffSel=2;civSel=0;turboSel=0;teamSel=1;mapSel=1;playersSel=8;
+    pendingSeed=0;   // fresh seed each (re)start — the load matters, not the battle
+    begin();
+    G.vis.fill(2);fogDirty=true;renderFogCanvas();
+    const p=isoPt(MAP/2,MAP/2);
+    G.cam.z=1;G.cam.x=p.x-vw/G.cam.z/2;G.cam.y=p.y-vh/G.cam.z/2;
+  }
+  function sampler(t){
+    if(G&&G.over){restarts++;startScene();}   // a decided battle idles the GPU — keep the fire lit
+    if(!winStart)winStart=t;
+    if(lastT){deltas.push(t-lastT);frames++;}
+    lastT=t;
+    if(t-winStart>=30000){
+      deltas.sort((a,b)=>a-b);
+      windows.push({fps:Math.round(frames*1000/(t-winStart)),med:+((deltas[deltas.length>>1]||0).toFixed(1))});
+      frames=0;deltas=[];winStart=t;
+      chip.textContent='🔥 long bench '+(windows.length/2)+' / '+MINUTES+' min — keep the screen ON\n'
+        +'fps per 30s: '+windows.map(w=>w.fps).join(' ');
+      if(windows.length>=MINUTES*2)return finish();
+    }
+    requestAnimationFrame(sampler);
+  }
+  function finish(){
+    const first=windows[0]||{fps:0},last=windows[windows.length-1]||{fps:0};
+    const minW=windows.reduce((m2,w)=>Math.min(m2,w.fps),1e9);
+    const sag=first.fps?Math.round(100*(first.fps-last.fps)/first.fps):0;
+    const report={kind:'benchlong',minutes:MINUTES,restarts,
+      hiddenSec:Math.round(hiddenMs/1000),fps30:!!OPT.fps30,
+      ua:navigator.userAgent,dpr:devicePixelRatio,windows};
+    let sent='not sent';
+    fetch(relayHttp()+'/report',{method:'POST',body:JSON.stringify(report)})
+      .then(r=>{sent=r.ok?'sent to the workshop ✓':'upload failed — screenshot this';done();},
+            ()=>{sent='upload failed — screenshot this';done();});
+    function done(){
+      chip.style.pointerEvents='auto';
+      chip.textContent='🔥 Long bench finished — '+MINUTES+' min\n'
+        +'first 30s: '+first.fps+' fps · last 30s: '+last.fps+' fps · worst window: '+minW+' fps\n'
+        +(sag>10?'Thermal sag: ~'+sag+'% — the phone is throttling on long matches.'
+                :'Sag '+sag+'% — this device holds its pace. ')
+        +(hiddenMs>3000?'\n⚠ screen was off/hidden '+Math.round(hiddenMs/1000)+'s — numbers are suspect':'')
+        +'\n'+sent+'\nTap here to return to the game.';
+      chip.onclick=()=>location.replace(location.pathname);
+    }
+  }
+  addEventListener('load',()=>setTimeout(()=>{
+    document.getElementById('startOverlay').style.display='none';
+    startScene();
+    document.body.appendChild(chip);
+    chip.textContent='🔥 long bench warming up — keep the screen ON';
+    requestAnimationFrame(sampler);
+  },500));
+})();
 </script>
