@@ -15,8 +15,8 @@
  * Protocol is JSON text frames, `t` is the type.
  *
  *   client -> server
- *     {t:'host', name}                 create a room, become seat 0
- *     {t:'join', code, name}           take the next free seat
+ *     {t:'host', name, v}              create a room, become seat 0 (v = build version)
+ *     {t:'join', code, name, v}        take the next free seat — v must match the host's
  *     {t:'seat', civ, team}            set your civ / team in the lobby
  *     {t:'cfg', cfg}                   host only: map, difficulty, pace, AI count
  *     {t:'start', seed}                host only: lock the lobby and begin
@@ -222,6 +222,11 @@ wss.on('connection', (ws) => {
         if (!code) return send(ws, { t: 'err', msg: 'could not allocate a room' });
         const r = {
           code, seats: new Array(MAX_SEATS).fill(null), hostSeat: 0,
+          // The build version the room runs on. The game's service worker
+          // updates politely (never mid-match), so peers on DIFFERENT builds
+          // are routine — and a mixed-version lockstep room is a guaranteed
+          // desync. Refusing at the door beats drifting five minutes in.
+          ver: typeof m.v === 'string' ? m.v.slice(0, 24) : '',
           started: false, seed: 0, cfg: null, hashes: new Map(),
           maxTurn: 0, seen: Date.now(),
           journal: [], journalFull: false,  // the replay a returning player needs
@@ -243,6 +248,9 @@ wss.on('connection', (ws) => {
         const code = String(m.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
         const r = rooms.get(code);
         if (!r) return send(ws, { t: 'err', msg: 'no room with that code' });
+        const jv = typeof m.v === 'string' ? m.v.slice(0, 24) : '';
+        if (jv !== (r.ver || ''))
+          return send(ws, { t: 'err', msg: 'Different game versions — close and reopen the game on BOTH devices, then try again. (host: ' + (r.ver || 'older build') + ', you: ' + (jv || 'older build') + ')' });
         const name = cleanName(m.name);
 
         if (r.started) {

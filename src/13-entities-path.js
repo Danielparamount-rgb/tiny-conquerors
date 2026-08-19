@@ -23,7 +23,7 @@ function addUnit(p,type,tx,ty){
   // `face` stays keyed to slot 0, NOT localP: it is written into the unit record,
   // so keying it to the viewer would have two peers build different units.
   const u={id:uid++,p,type,x:tx+.5,y:ty+.5,hp,maxhp:hp,face:p===0?1:-1,flash:0,
-    hdg:Math.atan2(MAP/2-(ty+.5),MAP/2-(tx+.5)),spd:0,vx:0,vy:0,gaitPh:0,
+    hdg:dAtan2(MAP/2-(ty+.5),MAP/2-(tx+.5)),spd:0,vx:0,vy:0,gaitPh:0,
     state:'idle',path:null,target:null,carry:0,carryType:null,cd:0,gatherT:0,resKey:null,farm:null};
   if(d.garCap)u.gar=[];
   G.units.push(u);return u;
@@ -161,7 +161,7 @@ function findPath(sx,sy,tx,ty,team,naval){
       const g=n.g+(dx&&dy?1.41:1)+stepCost(nx,ny),k=key(nx,ny);
       const ex=seen.get(k);
       if(ex&&ex.g<=g)continue;
-      const node={x:nx,y:ny,g,f:g+Math.hypot(tx-nx,ty-ny),par:n};
+      const node={x:nx,y:ny,g,f:g+hyp(tx-nx,ty-ny),par:n};
       seen.set(k,node);hpush(node);
     }
   }
@@ -232,7 +232,7 @@ function lineClear(x0,y0,x1,y1,team,naval){
 // clearance ~0.35 tiles: center line + two parallels offset ±0.3 perpendicular
 function hasLOS(x0,y0,x1,y1,team,naval){
   if(!lineClear(x0,y0,x1,y1,team,naval))return false;
-  const dx=x1-x0,dy=y1-y0,L=Math.hypot(dx,dy);
+  const dx=x1-x0,dy=y1-y0,L=hyp(dx,dy);
   if(L<1e-6)return true;
   const px=-dy/L*.3,py=dx/L*.3;
   return lineClear(x0+px,y0+py,x1+px,y1+py,team,naval)
@@ -258,7 +258,7 @@ function smoothPath(ox,oy,path,team,naval){
 // cosmetic: turn a stationary unit's heading toward its work/attack target
 function slewHdg(u,tx,ty,dt){
   if(u.hdg===undefined)return;
-  const want=Math.atan2(ty-u.y,tx-u.x),t=motParams(u).turn*dt;
+  const want=dAtan2(ty-u.y,tx-u.x),t=motParams(u).turn*dt;
   const diff=wrapA(want-u.hdg);
   u.hdg=wrapA(u.hdg+Math.max(-t,Math.min(t,diff)));
 }
@@ -268,7 +268,7 @@ function latShove(u,dx,dy,mag){
   if(u.hdg===undefined)return;
   const tx=Math.floor(u.x),ty=Math.floor(u.y);
   if(!passable(tx+1,ty)||!passable(tx-1,ty)||!passable(tx,ty+1)||!passable(tx,ty-1))return;
-  const px=-Math.sin(u.hdg),py=Math.cos(u.hdg);
+  const px=-dSin(u.hdg),py=dCos(u.hdg);
   const side=(dx*px+dy*py)>=0?-1:1;
   const nx=u.x+px*side*mag,ny=u.y+py*side*mag;
   if(walkTile(nx,ny,u.p)){u.x=nx;u.y=ny;}

@@ -5,11 +5,13 @@ const mpEl=id=>document.getElementById(id);
 function mpStatus(s){mpEl('mpStatus').textContent=s||'';}
 function mpShow(){
   netReset();resetNet();
+  netPrewarm();   // wake the free-tier relay while the player types their name
   mpEl('mpConnect').style.display='';
   mpEl('mpRoom').style.display='none';
   mpEl('mpName').value=localStorage.getItem('tq_name')||'';
   mpEl('mpCode').value='';
   mpStatus(netAvailable()?'':'Multiplayer needs the web app at tiny-conquerors.onrender.com — the preview sandbox blocks connections.');
+  if(MATH_DRIFT)mpStatus('⚠ This device computes numbers differently from the tested build — a match may fall out of step. Playable, but expect possible desyncs.');
   mpEl('mpOverlay').style.display='flex';
 }
 function mpShowRoom(){
@@ -76,14 +78,24 @@ mpEl('mpBack').onclick=()=>{netReset();resetNet();mpEl('mpOverlay').style.displa
 mpEl('mpHost').onclick=()=>{
   const name=(mpEl('mpName').value||'Player').trim();
   localStorage.setItem('tq_name',name);netName=name;
-  netConnect(()=>{netSend({t:'host',name});netSend({t:'seat',civ:mpCiv});netSend({t:'cfg',cfg:mpCfg});});
+  // v: the build stamp — the relay refuses mixed-version rooms (the service
+  // worker updates politely, so peers on different builds are ROUTINE, and a
+  // mixed room is a guaranteed desync).
+  netConnect(()=>{netSend({t:'host',name,v:gameVer()});netSend({t:'seat',civ:mpCiv});netSend({t:'cfg',cfg:mpCfg});});
 };
 mpEl('mpJoin').onclick=()=>{
   const name=(mpEl('mpName').value||'Player').trim();
   const code=(mpEl('mpCode').value||'').toUpperCase().trim();
   if(code.length!==4){mpStatus('A room code is four letters');return;}
   localStorage.setItem('tq_name',name);netName=name;
-  netConnect(()=>{netSend({t:'join',code,name});netSend({t:'seat',civ:mpCiv});});
+  netConnect(()=>{netSend({t:'join',code,name,v:gameVer()});netSend({t:'seat',civ:mpCiv});});
+};
+mpEl('mpInvite').onclick=()=>{
+  const url=location.origin+location.pathname+'?room='+netRoom;
+  const done=()=>mpStatus('Invite link copied — send it to a friend');
+  if(navigator.clipboard&&navigator.clipboard.writeText)
+    navigator.clipboard.writeText(url).then(done,()=>mpStatus(url));
+  else mpStatus(url);
 };
 mpEl('mpStart').onclick=()=>{
   if(!netHost)return;
@@ -254,5 +266,80 @@ function begin(){
       +(allies.length?' beside the '+allies.join(', '):'')
       +' — against the '+foes.join(', ')+'!');
   }
+  wakeAcquire();   // battles are watched hands-off; a dimming screen kills iOS sockets
   last=performance.now();
 }
+/* ============ mobile resilience (the iOS survival kit) ============ */
+/* Screen wake lock: an RTS is WATCHED — long stretches with no touch dim the
+   screen, and on iOS a dimmed screen suspends the page and kills the socket.
+   Auto-released by the OS on backgrounding; the visibilitychange handler in
+   the fog/save module re-acquires it on every return. */
+let wakeLockS=null;
+function wakeAcquire(){
+  try{
+    if(!('wakeLock' in navigator)||wakeLockS||document.hidden||!G||G.over)return;
+    navigator.wakeLock.request('screen').then(w=>{
+      wakeLockS=w;
+      w.addEventListener('release',()=>{wakeLockS=null;});
+    }).catch(()=>{});
+  }catch(e){}
+}
+/* iOS suspends the AudioContext across interruptions (calls, Siri, screen
+   lock) and does not always resume it — any tap after that revives it. */
+document.addEventListener('pointerup',()=>{
+  try{if(typeof AC!=='undefined'&&AC&&AC.state!=='running')AC.resume().catch(()=>{});}catch(e){}
+},{passive:true});
+/* Warm the free-tier relay: it sleeps after 15 idle minutes and takes ~50s to
+   wake, which used to land on the FIRST Host press. A fire-and-forget fetch at
+   page load and again when the lobby opens hides the cold start behind the
+   player's own setup time. no-cors: /healthz has no CORS headers, but the
+   request still reaches (and wakes) the server. */
+function netHttpUrl(){
+  const h=location.hostname;
+  if(h==='localhost'||h==='127.0.0.1')return 'http://localhost:8080';
+  return 'https://tiny-conquerors-relay.onrender.com';
+}
+function netPrewarm(){
+  if(!netAvailable())return;
+  try{fetch(netHttpUrl()+'/healthz',{mode:'no-cors',cache:'no-store'}).catch(()=>{});}catch(e){}
+}
+netPrewarm();
+/* Join-by-URL: ?room=CODE deep-links straight into the join flow — phones
+   share via messaging apps, and a tappable link beats reading a code aloud. */
+addEventListener('load',()=>{
+  try{
+    const c=(new URLSearchParams(location.search).get('room')||'')
+      .toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4);
+    if(c.length===4&&netAvailable()){
+      mpShow();
+      mpEl('mpCode').value=c;
+      mpStatus('Invited to room '+c+' — enter your name and press Join');
+    }
+  }catch(e){}
+});
+/* Add-to-Home-Screen hint, iOS only, second visit onward, dismissible once.
+   Installing is not vanity there: it exempts the game from Safari's 7-day
+   storage eviction (saves!), removes the URL bar, and disarms the left-edge
+   back-swipe that can yank a player out of a battle. Appended INSIDE .scroll —
+   startOverlay.lastElementChild must stay the build stamp (bench sniffer). */
+(function(){
+  try{
+    const ua=navigator.userAgent||'';
+    const iOS=/iP(hone|ad|od)/.test(ua)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+    const standalone=navigator.standalone===true||(matchMedia&&matchMedia('(display-mode: standalone)').matches);
+    if(!iOS||standalone||localStorage.getItem('tq_a2hs'))return;
+    const visits=(+localStorage.getItem('tq_visits')||0)+1;
+    localStorage.setItem('tq_visits',String(visits));
+    if(visits<2)return;   // suggest to a RETURNING visitor — first-timers just want to play
+    addEventListener('load',()=>{
+      const ov=document.getElementById('startOverlay');if(!ov)return;
+      const scroll=ov.querySelector('.scroll');if(!scroll)return;
+      const d=document.createElement('div');
+      d.style.cssText='margin:10px auto 0;background:#efe2bd;border:2px solid #6b5330;border-radius:10px;padding:9px 12px;font-size:12.5px;color:#241a10;text-align:left;display:flex;gap:8px;align-items:center';
+      d.innerHTML='<span style="font-size:20px">📲</span><span style="flex:1">Add to your Home Screen to play fullscreen and keep your saves safe: tap <b>Share</b> → <b>Add to Home Screen</b></span>'
+        +'<button style="border:none;background:none;font-size:16px;padding:6px;cursor:pointer" aria-label="Dismiss">✕</button>';
+      d.querySelector('button').onclick=()=>{try{localStorage.setItem('tq_a2hs','1');}catch(e){}d.remove();};
+      scroll.appendChild(d);
+    });
+  }catch(e){}
+})();

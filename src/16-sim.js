@@ -173,7 +173,7 @@ function step(dt){
             const ms=!bt&&!e.bld&&Math.random()<missChance(b.p);
             G.proj.push({x0:c.x,y0:c.y-1.2,
               x1:e.ex+(ms?(Math.random()-.5)*.9:0),y1:e.ey+(ms?(Math.random()-.5)*.9:0),t:0,
-              dur:Math.max(.16,Math.hypot(e.ex-c.x,e.ey-c.y)*(bt?.045:.07)),miss:ms,
+              dur:Math.max(.16,hyp(e.ex-c.x,e.ey-c.y)*(bt?.045:.07)),miss:ms,
               kind:bt?'ball':null});}
         }
       }
@@ -360,7 +360,7 @@ function step(dt){
       ||G.blds.some(b2=>b2.gar&&b2.gar.some(g2=>g2.type===mission.win.ut))  // garrisoned = alive, not arrived
       ||G.units.some(u2=>u2.gar&&u2.gar.some(g2=>g2.type===mission.win.ut));
     if(!hero)return endGame(false);          // the one you were sworn to protect is dead
-    if(hero.x!==undefined&&Math.hypot(hero.x-W.x,hero.y-W.y)<(W.r||3))return endGame(true);
+    if(hero.x!==undefined&&hyp(hero.x-W.x,hero.y-W.y)<(W.r||3))return endGame(true);
     // a slow pulse on the destination so the player always knows the road
     if((G.t%8)<dt){const pgs=G.pings||(G.pings=[]);
       pgs.push({x:W.x,y:W.y,t:G.t});if(pgs.length>6)pgs.shift();}
@@ -398,7 +398,7 @@ function ejectGarrison(b){
     const u=b.gar.pop();
     const spot=nearFree(b.tx+Math.floor(b.size/2),b.ty+b.size,6)||{x:b.tx,y:b.ty+b.size};
     u.x=spot.x+.5+(n%3)*.3;u.y=spot.y+.5+((n/3)|0)*.3;
-    u.hdg=Math.atan2(u.y-(b.ty+b.size/2),u.x-(b.tx+b.size/2));u.spd=0;u.vx=0;u.vy=0;
+    u.hdg=dAtan2(u.y-(b.ty+b.size/2),u.x-(b.tx+b.size/2));u.spd=0;u.vx=0;u.vy=0;
     u.state='idle';u.path=null;u.target=null;n++;
     G.units.push(u);
   }
@@ -421,8 +421,8 @@ function removeBld(i){
     // dust rolls outward from the footprint as it comes down
     for(let fi=0;fi<14;fi++){
       const an=Math.random()*6.283,rr=b.size*(.4+Math.random()*.7);
-      G.fx.push({x:cc.x+Math.cos(an)*rr,y:cc.y+Math.sin(an)*rr*.6,
-        vx:Math.cos(an)*.9,vy:Math.sin(an)*.4-.25,
+      G.fx.push({x:cc.x+dCos(an)*rr,y:cc.y+dSin(an)*rr*.6,
+        vx:dCos(an)*.9,vy:dSin(an)*.4-.25,
         life:1.3+Math.random()*.9,max:2.2,r:4+Math.random()*4,kind:'smoke',col:'163,148,116'});
     }
     for(let fi=0;fi<8;fi++)G.fx.push({x:cc.x+(Math.random()-.5)*b.size,y:cc.y+(Math.random()-.5)*b.size,
@@ -446,13 +446,13 @@ function removeBld(i){
 function followPath(u,dt){
   const d=unitDef(u);
   if(!u.path||!u.path.length){u.spd=0;u.vx=0;u.vy=0;return true;}
-  if(u.hdg===undefined)u.hdg=Math.atan2(u.path[0].y-u.y,u.path[0].x-u.x); // old-save seed
+  if(u.hdg===undefined)u.hdg=dAtan2(u.path[0].y-u.y,u.path[0].x-u.x); // old-save seed
   if(u.spd===undefined){u.spd=0;u.vx=0;u.vy=0;u.gaitPh=0;}
   // consume intermediate waypoints: within 0.34, or already passed (behind, within
   // 0.75 > cav turn radius so a missed corner always releases). Never the final one.
   while(u.path.length>1){
-    const w0=u.path[0],ddx=w0.x-u.x,ddy=w0.y-u.y,dd=Math.hypot(ddx,ddy);
-    const behind=ddx*Math.cos(u.hdg)+ddy*Math.sin(u.hdg)<0;
+    const w0=u.path[0],ddx=w0.x-u.x,ddy=w0.y-u.y,dd=hyp(ddx,ddy);
+    const behind=ddx*dCos(u.hdg)+ddy*dSin(u.hdg)<0;
     if(dd<=.34||(behind&&dd<.75))u.path.shift();else break;
   }
   const wp=u.path[0];
@@ -468,7 +468,7 @@ function followPath(u,dt){
       cmdAttack(u,wb,true);return false;
     }
   }
-  const dx=wp.x-u.x,dy=wp.y-u.y,dist=Math.hypot(dx,dy);
+  const dx=wp.x-u.x,dy=wp.y-u.y,dist=hyp(dx,dy);
   const last=u.path.length===1;
   // FINAL waypoint keeps the exact snap, checked BEFORE moving — no overshoot,
   // zero final-position error, so gather 1.8 / farm 1.85 / deposit size*.5+1.7 /
@@ -477,7 +477,7 @@ function followPath(u,dt){
     u.x=wp.x;u.y=wp.y;u.path.shift();u.spd=0;u.vx=0;u.vy=0;u.formSpd=null;return true;
   }
   const m=motParams(u);
-  const want=Math.atan2(dy,dx);
+  const want=dAtan2(dy,dx);
   // stranded inside a building footprint placed after pathing (old code walked
   // through blocked tiles freely) — beeline to the free waypoint, guard bypassed
   const curOk=walkTile(u.x,u.y,u.p,nav);
@@ -488,7 +488,7 @@ function followPath(u,dt){
     u.hdg=wrapA(u.hdg+Math.max(-t,Math.min(t,diff)));
   }
   // alignment-scaled speed: cavalry carves arcs instead of pivoting on the spot
-  const align=Math.pow(Math.max(0,Math.cos(wrapA(want-u.hdg))),m.k);
+  const align=dPowi(Math.max(0,dCos(wrapA(want-u.hdg))),m.k); // Math.pow is not IEEE-pinned; k is 1/2/3
   let vt=speedOf(u)*align;
   // movement-feel: a formation marches TOGETHER — commanded groups carry the
   // group's slowest speed (set by CMDS.move/amove, cleared on arrival/new orders)
@@ -498,19 +498,19 @@ function followPath(u,dt){
   if(u.spd<0)u.spd=0;
   // advance along heading; guard so arcs / cut corners never enter a blocked tile
   const stp=u.spd*dt,px0=u.x,py0=u.y;
-  const nx=u.x+Math.cos(u.hdg)*stp,ny=u.y+Math.sin(u.hdg)*stp;
+  const nx=u.x+dCos(u.hdg)*stp,ny=u.y+dSin(u.hdg)*stp;
   if(!curOk||walkTile(nx,ny,u.p,nav)){u.x=nx;u.y=ny;}
   else if(walkTile(nx,u.y,u.p,nav)){u.x=nx;u.spd*=.7;}
   else if(walkTile(u.x,ny,u.p,nav)){u.y=ny;u.spd*=.7;}
   else u.spd=0; // pinned: pivot in place next frames
-  u.vx=Math.cos(u.hdg)*u.spd;u.vy=Math.sin(u.hdg)*u.spd;
+  u.vx=dCos(u.hdg)*u.spd;u.vy=dSin(u.hdg)*u.spd;
   // distance-driven gait phase: feet plant, no foot-sliding at any speed
-  const moved=Math.hypot(u.x-px0,u.y-py0);
+  const moved=hyp(u.x-px0,u.y-py0);
   u.gaitPh=(u.gaitPh||0)+moved*(u.type==='elephant'?.55:d.cav?(u.spd>1.1?.62:.95):d.ram?.6:1.15);
   if(u.type==='ram')u.wheelRot=(u.wheelRot||0)+moved*8.1;
   // face compat: SCREEN-space heading sign (isoPt: screenX=(x-y)*IW),
   // 0.08 deadzone stops flip jitter on screen-vertical walks
-  const sdx=Math.cos(u.hdg)-Math.sin(u.hdg);
+  const sdx=dCos(u.hdg)-dSin(u.hdg);
   if(Math.abs(sdx)>.08)u.face=sdx>0?1:-1;
   return false;
 }
@@ -538,7 +538,7 @@ function creepToward(u,tx,ty,want,dt){
   // Stagger the resting distance per unit so a crowd rings the trunk in loose
   // bands instead of all converging on one point.
   want+=(u.id%4)*.17;
-  const dx=tx-u.x,dy=ty-u.y,d=Math.hypot(dx,dy);
+  const dx=tx-u.x,dy=ty-u.y,d=hyp(dx,dy);
   if(d<=want||d<1e-4)return;
   const step=Math.min(d-want,speedOf(u)*.55*dt);
   const nx=u.x+dx/d*step,ny=u.y+dy/d*step;
@@ -558,9 +558,9 @@ function nearestEnemy(p,x,y,r,unitsOnly){
   // otherwise abandon a battle to shoot the neighbour's sheep. Hunting is
   // always an explicit order.
   for(const u of G.units){if(allied(u.p,p)||u.hp<=0||isAnimal(u))continue;
-    const d=Math.hypot(u.x-x,u.y-y);if(d<bd){bd=d;best={ent:u,bld:false,ex:u.x,ey:u.y};}}
+    const d=hyp(u.x-x,u.y-y);if(d<bd){bd=d;best={ent:u,bld:false,ex:u.x,ey:u.y};}}
   if(!unitsOnly)for(const b of G.blds){if(allied(b.p,p))continue;
-    const c=bldCenter(b),d=Math.hypot(c.x-x,c.y-y)-b.size*.5;
+    const c=bldCenter(b),d=hyp(c.x-x,c.y-y)-b.size*.5;
     if(d<bd){bd=d;best={ent:b,bld:true,ex:c.x,ey:c.y};}}
   return best;
 }
@@ -583,7 +583,7 @@ function dealDamage(hit,amt,fromP,ranged){
   if(fromP!==localP&&hit.ent.p===localP){ // minimap attack ping (separate from the toast throttle)
     const pgs=G.pings||(G.pings=[]);
     const lp=pgs[pgs.length-1];
-    if(!lp||G.t-lp.t>2||Math.hypot(hx-lp.x,hy-lp.y)>10){
+    if(!lp||G.t-lp.t>2||hyp(hx-lp.x,hy-lp.y)>10){
       pgs.push({x:hx,y:hy,t:G.t});if(pgs.length>6)pgs.shift();}
   }
   if(tileVis(hx,hy)){
@@ -609,8 +609,8 @@ function updateUnit(u,dt){
         u.grazeT=2.5+SR()*4;
         const h=u.home||(u.home={x:u.x,y:u.y});
         const a=SR()*6.283,r=SR()*2.2;
-        const tx=Math.max(1,Math.min(MAP-2,Math.round(h.x+Math.cos(a)*r)));
-        const ty=Math.max(1,Math.min(MAP-2,Math.round(h.y+Math.sin(a)*r)));
+        const tx=Math.max(1,Math.min(MAP-2,Math.round(h.x+dCos(a)*r)));
+        const ty=Math.max(1,Math.min(MAP-2,Math.round(h.y+dSin(a)*r)));
         if(passable(tx,ty))u.path=uPath(u,tx,ty)||[];
       }
       // Sheep belong to whoever walks up to them (manual: they are "converted"
@@ -622,7 +622,7 @@ function updateUnit(u,dt){
           let best=null,bd=7;
           for(const o of G.units){
             if(o.hp<=0||o.p===GAIA||isAnimal(o))continue;
-            const dd=Math.hypot(o.x-u.x,o.y-u.y);
+            const dd=hyp(o.x-u.x,o.y-u.y);
             if(dd<bd){bd=dd;best=o;}
           }
           if(best){
@@ -646,7 +646,7 @@ function updateUnit(u,dt){
       if(u.type==='ram'){
         let bb=null,bd=6;
         for(const b2 of G.blds){if(b2.p===u.p)continue;
-          const c2=bldCenter(b2),dd=Math.hypot(c2.x-u.x,c2.y-u.y)-b2.size*.5;
+          const c2=bldCenter(b2),dd=hyp(c2.x-u.x,c2.y-u.y)-b2.size*.5;
           if(dd<bd){bd=dd;bb=b2;}}
         if(bb)cmdAttack(u,bb,true);
       }else if(d.monk){
@@ -661,7 +661,7 @@ function updateUnit(u,dt){
                 u.state='toMon';u.monB=mon.id;u.path=uPath(u,c2.x,c2.y,u.p)||[];break;}
               let rr=null,rd=26;
               for(const r2 of G.relics){if(r2.held||r2.mon)continue;
-                const dd=Math.hypot(r2.x+.5-u.x,r2.y+.5-u.y);
+                const dd=hyp(r2.x+.5-u.x,r2.y+.5-u.y);
                 if(dd<rd){rd=dd;rr=r2;}}
               if(rr){u.state='toRelic';u.relicT=rr.id;
                 u.path=uPath(u,rr.x,rr.y,u.p)||[];break;}
@@ -670,7 +670,7 @@ function updateUnit(u,dt){
           let best=null,bd=7;
           for(const f of G.units){
             if(!allied(f.p,u.p)||f.id===u.id||f.hp<=0||f.hp>=f.maxhp||isAnimal(f))continue;
-            const dd=Math.hypot(f.x-u.x,f.y-u.y);
+            const dd=hyp(f.x-u.x,f.y-u.y);
             if(dd<bd){bd=dd;best=f;}}
           if(best){u.state='toHeal';u.target={id:best.id,bld:false};
             u.path=uPath(u,best.x,best.y,u.p)||[];}
@@ -678,7 +678,7 @@ function updateUnit(u,dt){
             let foe=null,fd=7.5;
             for(const f of G.units){
               if(allied(f.p,u.p)||f.hp<=0||!canConvert(u,f,false))continue;
-              const dd=Math.hypot(f.x-u.x,f.y-u.y);
+              const dd=hyp(f.x-u.x,f.y-u.y);
               if(dd<fd){fd=dd;foe=f;}}
             if(foe)cmdConvert(u,foe,false);
           }
@@ -692,7 +692,7 @@ function updateUnit(u,dt){
           const home=G.blds.find(b=>b.p===u.p&&b.type===bt&&b.built);
           let far=null,fd=1e9;
           for(const b of G.blds){if(b.p===u.p||b.type!==bt||!b.built)continue;
-            const c=bldCenter(b),dd=Math.hypot(c.x-u.x,c.y-u.y);
+            const c=bldCenter(b),dd=hyp(c.x-u.x,c.y-u.y);
             if(dd<fd){fd=dd;far=b;}}
           if(home&&far){u.state='tradeOut';u.tradeA=home.id;u.tradeB=far.id;
             const c=bldCenter(far);u.path=uPath(u,c.x,c.y)||[];}
@@ -712,10 +712,10 @@ function updateUnit(u,dt){
       const far=G.blds.find(b=>b.id===u.tradeB&&b.built);
       if(!far){u.state='idle';break;}
       const done=followPath(u,dt);const c=bldCenter(far);
-      if(Math.hypot(c.x-u.x,c.y-u.y)<far.size*.5+1.9){
+      if(hyp(c.x-u.x,c.y-u.y)<far.size*.5+1.9){
         u.state='tradeBack';u.tradeDist=0;
         const home=G.blds.find(b=>b.id===u.tradeA&&b.built);
-        if(home){const hc=bldCenter(home);u.tradeDist=Math.hypot(hc.x-c.x,hc.y-c.y);
+        if(home){const hc=bldCenter(home);u.tradeDist=hyp(hc.x-c.x,hc.y-c.y);
           u.path=uPath(u,hc.x,hc.y)||[];}
         else u.state='idle';
       }else if(done){u.path=uPath(u,c.x,c.y)||[];if(!u.path.length)u.state='idle';}
@@ -724,7 +724,7 @@ function updateUnit(u,dt){
       const home=G.blds.find(b=>b.id===u.tradeA&&b.built);
       if(!home){u.state='idle';break;}
       const done=followPath(u,dt);const c=bldCenter(home);
-      if(Math.hypot(c.x-u.x,c.y-u.y)<home.size*.5+1.9){
+      if(hyp(c.x-u.x,c.y-u.y)<home.size*.5+1.9){
         let gold=Math.round(8+(u.tradeDist||0)*1.2); // manual: profit scales with distance
         if(ecoTier(u.p,'caravan'))gold=Math.round(gold*1.3);   // Caravan
         if(teamHas(u.p,'tradeGold'))gold=Math.round(gold*1.33); // Spanish team bonus
@@ -739,14 +739,14 @@ function updateUnit(u,dt){
       if(!t||t.hp<=0||allied(t.p,u.p)){u.state='idle';u.target=null;break;}
       const done=followPath(u,dt);
       const c=u.target.bld?bldCenter(t):t;
-      if(Math.hypot(c.x-u.x,c.y-u.y)<convRange(u.p)){u.state='convert';u.convT=0;u.path=null;}
+      if(hyp(c.x-u.x,c.y-u.y)<convRange(u.p)){u.state='convert';u.convT=0;u.path=null;}
       else if(done){u.path=uPath(u,c.x,c.y,u.p)||[];if(!u.path.length)u.state='idle';}
       break;}
     case 'convert':{
       const t=targetEnt(u.target);
       if(!t||t.hp<=0||allied(t.p,u.p)){u.state='idle';u.target=null;break;}
       const c=u.target.bld?bldCenter(t):t;
-      if(Math.hypot(c.x-u.x,c.y-u.y)>convRange(u.p)+1){u.state='toConv';
+      if(hyp(c.x-u.x,c.y-u.y)>convRange(u.p)+1){u.state='toConv';
         u.path=uPath(u,c.x,c.y,u.p)||[];break;}
       slewHdg(u,c.x,c.y,dt);
       u.convT=(u.convT||0)+dt;
@@ -763,13 +763,13 @@ function updateUnit(u,dt){
       const t=targetEnt(u.target);
       if(!t||t.hp<=0||t.hp>=t.maxhp){u.state='idle';u.target=null;break;}
       const done=followPath(u,dt);
-      if(Math.hypot(t.x-u.x,t.y-u.y)<2.2*(civOf(u.p).healRange||1)){u.state='heal';u.path=null;}
+      if(hyp(t.x-u.x,t.y-u.y)<2.2*(civOf(u.p).healRange||1)){u.state='heal';u.path=null;}
       else if(done){u.path=uPath(u,t.x,t.y,u.p)||[];if(!u.path.length)u.state='idle';}
       break;}
     case 'heal':{
       const t=targetEnt(u.target);
       if(!t||t.hp<=0||t.hp>=t.maxhp){u.state='idle';u.target=null;break;}
-      if(Math.hypot(t.x-u.x,t.y-u.y)>2.6*(civOf(u.p).healRange||1)){u.state='toHeal';
+      if(hyp(t.x-u.x,t.y-u.y)>2.6*(civOf(u.p).healRange||1)){u.state='toHeal';
         u.path=uPath(u,t.x,t.y,u.p)||[];break;}
       slewHdg(u,t.x,t.y,dt);
       t.hp=Math.min(t.maxhp,t.hp+(teamHas(u.p,'healFast')?9:6)*dt); // Byzantine TB
@@ -778,7 +778,7 @@ function updateUnit(u,dt){
       const r=G.relics.find(x=>x.id===u.relicT);
       if(!r||r.held||r.mon){u.state='idle';u.relicT=null;break;}
       const done=followPath(u,dt);
-      if(Math.hypot(r.x+.5-u.x,r.y+.5-u.y)<1.2){
+      if(hyp(r.x+.5-u.x,r.y+.5-u.y)<1.2){
         r.held=u.id;u.relic=r.id;u.relicT=null;u.state='idle';
         if(u.p===localP)toast('Relic recovered — bring it to a Monastery');
       }else if(done){u.path=uPath(u,r.x,r.y,u.p)||[];if(!u.path.length)u.state='idle';}
@@ -787,7 +787,7 @@ function updateUnit(u,dt){
       const b=G.blds.find(x=>x.id===u.monB);
       if(!b||!b.built||!u.relic){u.state='idle';u.monB=null;break;}
       const done=followPath(u,dt);const c=bldCenter(b);
-      if(Math.hypot(c.x-u.x,c.y-u.y)<b.size*.5+1.7){
+      if(hyp(c.x-u.x,c.y-u.y)<b.size*.5+1.7){
         const r=G.relics.find(x=>x.id===u.relic);
         if(r){r.mon=b.id;r.held=null;r.x=b.tx;r.y=b.ty;}
         u.relic=null;u.monB=null;u.state='idle';
@@ -831,7 +831,7 @@ function updateUnit(u,dt){
       const b=G.blds.find(x=>x.id===u.garB);
       if(!b||!b.built||b.gar.length>=bldGarCap(b)){u.state='idle';u.garB=null;break;}
       const done=followPath(u,dt);const c=bldCenter(b);
-      if(Math.hypot(c.x-u.x,c.y-u.y)<b.size*.5+1.7){u._gar=b;u.state='idle';u.garB=null;}
+      if(hyp(c.x-u.x,c.y-u.y)<b.size*.5+1.7){u._gar=b;u.state='idle';u.garB=null;}
       else if(done){u.path=uPath(u,c.x,c.y,u.p)||[];if(!u.path.length){u.state='idle';u.garB=null;}}
       break;}
     case 'toGarU':{ // climbing into a Battering Ram / boarding a Transport
@@ -839,7 +839,7 @@ function updateUnit(u,dt){
       if(!ram||!ram.gar||ram.gar.length>=UNITS[ram.type].garCap){u.state='idle';u.garU=null;break;}
       const done=followPath(u,dt);
       const reach=UNITS[ram.type].ship?2.1:1.2; // ships board from the bank
-      if(Math.hypot(ram.x-u.x,ram.y-u.y)<reach){u._garU=ram;u.state='idle';u.garU=null;}
+      if(hyp(ram.x-u.x,ram.y-u.y)<reach){u._garU=ram;u.state='idle';u.garU=null;}
       else if(done){u.path=uPath(u,ram.x,ram.y,u.p)||[];
         if(!u.path.length){u.state='idle';u.garU=null;}}
       break;}
@@ -847,7 +847,7 @@ function updateUnit(u,dt){
       const r=G.res[u.resKey];
       if(!r){u.state='idle';autoNext(u);break;}
       const done=followPath(u,dt);
-      if(Math.hypot(r.x+.5-u.x,r.y+.5-u.y)<1.8){u.state='gather';u.gatherT=0;}
+      if(hyp(r.x+.5-u.x,r.y+.5-u.y)<1.8){u.state='gather';u.gatherT=0;}
       else if(done){u.path=uPath(u,r.x,r.y,u.p)||[];if(!u.path.length)u.state='idle';}
       break;}
     case 'gather':{
@@ -883,7 +883,7 @@ function updateUnit(u,dt){
       const b=G.blds.find(x=>x.id===u.farm);
       if(!b){u.state='idle';break;}
       const done=followPath(u,dt);const c=bldCenter(b);
-      if(Math.hypot(c.x-u.x,c.y-u.y)<1.85){u.state='farming';u.gatherT=0;}
+      if(hyp(c.x-u.x,c.y-u.y)<1.85){u.state='farming';u.gatherT=0;}
       else if(done){u.path=uPath(u,c.x,c.y,u.p)||[];if(!u.path.length)u.state='idle';}
       break;}
     case 'farming':{
@@ -909,7 +909,7 @@ function updateUnit(u,dt){
       const done=followPath(u,dt);
       const b=dropoffFor(u);
       if(b){const c=bldCenter(b);
-        if(Math.hypot(c.x-u.x,c.y-u.y)<b.size*.5+1.7){
+        if(hyp(c.x-u.x,c.y-u.y)<b.size*.5+1.7){
           if(u.carryType){
             G.P[u.p][u.carryType[0]]+=u.carry;
             if(G.pstats)G.pstats[u.p].gath+=u.carry;
@@ -930,7 +930,7 @@ function updateUnit(u,dt){
       const b=targetEnt(u.target);
       if(!b||b.built){u.state='idle';if(b&&b.built)autoNext(u);break;}
       const done=followPath(u,dt);const c=bldCenter(b);
-      if(Math.hypot(c.x-u.x,c.y-u.y)<b.size*.5+1.7)u.state='building';
+      if(hyp(c.x-u.x,c.y-u.y)<b.size*.5+1.7)u.state='building';
       else if(done){u.path=uPath(u,c.x,c.y,u.p)||[];if(!u.path.length)u.state='idle';}
       break;}
     case 'building':{
@@ -954,14 +954,14 @@ function updateUnit(u,dt){
         else{
           let site=null,sd=8;
           for(const s2 of G.blds){if(s2.p!==u.p||s2.built)continue;
-            const c2=bldCenter(s2),dd=Math.hypot(c2.x-u.x,c2.y-u.y);
+            const c2=bldCenter(s2),dd=hyp(c2.x-u.x,c2.y-u.y);
             if(dd<sd){sd=dd;site=s2;}}
           if(site)cmdBuild(u,site);
           else if(b.type==='camp'){ // smarter villagers (manual Ch. II): a finished
             // Storage Camp sends its builder straight to the nearest resource
             let bk=null,bd2=6;
             for(const k2 in G.res){const r2=G.res[k2];
-              const dd=Math.hypot(r2.x+.5-u.x,r2.y+.5-u.y);
+              const dd=hyp(r2.x+.5-u.x,r2.y+.5-u.y);
               if(dd<bd2){bd2=dd;bk=k2;}}
             if(bk)cmdGather(u,bk);else u.state='idle';
           }
@@ -989,7 +989,7 @@ function updateUnit(u,dt){
         break;}
       const c=u.target.bld?bldCenter(t):t;
       const rad=u.target.bld?t.size*.5:.3;
-      const dist=Math.hypot(c.x-u.x,c.y-u.y)-rad;
+      const dist=hyp(c.x-u.x,c.y-u.y)-rad;
       const uRng=rangeOf(u);
       // engagement radius: ranged units keep their range; melee close right up
       const rng=u.target.bld?Math.max(uRng,1.25):Math.max(uRng,.62);
@@ -997,7 +997,7 @@ function updateUnit(u,dt){
       if(dist>rng&&u.autoTgt&&(u.stance|0)===2){
         u.state='idle';u.target=null;u.path=null;u.autoTgt=0;break;}
       if(u.autoTgt&&(u.stance|0)===1&&u.post
-        &&Math.hypot(u.x-u.post.x,u.y-u.post.y)>9){
+        &&hyp(u.x-u.post.x,u.y-u.post.y)>9){
         const px2=u.post.x,py2=u.post.y;u.post=null;u.target=null;u.autoTgt=0;
         cmdMove(u,px2,py2);break;}
       if(dist<=rng){
@@ -1009,7 +1009,7 @@ function updateUnit(u,dt){
             // fan to an id-keyed slot on the victim's ring so a mob surrounds
             // instead of queueing — deterministic (id + target id, no RNG)
             const a=((u.id*2654435761^t.id)>>>0)%8/8*6.2832;
-            creepToward(u,c.x+Math.cos(a)*want*.9,c.y+Math.sin(a)*want*.9,want*.35,dt);
+            creepToward(u,c.x+dCos(a)*want*.9,c.y+dSin(a)*want*.9,want*.35,dt);
           }else creepToward(u,c.x,c.y,want,dt);
         }
         if(d.treb&&!u.setup){ // a trebuchet unpacks before its first shot
@@ -1046,7 +1046,7 @@ function updateUnit(u,dt){
             dealDamage({ent:t,bld:u.target.bld},blast,u.p,false);
             for(const o of G.units){
               if(allied(o.p,u.p)||o.hp<=0||o.id===t.id)continue;
-              if(Math.hypot(o.x-bx,o.y-by)<1.9)dealDamage({ent:o,bld:false},Math.round(blast*.6),u.p,false);
+              if(hyp(o.x-bx,o.y-by)<1.9)dealDamage({ent:o,bld:false},Math.round(blast*.6),u.p,false);
             }
             u.hp=0;
             for(let fi=0;fi<6;fi++)G.fx.push({x:u.x,y:u.y-.3,vx:(Math.random()-.5)*2,
@@ -1058,7 +1058,7 @@ function updateUnit(u,dt){
           if(!u.target.bld&&isAnimal(t))animalHit(t,u); // it charges, or it bolts
           // heavy melee shoves its victim back a touch — sells the weight of the blow
           if(!u.target.bld&&!rangedKind&&dmg>=8&&t.hp>0&&!UNITS[t.type].ship){
-            const kx=t.x-u.x,ky=t.y-u.y,kd=Math.hypot(kx,ky)||1;
+            const kx=t.x-u.x,ky=t.y-u.y,kd=hyp(kx,ky)||1;
             const push=Math.min(.16,.012*dmg);
             const nx2=t.x+kx/kd*push,ny2=t.y+ky/kd*push;
             if(walkTile(nx2,ny2,t.p)){t.x=nx2;t.y=ny2;}
@@ -1079,12 +1079,12 @@ function updateUnit(u,dt){
           if(d.blast){ // mangonel line: the stone shatters across everyone near the impact
             for(const o of G.units){
               if(allied(o.p,u.p)||o.hp<=0||o.id===t.id)continue;
-              if(Math.hypot(o.x-c.x,o.y-c.y)<d.blast)
+              if(hyp(o.x-c.x,o.y-c.y)<d.blast)
                 dealDamage({ent:o,bld:false},Math.max(2,Math.round(dmg*.6)),u.p,'siege');
             }
           }
           if(d.pierce&&!u.target.bld){ // scorpion bolts pass through the ranks
-            const L=Math.hypot(c.x-u.x,c.y-u.y)||1,nx=(c.x-u.x)/L,ny=(c.y-u.y)/L;
+            const L=hyp(c.x-u.x,c.y-u.y)||1,nx=(c.x-u.x)/L,ny=(c.y-u.y)/L;
             for(const o of G.units){
               if(allied(o.p,u.p)||o.hp<=0||o.id===t.id)continue;
               const px2=o.x-u.x,py2=o.y-u.y,along=px2*nx+py2*ny;
@@ -1097,7 +1097,7 @@ function updateUnit(u,dt){
             // Logistica: trample damage to enemies pressed around the target
             for(const o of G.units){
               if(allied(o.p,u.p)||o.hp<=0||o.id===t.id)continue;
-              if(Math.hypot(o.x-c.x,o.y-c.y)<1.4)dealDamage({ent:o,bld:false},5,u.p,false);
+              if(hyp(o.x-c.x,o.y-c.y)<1.4)dealDamage({ent:o,bld:false},5,u.p,false);
             }
           }
           if(d.range>1){
@@ -1114,7 +1114,7 @@ function updateUnit(u,dt){
             const ms=!kind&&!noMiss&&!u.target.bld&&Math.random()<missChance(u.p);
             G.proj.push({x0:u.x,y0:u.y-.4,
               x1:c.x+(ms?(Math.random()-.5)*.9:0),y1:c.y+(ms?(Math.random()-.5)*.9:0),t:0,
-              dur:Math.max(.14,Math.hypot(c.x-u.x,c.y-u.y)*(kind==='ball'?.045:kind==='stone'?.11:.07)),
+              dur:Math.max(.14,hyp(c.x-u.x,c.y-u.y)*(kind==='ball'?.045:kind==='stone'?.11:.07)),
               miss:ms,kind,tid:(!kind&&!u.target.bld)?t.id:null}); // arrows remember their mark
             if(kind==='ball')G.fx.push({x:u.x,y:u.y-.5,vx:0,vy:-.3,life:.3,max:.3,r:3.5,kind:'smoke',col:'200,196,186'});
           }}

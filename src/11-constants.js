@@ -1,4 +1,57 @@
 /* ================= constants ================= */
+/* ---------- deterministic math (cross-engine lockstep) ----------
+   ECMAScript pins basic IEEE-754 arithmetic (+ - * / %), Math.sqrt and
+   Math.fround to exact bit-level results — but Math.sin/cos/atan2/pow/hypot
+   are "implementation-approximated": V8 (Chrome/Android) and JavaScriptCore
+   (iPhone Safari) genuinely return different bits. Any of them in the SIM
+   path desyncs a cross-engine multiplayer match despite perfect seeding.
+   So the sim uses ONLY these replacements, built from pinned ops. Render,
+   sound and UI code may keep the native Math.* — cosmetics never touch G. */
+const D_TAU=6.283185307179586,D_PI=3.141592653589793,D_HPI=1.5707963267948966;
+function hyp(x,y){return Math.sqrt(x*x+y*y);}          // Math.hypot is NOT pinned; this is
+function dSin(x){                                       // |err| < 1e-9 over all reals
+  x-=D_TAU*Math.floor(x/D_TAU);                         // [0,TAU)
+  if(x>D_PI)x-=D_TAU;                                   // (-PI,PI]
+  if(x>D_HPI)x=D_PI-x;else if(x<-D_HPI)x=-D_PI-x;       // fold to [-PI/2,PI/2]
+  const z=x*x;                                          // Taylor to x^13 (pinned literals)
+  return x*(1-z*(1/6-z*(1/120-z*(1/5040-z*(1/362880-z*(1/39916800-z/6227020800))))));
+}
+function dCos(x){return dSin(x+D_HPI);}
+function dAtanU(z){                                     // atan on [0,1], |err| ~ 1e-7
+  let o=0;
+  if(z>0.41421356237309503){o=0.7853981633974483;z=(z-1)/(z+1);} // fold past tan(PI/8)
+  const s=z*z;
+  return o+z*(1-s*(1/3-s*(1/5-s*(1/7-s*(1/9-s*(1/11-s/13))))));
+}
+function dAtan2(y,x){
+  const ax=x<0?-x:x,ay=y<0?-y:y;
+  let a;
+  if(ax>=ay)a=ax===0?0:dAtanU(ay/ax);
+  else a=D_HPI-dAtanU(ax/ay);
+  if(x<0)a=D_PI-a;
+  return y<0?-a:a;
+}
+function dPowi(b,k){return k===1?b:k===2?b*b:b*b*b;}    // motParams k is only ever 1/2/3
+/* Startup canary: hash a battery of the exact operations the sim leans on and
+   compare against the value this build was tested with. A device that computes
+   differently (exotic engine, FMA-fused JIT) would desync a lockstep match —
+   warn in the multiplayer lobby instead of letting it drift mid-battle. */
+function mathSelfTest(){
+  const f=new Float64Array(1),iv=new Uint32Array(f.buffer);
+  let h=2166136261>>>0;
+  const mix=v=>{f[0]=v;h^=iv[0];h=Math.imul(h,16777619);h^=iv[1];h=Math.imul(h,16777619);};
+  let x=0.123456789;
+  for(let i=1;i<=256;i++){
+    x=x*1.0000001+i*0.618033988749895;
+    const a=x%12.566370614359172-6.283185307179586;
+    mix(dSin(a));mix(dCos(a*0.7));mix(dAtan2(a,1.7-a*0.3));
+    mix(hyp(a,i*0.011));mix(Math.sqrt(i+0.5));mix(dPowi(0.9999+a*1e-6,3));
+  }
+  return (h>>>0).toString(16);
+}
+const MATH_GOLD='fe27d213'; // computed on V8; the kit is pinned-ops only, so every conforming engine should match
+let MATH_DRIFT=false;
+try{MATH_DRIFT=mathSelfTest()!==MATH_GOLD;}catch(e){MATH_DRIFT=true;}
 let MAP=64; const TILE=26;
 let START=[[8,53],[53,9],[10,10]];
 function genStarts(n){
@@ -6,8 +59,8 @@ function genStarts(n){
   const c=MAP/2,r=MAP*.4,out=[];
   for(let i=0;i<n;i++){
     const a=Math.PI*.75+i*2*Math.PI/n;
-    out.push([Math.max(3,Math.min(MAP-5,Math.round(c+Math.cos(a)*r))),
-              Math.max(3,Math.min(MAP-5,Math.round(c+Math.sin(a)*r)))]);
+    out.push([Math.max(3,Math.min(MAP-5,Math.round(c+dCos(a)*r))),
+              Math.max(3,Math.min(MAP-5,Math.round(c+dSin(a)*r)))]);
   }
   return out;
 }

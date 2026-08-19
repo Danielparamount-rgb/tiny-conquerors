@@ -21,13 +21,19 @@ import puppeteer from 'puppeteer';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-// Baselines as of tq-v28 (diffSel 1, civSel 0, turboSel 0, no mission).
-// They have survived every change since the wildlife pass.
+// Baselines as of tq-v73 (diffSel 1, civSel 0, turboSel 0, no mission).
+// The tq-v28 hashes (cb7551c0/1df24e5e/c39be881/172444aa) survived every
+// change from the wildlife pass until the DELIBERATE cross-engine math sweep
+// (tq-v73): the sim now uses pinned-ops dSin/dCos/dAtan2/hyp/dPowi instead of
+// the implementation-approximated Math.sin/cos/atan2/pow/hypot, so V8 and
+// JavaScriptCore (iPhone) peers compute identical bits. Last-ulp differences
+// cascaded into new — equally deterministic — baselines; m2-2p happened not
+// to cross any discrete threshold and kept its old hash.
 const BASELINES = [
-  {name: 'm0-2p',       seed: 4242,  steps: 1500, map: 0, np: 2, team: 0, hash: 'cb7551c0'},
-  {name: 'm1-2p',       seed: 4242,  steps: 1500, map: 1, np: 2, team: 0, hash: '1df24e5e'},
+  {name: 'm0-2p',       seed: 4242,  steps: 1500, map: 0, np: 2, team: 0, hash: '6825c2e'},
+  {name: 'm1-2p',       seed: 4242,  steps: 1500, map: 1, np: 2, team: 0, hash: '6fdc60a7'},
   {name: 'm2-2p',       seed: 4242,  steps: 1500, map: 2, np: 2, team: 0, hash: 'c39be881'},
-  {name: 'm1-8p-2team', seed: 31337, steps: 1500, map: 1, np: 8, team: 1, hash: '172444aa'},
+  {name: 'm1-8p-2team', seed: 31337, steps: 1500, map: 1, np: 8, team: 1, hash: '4f8eb0e0'},
 ];
 
 const game = readFileSync(join(root, 'tiny-conquerors.html'), 'utf8');

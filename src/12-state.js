@@ -45,10 +45,10 @@ function genMapArena(){
   // a few low hills in the open field
   for(let hb=0,nH=Math.round(5*MAP*MAP/4096);hb<nH;hb++){
     const hx=6+rng(MAP-12),hy=6+rng(MAP-12),hr=3+rng(2);
-    if(START.some(([bx,by])=>Math.hypot(hx-bx,hy-by)<14))continue;
+    if(START.some(([bx,by])=>hyp(hx-bx,hy-by)<14))continue;
     for(let y=hy-hr;y<=hy+hr;y++)for(let x=hx-hr;x<=hx+hr;x++){
       if(x<1||y<1||x>=MAP-1||y>=MAP-1)continue;
-      if(Math.hypot(x-hx,y-hy)<=hr-.2+((x*7+y*13)%2)*.5)G.elev[y*MAP+x]=1;
+      if(hyp(x-hx,y-hy)<=hr-.2+((x*7+y*13)%2)*.5)G.elev[y*MAP+x]=1;
     }
   }
   // the walls, gate facing the centre of the world
@@ -80,7 +80,7 @@ function genMapArena(){
   // sparse neutral woods in no-man's-land
   for(let b=0,nF=Math.round(6*MAP*MAP/4096);b<nF;b++){
     const cx=3+rng(MAP-6),cy=3+rng(MAP-6);
-    if(START.some(([sx2,sy2])=>Math.hypot(cx-sx2,cy-sy2)<R+4))continue;
+    if(START.some(([sx2,sy2])=>hyp(cx-sx2,cy-sy2)<R+4))continue;
     placeForest(cx,cy,14+rng(24),11);
   }
 }
@@ -92,10 +92,10 @@ function genMapHighlands(){
   const rng=(n)=>SRi(n);
   for(let hb=0,nH=Math.round(16*MAP*MAP/4096);hb<nH;hb++){
     const hx=5+rng(MAP-10),hy=5+rng(MAP-10),hr=3+rng(4);
-    if(START.some(([bx,by])=>Math.hypot(hx-bx,hy-by)<9))continue;
+    if(START.some(([bx,by])=>hyp(hx-bx,hy-by)<9))continue;
     for(let y=hy-hr;y<=hy+hr;y++)for(let x=hx-hr;x<=hx+hr;x++){
       if(x<1||y<1||x>=MAP-1||y>=MAP-1)continue;
-      if(Math.hypot(x-hx,y-hy)<=hr-.2+((x*7+y*13)%2)*.5)G.elev[y*MAP+x]=1;
+      if(hyp(x-hx,y-hy)<=hr-.2+((x*7+y*13)%2)*.5)G.elev[y*MAP+x]=1;
     }
   }
   const placeRes=(type,cx,cy,n)=>{let placed=0,tries=0;
@@ -131,7 +131,7 @@ let mission=null;
    short; both spiral outward from a point until the ground allows it. */
 function missionBld(p,type,bx,by,rMin,rMax,done){
   for(let r=rMin;r<rMax;r++)for(let a=0;a<16;a++){
-    const tx=Math.round(bx+Math.cos(a/16*6.283)*r),ty=Math.round(by+Math.sin(a/16*6.283)*r);
+    const tx=Math.round(bx+dCos(a/16*6.283)*r),ty=Math.round(by+dSin(a/16*6.283)*r);
     if(type==='dock'?canPlaceDock(tx,ty):canPlace(tx,ty,BLDS[type].size,0,!!BLDS[type].thin))
       return addBld(p,type,tx,ty,done!==false);
   }
@@ -172,7 +172,7 @@ const MISSIONS=[
      const [bx,by]=START[localP];
      let placed=false;
      for(let r=3;r<9&&!placed;r++)for(let a=0;a<12&&!placed;a++){
-       const tx=Math.round(bx+Math.cos(a/12*6.283)*r),ty=Math.round(by+Math.sin(a/12*6.283)*r);
+       const tx=Math.round(bx+dCos(a/12*6.283)*r),ty=Math.round(by+dSin(a/12*6.283)*r);
        if(canPlace(tx,ty,2,0)){addBld(localP,'monastery',tx,ty,true);placed=true;}}
      addUnit(localP,'monk',bx+1,by+4);},
    obj:'Enshrine 3 relics in your Monastery. Monks pick them up — tap a relic, then tap the Monastery.'},
@@ -199,7 +199,7 @@ const MISSIONS=[
      missionBld(1,'castle',ex,ey,3,7);
      for(let a=0;a<40;a++){
        if(a>=17&&a<=20)continue;                 // leave a gate's worth of gap
-       const wx=Math.round(ex+1+Math.cos(a/40*6.283)*7),wy=Math.round(ey+1+Math.sin(a/40*6.283)*7);
+       const wx=Math.round(ex+1+dCos(a/40*6.283)*7),wy=Math.round(ey+1+dSin(a/40*6.283)*7);
        if(canPlace(wx,wy,1,0,true))addBld(1,'swall',wx,wy,true);
      }
      missionSquad(1,'archer',4,ex,ey+3);
@@ -222,7 +222,7 @@ const MISSIONS=[
      // it, so walk the water list for the nearest tile the way the AI does
      let near=null,nd=1e9;
      for(const w of (G.waterList||[])){
-       const dd=Math.hypot(w.x-bx,w.y-by);
+       const dd=hyp(w.x-bx,w.y-by);
        if(dd<nd){nd=dd;near=w;}
      }
      let dk=null;
@@ -482,7 +482,7 @@ function newGame(){
     if(mapRealSel===2&&!mission){ // Hallowed Ground: every lord starts with the cloth
       let placed=null;
       for(let r=3;r<9&&!placed;r++)for(let a=0;a<12&&!placed;a++){
-        const tx=Math.round(bx+Math.cos(a/12*6.283)*r),ty=Math.round(by+Math.sin(a/12*6.283)*r);
+        const tx=Math.round(bx+dCos(a/12*6.283)*r),ty=Math.round(by+dSin(a/12*6.283)*r);
         if(canPlace(tx,ty,2,0))placed={tx,ty};}
       if(placed)addBld(p,'monastery',placed.tx,placed.ty,true);
       addUnit(p,'monk',bx+2,by+3);
@@ -537,7 +537,7 @@ function placeAnimals(){
   const spot=(cx,cy,rMin,rMax)=>{
     for(let n=0;n<40;n++){
       const a=SR()*6.283,r=rMin+SR()*(rMax-rMin);
-      const x=Math.round(cx+Math.cos(a)*r),y=Math.round(cy+Math.sin(a)*r);
+      const x=Math.round(cx+dCos(a)*r),y=Math.round(cy+dSin(a)*r);
       if(openAt(x,y))return{x,y};
     }
     return null;
@@ -596,7 +596,7 @@ function animalHit(t,from){
     const cur=t.target&&targetEnt(t.target);
     if(cur!==from)cmdAttack(t,from,false);
   }else if(d.skittish){
-    const dx=t.x-from.x,dy=t.y-from.y,dd=Math.hypot(dx,dy)||1;
+    const dx=t.x-from.x,dy=t.y-from.y,dd=hyp(dx,dy)||1;
     const fx=Math.max(2,Math.min(MAP-3,Math.round(t.x+dx/dd*10)));
     const fy=Math.max(2,Math.min(MAP-3,Math.round(t.y+dy/dd*10)));
     t.state='flee';t.fleeT=6;t.home={x:fx+.5,y:fy+.5};
@@ -611,8 +611,8 @@ function placeRelics(){
     let guard=0;
     while(spots.length<8&&guard++<300){
       const x=4+SRi(MAP-8),y=4+SRi(MAP-8);
-      if(START.some(([bx,by])=>Math.hypot(x-bx,y-by)<8))continue;
-      if(spots.some(([sx,sy])=>Math.hypot(x-sx,y-sy)<7))continue;
+      if(START.some(([bx,by])=>hyp(x-bx,y-by)<8))continue;
+      if(spots.some(([sx,sy])=>hyp(x-sx,y-sy)<7))continue;
       spots.push([x,y]);
     }
   }else spots=mapRealSel===1
@@ -640,17 +640,17 @@ function genMapForest(){
   const carve=(cx,cy,r)=>{
     for(let y=Math.floor(cy-r-1);y<=cy+r+1;y++)for(let x=Math.floor(cx-r-1);x<=cx+r+1;x++){
       if(x<1||y<1||x>=MAP-1||y>=MAP-1)continue;
-      if(Math.hypot(x-cx,y-cy)<=r+((x*7+y*13)%3)*.35)open[y*MAP+x]=1;
+      if(hyp(x-cx,y-cy)<=r+((x*7+y*13)%3)*.35)open[y*MAP+x]=1;
     }};
   for(const[bx,by] of START)carve(bx+1,by+1,8);
   carve(C,C,6.5);
   carve(12,12,4.5);carve(MAP-13,MAP-13,4.5);
   const trail=(x0,y0,x1,y1,w)=>{
     let x=x0,y=y0,guard=0;
-    while(Math.hypot(x1-x,y1-y)>1.5&&guard++<400){
+    while(hyp(x1-x,y1-y)>1.5&&guard++<400){
       carve(Math.round(x),Math.round(y),w);
-      const a=Math.atan2(y1-y,x1-x)+(SR()-.5)*.9;
-      x+=Math.cos(a)*1.3;y+=Math.sin(a)*1.3;
+      const a=dAtan2(y1-y,x1-x)+(SR()-.5)*.9;
+      x+=dCos(a)*1.3;y+=dSin(a)*1.3;
     }};
   // a spoke trail from every base to the contested center, plus two pocket trails
   for(const [bx,by] of START)trail(bx+1,by+1,C,C,2);
@@ -674,7 +674,7 @@ function genMapForest(){
   }
   // contested center: a low hill with the richest gold, plus corner pockets
   for(let y=C-4;y<=C+4;y++)for(let x=C-4;x<=C+4;x++){
-    if(open[y*MAP+x]&&Math.hypot(x-C,y-C)<=2.8)G.elev[y*MAP+x]=1;}
+    if(open[y*MAP+x]&&hyp(x-C,y-C)<=2.8)G.elev[y*MAP+x]=1;}
   placeRes('gold',C,C,6);placeRes('food',C-3,C+3,4);
   placeRes('gold',12,12,4);placeRes('gold',MAP-13,MAP-13,4);
 }
@@ -684,7 +684,7 @@ function genMapForest(){
 function placeForest(cx,cy,n,minStart){
   const open=[[cx,cy]],seen=new Set();
   let placed=0,guard=0;
-  const near=(x,y)=>START.some(([bx,by])=>Math.hypot(x-bx,y-by)<(minStart||10));
+  const near=(x,y)=>START.some(([bx,by])=>hyp(x-bx,y-by)<(minStart||10));
   while(open.length&&placed<n&&guard++<n*14){
     const i=SRi(open.length);
     const spot=open.splice(i,1)[0],x=spot[0],y=spot[1],k=x+','+y;
@@ -705,7 +705,7 @@ function genMapRiver(){
   // meandering river NW->SE with three sandy fords — four tiles wide so a
   // navy has room to maneuver and docks find a 2x2 berth
   for(let x=0;x<MAP;x++){
-    const cy=Math.round(MAP*.34+(x/MAP)*MAP*.32+Math.sin(x*.33)*2.6);
+    const cy=Math.round(MAP*.34+(x/MAP)*MAP*.32+dSin(x*.33)*2.6);
     const isFord=[.2,.5,.8].some(f=>Math.abs(x-MAP*f)<2);
     for(let dy=-1;dy<=2;dy++){
       const y=cy+dy;if(y<1||y>=MAP-1)continue;
@@ -725,13 +725,13 @@ function genMapRiver(){
   for(let hb=0,nH=Math.round(6*MAP*MAP/4096);hb<nH;hb++){
     const hx=6+rng(MAP-12),hy=6+rng(MAP-12),hr=3+rng(3);
     let bad=false;
-    for(const[bx,by] of START)if(Math.hypot(hx-bx,hy-by)<10)bad=true;
+    for(const[bx,by] of START)if(hyp(hx-bx,hy-by)<10)bad=true;
     if(bad)continue;
     for(let y=hy-hr;y<=hy+hr;y++)for(let x=hx-hr;x<=hx+hr;x++){
       if(x<1||y<1||x>=MAP-1||y>=MAP-1)continue;
       const k=x+','+y;
       if(G.water[k]||G.ford[k])continue;
-      if(Math.hypot(x-hx,y-hy)<=hr-.2+((x*7+y*13)%2)*.5)G.elev[y*MAP+x]=1;
+      if(hyp(x-hx,y-hy)<=hr-.2+((x*7+y*13)%2)*.5)G.elev[y*MAP+x]=1;
     }
   }
   const nearFord=(x,y)=>{for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++)
@@ -771,10 +771,10 @@ function genMapHallowed(){
   // ponds (the script's little oases), never near a start; fish in each
   for(let p2=0,nP=Math.round(8*MAP*MAP/4096);p2<nP;p2++){
     const px=6+rng(MAP-12),py=6+rng(MAP-12),pr=2+rng(2);
-    if(START.some(([bx,by])=>Math.hypot(px-bx,py-by)<12))continue;
+    if(START.some(([bx,by])=>hyp(px-bx,py-by)<12))continue;
     for(let y=py-pr;y<=py+pr;y++)for(let x=px-pr;x<=px+pr;x++){
       if(x<2||y<2||x>=MAP-2||y>=MAP-2)continue;
-      if(Math.hypot(x-px,y-py)<=pr-.3+((x*7+y*13)%2)*.6){
+      if(hyp(x-px,y-py)<=pr-.3+((x*7+y*13)%2)*.6){
         G.map[y][x]=1;G.water[x+','+y]=1;}
     }
     const fk=px+','+py;
@@ -784,11 +784,11 @@ function genMapHallowed(){
   G.elev=new Uint8Array(MAP*MAP);
   for(let hb=0,nH=Math.round(7*MAP*MAP/4096);hb<nH;hb++){
     const hx=6+rng(MAP-12),hy=6+rng(MAP-12),hr=3+rng(3);
-    if(START.some(([bx,by])=>Math.hypot(hx-bx,hy-by)<10))continue;
+    if(START.some(([bx,by])=>hyp(hx-bx,hy-by)<10))continue;
     for(let y=hy-hr;y<=hy+hr;y++)for(let x=hx-hr;x<=hx+hr;x++){
       if(x<1||y<1||x>=MAP-1||y>=MAP-1)continue;
       if(G.water[x+','+y])continue;
-      if(Math.hypot(x-hx,y-hy)<=hr-.2+((x*7+y*13)%2)*.5)G.elev[y*MAP+x]=1;
+      if(hyp(x-hx,y-hy)<=hr-.2+((x*7+y*13)%2)*.5)G.elev[y*MAP+x]=1;
     }
   }
   const placeRes=(type,cx,cy,n)=>{let placed=0,tries=0;

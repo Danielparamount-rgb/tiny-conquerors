@@ -534,6 +534,7 @@
       <p class="goal" style="text-align:center;margin:2px 0 8px">
         Room code<br><b id="mpRoomCode" style="font-size:34px;letter-spacing:.35em;font-family:Georgia,serif;color:#8a2f27"></b>
       </p>
+      <button class="bigbtn alt" id="mpInvite" style="margin-top:0">📋 &nbsp;Copy invite link</button>
       <div id="mpPlayers" style="text-align:left;font-size:13.5px;margin:8px 0"></div>
       <div class="rule"></div>
       <details id="mpCivPick"><summary>Your civilization: <b id="mpCivName">Britons</b></summary>
@@ -633,6 +634,59 @@ try{document.documentElement.lang=document.documentElement.lang||'en';}catch(e){
 let STR={};
 function T(key,fallback){return STR[key]!==undefined?STR[key]:fallback;}
 /* ================= constants ================= */
+/* ---------- deterministic math (cross-engine lockstep) ----------
+   ECMAScript pins basic IEEE-754 arithmetic (+ - * / %), Math.sqrt and
+   Math.fround to exact bit-level results — but Math.sin/cos/atan2/pow/hypot
+   are "implementation-approximated": V8 (Chrome/Android) and JavaScriptCore
+   (iPhone Safari) genuinely return different bits. Any of them in the SIM
+   path desyncs a cross-engine multiplayer match despite perfect seeding.
+   So the sim uses ONLY these replacements, built from pinned ops. Render,
+   sound and UI code may keep the native Math.* — cosmetics never touch G. */
+const D_TAU=6.283185307179586,D_PI=3.141592653589793,D_HPI=1.5707963267948966;
+function hyp(x,y){return Math.sqrt(x*x+y*y);}          // Math.hypot is NOT pinned; this is
+function dSin(x){                                       // |err| < 1e-9 over all reals
+  x-=D_TAU*Math.floor(x/D_TAU);                         // [0,TAU)
+  if(x>D_PI)x-=D_TAU;                                   // (-PI,PI]
+  if(x>D_HPI)x=D_PI-x;else if(x<-D_HPI)x=-D_PI-x;       // fold to [-PI/2,PI/2]
+  const z=x*x;                                          // Taylor to x^13 (pinned literals)
+  return x*(1-z*(1/6-z*(1/120-z*(1/5040-z*(1/362880-z*(1/39916800-z/6227020800))))));
+}
+function dCos(x){return dSin(x+D_HPI);}
+function dAtanU(z){                                     // atan on [0,1], |err| ~ 1e-7
+  let o=0;
+  if(z>0.41421356237309503){o=0.7853981633974483;z=(z-1)/(z+1);} // fold past tan(PI/8)
+  const s=z*z;
+  return o+z*(1-s*(1/3-s*(1/5-s*(1/7-s*(1/9-s*(1/11-s/13))))));
+}
+function dAtan2(y,x){
+  const ax=x<0?-x:x,ay=y<0?-y:y;
+  let a;
+  if(ax>=ay)a=ax===0?0:dAtanU(ay/ax);
+  else a=D_HPI-dAtanU(ax/ay);
+  if(x<0)a=D_PI-a;
+  return y<0?-a:a;
+}
+function dPowi(b,k){return k===1?b:k===2?b*b:b*b*b;}    // motParams k is only ever 1/2/3
+/* Startup canary: hash a battery of the exact operations the sim leans on and
+   compare against the value this build was tested with. A device that computes
+   differently (exotic engine, FMA-fused JIT) would desync a lockstep match —
+   warn in the multiplayer lobby instead of letting it drift mid-battle. */
+function mathSelfTest(){
+  const f=new Float64Array(1),iv=new Uint32Array(f.buffer);
+  let h=2166136261>>>0;
+  const mix=v=>{f[0]=v;h^=iv[0];h=Math.imul(h,16777619);h^=iv[1];h=Math.imul(h,16777619);};
+  let x=0.123456789;
+  for(let i=1;i<=256;i++){
+    x=x*1.0000001+i*0.618033988749895;
+    const a=x%12.566370614359172-6.283185307179586;
+    mix(dSin(a));mix(dCos(a*0.7));mix(dAtan2(a,1.7-a*0.3));
+    mix(hyp(a,i*0.011));mix(Math.sqrt(i+0.5));mix(dPowi(0.9999+a*1e-6,3));
+  }
+  return (h>>>0).toString(16);
+}
+const MATH_GOLD='fe27d213'; // computed on V8; the kit is pinned-ops only, so every conforming engine should match
+let MATH_DRIFT=false;
+try{MATH_DRIFT=mathSelfTest()!==MATH_GOLD;}catch(e){MATH_DRIFT=true;}
 let MAP=64; const TILE=26;
 let START=[[8,53],[53,9],[10,10]];
 function genStarts(n){
@@ -640,8 +694,8 @@ function genStarts(n){
   const c=MAP/2,r=MAP*.4,out=[];
   for(let i=0;i<n;i++){
     const a=Math.PI*.75+i*2*Math.PI/n;
-    out.push([Math.max(3,Math.min(MAP-5,Math.round(c+Math.cos(a)*r))),
-              Math.max(3,Math.min(MAP-5,Math.round(c+Math.sin(a)*r)))]);
+    out.push([Math.max(3,Math.min(MAP-5,Math.round(c+dCos(a)*r))),
+              Math.max(3,Math.min(MAP-5,Math.round(c+dSin(a)*r)))]);
   }
   return out;
 }
@@ -1055,10 +1109,10 @@ function genMapArena(){
   // a few low hills in the open field
   for(let hb=0,nH=Math.round(5*MAP*MAP/4096);hb<nH;hb++){
     const hx=6+rng(MAP-12),hy=6+rng(MAP-12),hr=3+rng(2);
-    if(START.some(([bx,by])=>Math.hypot(hx-bx,hy-by)<14))continue;
+    if(START.some(([bx,by])=>hyp(hx-bx,hy-by)<14))continue;
     for(let y=hy-hr;y<=hy+hr;y++)for(let x=hx-hr;x<=hx+hr;x++){
       if(x<1||y<1||x>=MAP-1||y>=MAP-1)continue;
-      if(Math.hypot(x-hx,y-hy)<=hr-.2+((x*7+y*13)%2)*.5)G.elev[y*MAP+x]=1;
+      if(hyp(x-hx,y-hy)<=hr-.2+((x*7+y*13)%2)*.5)G.elev[y*MAP+x]=1;
     }
   }
   // the walls, gate facing the centre of the world
@@ -1090,7 +1144,7 @@ function genMapArena(){
   // sparse neutral woods in no-man's-land
   for(let b=0,nF=Math.round(6*MAP*MAP/4096);b<nF;b++){
     const cx=3+rng(MAP-6),cy=3+rng(MAP-6);
-    if(START.some(([sx2,sy2])=>Math.hypot(cx-sx2,cy-sy2)<R+4))continue;
+    if(START.some(([sx2,sy2])=>hyp(cx-sx2,cy-sy2)<R+4))continue;
     placeForest(cx,cy,14+rng(24),11);
   }
 }
@@ -1102,10 +1156,10 @@ function genMapHighlands(){
   const rng=(n)=>SRi(n);
   for(let hb=0,nH=Math.round(16*MAP*MAP/4096);hb<nH;hb++){
     const hx=5+rng(MAP-10),hy=5+rng(MAP-10),hr=3+rng(4);
-    if(START.some(([bx,by])=>Math.hypot(hx-bx,hy-by)<9))continue;
+    if(START.some(([bx,by])=>hyp(hx-bx,hy-by)<9))continue;
     for(let y=hy-hr;y<=hy+hr;y++)for(let x=hx-hr;x<=hx+hr;x++){
       if(x<1||y<1||x>=MAP-1||y>=MAP-1)continue;
-      if(Math.hypot(x-hx,y-hy)<=hr-.2+((x*7+y*13)%2)*.5)G.elev[y*MAP+x]=1;
+      if(hyp(x-hx,y-hy)<=hr-.2+((x*7+y*13)%2)*.5)G.elev[y*MAP+x]=1;
     }
   }
   const placeRes=(type,cx,cy,n)=>{let placed=0,tries=0;
@@ -1141,7 +1195,7 @@ let mission=null;
    short; both spiral outward from a point until the ground allows it. */
 function missionBld(p,type,bx,by,rMin,rMax,done){
   for(let r=rMin;r<rMax;r++)for(let a=0;a<16;a++){
-    const tx=Math.round(bx+Math.cos(a/16*6.283)*r),ty=Math.round(by+Math.sin(a/16*6.283)*r);
+    const tx=Math.round(bx+dCos(a/16*6.283)*r),ty=Math.round(by+dSin(a/16*6.283)*r);
     if(type==='dock'?canPlaceDock(tx,ty):canPlace(tx,ty,BLDS[type].size,0,!!BLDS[type].thin))
       return addBld(p,type,tx,ty,done!==false);
   }
@@ -1182,7 +1236,7 @@ const MISSIONS=[
      const [bx,by]=START[localP];
      let placed=false;
      for(let r=3;r<9&&!placed;r++)for(let a=0;a<12&&!placed;a++){
-       const tx=Math.round(bx+Math.cos(a/12*6.283)*r),ty=Math.round(by+Math.sin(a/12*6.283)*r);
+       const tx=Math.round(bx+dCos(a/12*6.283)*r),ty=Math.round(by+dSin(a/12*6.283)*r);
        if(canPlace(tx,ty,2,0)){addBld(localP,'monastery',tx,ty,true);placed=true;}}
      addUnit(localP,'monk',bx+1,by+4);},
    obj:'Enshrine 3 relics in your Monastery. Monks pick them up — tap a relic, then tap the Monastery.'},
@@ -1209,7 +1263,7 @@ const MISSIONS=[
      missionBld(1,'castle',ex,ey,3,7);
      for(let a=0;a<40;a++){
        if(a>=17&&a<=20)continue;                 // leave a gate's worth of gap
-       const wx=Math.round(ex+1+Math.cos(a/40*6.283)*7),wy=Math.round(ey+1+Math.sin(a/40*6.283)*7);
+       const wx=Math.round(ex+1+dCos(a/40*6.283)*7),wy=Math.round(ey+1+dSin(a/40*6.283)*7);
        if(canPlace(wx,wy,1,0,true))addBld(1,'swall',wx,wy,true);
      }
      missionSquad(1,'archer',4,ex,ey+3);
@@ -1232,7 +1286,7 @@ const MISSIONS=[
      // it, so walk the water list for the nearest tile the way the AI does
      let near=null,nd=1e9;
      for(const w of (G.waterList||[])){
-       const dd=Math.hypot(w.x-bx,w.y-by);
+       const dd=hyp(w.x-bx,w.y-by);
        if(dd<nd){nd=dd;near=w;}
      }
      let dk=null;
@@ -1492,7 +1546,7 @@ function newGame(){
     if(mapRealSel===2&&!mission){ // Hallowed Ground: every lord starts with the cloth
       let placed=null;
       for(let r=3;r<9&&!placed;r++)for(let a=0;a<12&&!placed;a++){
-        const tx=Math.round(bx+Math.cos(a/12*6.283)*r),ty=Math.round(by+Math.sin(a/12*6.283)*r);
+        const tx=Math.round(bx+dCos(a/12*6.283)*r),ty=Math.round(by+dSin(a/12*6.283)*r);
         if(canPlace(tx,ty,2,0))placed={tx,ty};}
       if(placed)addBld(p,'monastery',placed.tx,placed.ty,true);
       addUnit(p,'monk',bx+2,by+3);
@@ -1547,7 +1601,7 @@ function placeAnimals(){
   const spot=(cx,cy,rMin,rMax)=>{
     for(let n=0;n<40;n++){
       const a=SR()*6.283,r=rMin+SR()*(rMax-rMin);
-      const x=Math.round(cx+Math.cos(a)*r),y=Math.round(cy+Math.sin(a)*r);
+      const x=Math.round(cx+dCos(a)*r),y=Math.round(cy+dSin(a)*r);
       if(openAt(x,y))return{x,y};
     }
     return null;
@@ -1606,7 +1660,7 @@ function animalHit(t,from){
     const cur=t.target&&targetEnt(t.target);
     if(cur!==from)cmdAttack(t,from,false);
   }else if(d.skittish){
-    const dx=t.x-from.x,dy=t.y-from.y,dd=Math.hypot(dx,dy)||1;
+    const dx=t.x-from.x,dy=t.y-from.y,dd=hyp(dx,dy)||1;
     const fx=Math.max(2,Math.min(MAP-3,Math.round(t.x+dx/dd*10)));
     const fy=Math.max(2,Math.min(MAP-3,Math.round(t.y+dy/dd*10)));
     t.state='flee';t.fleeT=6;t.home={x:fx+.5,y:fy+.5};
@@ -1621,8 +1675,8 @@ function placeRelics(){
     let guard=0;
     while(spots.length<8&&guard++<300){
       const x=4+SRi(MAP-8),y=4+SRi(MAP-8);
-      if(START.some(([bx,by])=>Math.hypot(x-bx,y-by)<8))continue;
-      if(spots.some(([sx,sy])=>Math.hypot(x-sx,y-sy)<7))continue;
+      if(START.some(([bx,by])=>hyp(x-bx,y-by)<8))continue;
+      if(spots.some(([sx,sy])=>hyp(x-sx,y-sy)<7))continue;
       spots.push([x,y]);
     }
   }else spots=mapRealSel===1
@@ -1650,17 +1704,17 @@ function genMapForest(){
   const carve=(cx,cy,r)=>{
     for(let y=Math.floor(cy-r-1);y<=cy+r+1;y++)for(let x=Math.floor(cx-r-1);x<=cx+r+1;x++){
       if(x<1||y<1||x>=MAP-1||y>=MAP-1)continue;
-      if(Math.hypot(x-cx,y-cy)<=r+((x*7+y*13)%3)*.35)open[y*MAP+x]=1;
+      if(hyp(x-cx,y-cy)<=r+((x*7+y*13)%3)*.35)open[y*MAP+x]=1;
     }};
   for(const[bx,by] of START)carve(bx+1,by+1,8);
   carve(C,C,6.5);
   carve(12,12,4.5);carve(MAP-13,MAP-13,4.5);
   const trail=(x0,y0,x1,y1,w)=>{
     let x=x0,y=y0,guard=0;
-    while(Math.hypot(x1-x,y1-y)>1.5&&guard++<400){
+    while(hyp(x1-x,y1-y)>1.5&&guard++<400){
       carve(Math.round(x),Math.round(y),w);
-      const a=Math.atan2(y1-y,x1-x)+(SR()-.5)*.9;
-      x+=Math.cos(a)*1.3;y+=Math.sin(a)*1.3;
+      const a=dAtan2(y1-y,x1-x)+(SR()-.5)*.9;
+      x+=dCos(a)*1.3;y+=dSin(a)*1.3;
     }};
   // a spoke trail from every base to the contested center, plus two pocket trails
   for(const [bx,by] of START)trail(bx+1,by+1,C,C,2);
@@ -1684,7 +1738,7 @@ function genMapForest(){
   }
   // contested center: a low hill with the richest gold, plus corner pockets
   for(let y=C-4;y<=C+4;y++)for(let x=C-4;x<=C+4;x++){
-    if(open[y*MAP+x]&&Math.hypot(x-C,y-C)<=2.8)G.elev[y*MAP+x]=1;}
+    if(open[y*MAP+x]&&hyp(x-C,y-C)<=2.8)G.elev[y*MAP+x]=1;}
   placeRes('gold',C,C,6);placeRes('food',C-3,C+3,4);
   placeRes('gold',12,12,4);placeRes('gold',MAP-13,MAP-13,4);
 }
@@ -1694,7 +1748,7 @@ function genMapForest(){
 function placeForest(cx,cy,n,minStart){
   const open=[[cx,cy]],seen=new Set();
   let placed=0,guard=0;
-  const near=(x,y)=>START.some(([bx,by])=>Math.hypot(x-bx,y-by)<(minStart||10));
+  const near=(x,y)=>START.some(([bx,by])=>hyp(x-bx,y-by)<(minStart||10));
   while(open.length&&placed<n&&guard++<n*14){
     const i=SRi(open.length);
     const spot=open.splice(i,1)[0],x=spot[0],y=spot[1],k=x+','+y;
@@ -1715,7 +1769,7 @@ function genMapRiver(){
   // meandering river NW->SE with three sandy fords — four tiles wide so a
   // navy has room to maneuver and docks find a 2x2 berth
   for(let x=0;x<MAP;x++){
-    const cy=Math.round(MAP*.34+(x/MAP)*MAP*.32+Math.sin(x*.33)*2.6);
+    const cy=Math.round(MAP*.34+(x/MAP)*MAP*.32+dSin(x*.33)*2.6);
     const isFord=[.2,.5,.8].some(f=>Math.abs(x-MAP*f)<2);
     for(let dy=-1;dy<=2;dy++){
       const y=cy+dy;if(y<1||y>=MAP-1)continue;
@@ -1735,13 +1789,13 @@ function genMapRiver(){
   for(let hb=0,nH=Math.round(6*MAP*MAP/4096);hb<nH;hb++){
     const hx=6+rng(MAP-12),hy=6+rng(MAP-12),hr=3+rng(3);
     let bad=false;
-    for(const[bx,by] of START)if(Math.hypot(hx-bx,hy-by)<10)bad=true;
+    for(const[bx,by] of START)if(hyp(hx-bx,hy-by)<10)bad=true;
     if(bad)continue;
     for(let y=hy-hr;y<=hy+hr;y++)for(let x=hx-hr;x<=hx+hr;x++){
       if(x<1||y<1||x>=MAP-1||y>=MAP-1)continue;
       const k=x+','+y;
       if(G.water[k]||G.ford[k])continue;
-      if(Math.hypot(x-hx,y-hy)<=hr-.2+((x*7+y*13)%2)*.5)G.elev[y*MAP+x]=1;
+      if(hyp(x-hx,y-hy)<=hr-.2+((x*7+y*13)%2)*.5)G.elev[y*MAP+x]=1;
     }
   }
   const nearFord=(x,y)=>{for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++)
@@ -1781,10 +1835,10 @@ function genMapHallowed(){
   // ponds (the script's little oases), never near a start; fish in each
   for(let p2=0,nP=Math.round(8*MAP*MAP/4096);p2<nP;p2++){
     const px=6+rng(MAP-12),py=6+rng(MAP-12),pr=2+rng(2);
-    if(START.some(([bx,by])=>Math.hypot(px-bx,py-by)<12))continue;
+    if(START.some(([bx,by])=>hyp(px-bx,py-by)<12))continue;
     for(let y=py-pr;y<=py+pr;y++)for(let x=px-pr;x<=px+pr;x++){
       if(x<2||y<2||x>=MAP-2||y>=MAP-2)continue;
-      if(Math.hypot(x-px,y-py)<=pr-.3+((x*7+y*13)%2)*.6){
+      if(hyp(x-px,y-py)<=pr-.3+((x*7+y*13)%2)*.6){
         G.map[y][x]=1;G.water[x+','+y]=1;}
     }
     const fk=px+','+py;
@@ -1794,11 +1848,11 @@ function genMapHallowed(){
   G.elev=new Uint8Array(MAP*MAP);
   for(let hb=0,nH=Math.round(7*MAP*MAP/4096);hb<nH;hb++){
     const hx=6+rng(MAP-12),hy=6+rng(MAP-12),hr=3+rng(3);
-    if(START.some(([bx,by])=>Math.hypot(hx-bx,hy-by)<10))continue;
+    if(START.some(([bx,by])=>hyp(hx-bx,hy-by)<10))continue;
     for(let y=hy-hr;y<=hy+hr;y++)for(let x=hx-hr;x<=hx+hr;x++){
       if(x<1||y<1||x>=MAP-1||y>=MAP-1)continue;
       if(G.water[x+','+y])continue;
-      if(Math.hypot(x-hx,y-hy)<=hr-.2+((x*7+y*13)%2)*.5)G.elev[y*MAP+x]=1;
+      if(hyp(x-hx,y-hy)<=hr-.2+((x*7+y*13)%2)*.5)G.elev[y*MAP+x]=1;
     }
   }
   const placeRes=(type,cx,cy,n)=>{let placed=0,tries=0;
@@ -1849,7 +1903,7 @@ function addUnit(p,type,tx,ty){
   // `face` stays keyed to slot 0, NOT localP: it is written into the unit record,
   // so keying it to the viewer would have two peers build different units.
   const u={id:uid++,p,type,x:tx+.5,y:ty+.5,hp,maxhp:hp,face:p===0?1:-1,flash:0,
-    hdg:Math.atan2(MAP/2-(ty+.5),MAP/2-(tx+.5)),spd:0,vx:0,vy:0,gaitPh:0,
+    hdg:dAtan2(MAP/2-(ty+.5),MAP/2-(tx+.5)),spd:0,vx:0,vy:0,gaitPh:0,
     state:'idle',path:null,target:null,carry:0,carryType:null,cd:0,gatherT:0,resKey:null,farm:null};
   if(d.garCap)u.gar=[];
   G.units.push(u);return u;
@@ -1987,7 +2041,7 @@ function findPath(sx,sy,tx,ty,team,naval){
       const g=n.g+(dx&&dy?1.41:1)+stepCost(nx,ny),k=key(nx,ny);
       const ex=seen.get(k);
       if(ex&&ex.g<=g)continue;
-      const node={x:nx,y:ny,g,f:g+Math.hypot(tx-nx,ty-ny),par:n};
+      const node={x:nx,y:ny,g,f:g+hyp(tx-nx,ty-ny),par:n};
       seen.set(k,node);hpush(node);
     }
   }
@@ -2058,7 +2112,7 @@ function lineClear(x0,y0,x1,y1,team,naval){
 // clearance ~0.35 tiles: center line + two parallels offset ±0.3 perpendicular
 function hasLOS(x0,y0,x1,y1,team,naval){
   if(!lineClear(x0,y0,x1,y1,team,naval))return false;
-  const dx=x1-x0,dy=y1-y0,L=Math.hypot(dx,dy);
+  const dx=x1-x0,dy=y1-y0,L=hyp(dx,dy);
   if(L<1e-6)return true;
   const px=-dy/L*.3,py=dx/L*.3;
   return lineClear(x0+px,y0+py,x1+px,y1+py,team,naval)
@@ -2084,7 +2138,7 @@ function smoothPath(ox,oy,path,team,naval){
 // cosmetic: turn a stationary unit's heading toward its work/attack target
 function slewHdg(u,tx,ty,dt){
   if(u.hdg===undefined)return;
-  const want=Math.atan2(ty-u.y,tx-u.x),t=motParams(u).turn*dt;
+  const want=dAtan2(ty-u.y,tx-u.x),t=motParams(u).turn*dt;
   const diff=wrapA(want-u.hdg);
   u.hdg=wrapA(u.hdg+Math.max(-t,Math.min(t,diff)));
 }
@@ -2094,7 +2148,7 @@ function latShove(u,dx,dy,mag){
   if(u.hdg===undefined)return;
   const tx=Math.floor(u.x),ty=Math.floor(u.y);
   if(!passable(tx+1,ty)||!passable(tx-1,ty)||!passable(tx,ty+1)||!passable(tx,ty-1))return;
-  const px=-Math.sin(u.hdg),py=Math.cos(u.hdg);
+  const px=-dSin(u.hdg),py=dCos(u.hdg);
   const side=(dx*px+dy*py)>=0?-1:1;
   const nx=u.x+px*side*mag,ny=u.y+py*side*mag;
   if(walkTile(nx,ny,u.p)){u.x=nx;u.y=ny;}
@@ -2606,6 +2660,20 @@ let netSendFrom=0;            // first turn we answer for; null while an AI hold
 let netReplay=null;           // the catch-up in progress, if any
 let netReplaying=false;       // suppresses the feed chatter while thousands of turns fly past
 let netLeftName='';           // who dropped, for the message when the stall runs out
+/* Rolling hash of every command list actually APPLIED, folded turn by turn.
+   Shipped beside stateHash: if the input hashes diverge the network layer
+   delivered different orders; if they match while the state hashes diverge the
+   simulations computed differently. That split is the single most useful fact
+   a desync report can carry. */
+let netInHash=2166136261>>>0;
+function netFoldCmds(arr){
+  const s=JSON.stringify(arr);   // JSON round-trips key order + float text identically on every engine
+  let h=netInHash;
+  for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}
+  netInHash=h>>>0;
+}
+let netPongAt=0,netProbeT=null,netRejoinT=null,netRejoinN=99; // 99 = no recovery in progress
+function gameVer(){return (typeof window!=='undefined'&&window.GAMEVER)||'dev';}
 function netUrl(){
   const h=location.hostname;
   if(h==='localhost'||h==='127.0.0.1')return 'ws://localhost:8080';
@@ -2627,6 +2695,8 @@ function netReset(){
   netLobby={players:[],cfg:null,host:0};netPlayers=[];
   netGone=new Set();netAiAt=new Map();netHumanAt=new Map();netLeftName='';
   netSendFrom=0;netReplay=null;netReplaying=false;
+  netInHash=2166136261>>>0;
+  clearTimeout(netProbeT);clearTimeout(netRejoinT);netRejoinT=null;netRejoinN=99;
   const ov=document.getElementById('netCatch');if(ov)ov.style.display='none';
 }
 function netConnect(then){
@@ -2636,23 +2706,32 @@ function netConnect(then){
   let s;
   try{s=new WebSocket(netUrl());}catch(e){mpStatus('Could not reach the relay');return;}
   netSock=s;
-  s.onopen=()=>{mpStatus('');then&&then();};
+  // Every handler ignores a socket that is no longer THE socket — the
+  // auto-rejoin loop can have a stale connection attempt still dying in the
+  // background, and its close must not null out its replacement.
+  s.onopen=()=>{if(netSock!==s)return;mpStatus('');then&&then();};
   s.onerror=()=>{
+    if(netSock!==s)return;
     // Two honest possibilities, and the player can't tell them apart from here:
     // the free relay is cold-starting, or this is the artifact preview, whose
     // sandbox blocks every outbound connection.
     mpStatus('Could not reach the relay. If this is the shared preview link, use the web app at tiny-conquerors.onrender.com — otherwise the relay is waking up, try again in half a minute.');
   };
   s.onclose=()=>{
+    if(netSock!==s)return;
     netSock=null;
     if(!netMode)return mpStatus('Disconnected');
+    if(netRejoinT)return;   // auto-rejoin already knocking — let it keep trying
     // If we were the last person in the room anyway, losing the relay costs us
     // nothing — carry on offline against the computers instead of stopping.
     if(netAlone())return netGoOffline('The relay is gone; the battle goes on against the computer');
-    netHalt('Connection lost','The relay stopped answering.',
-      'Everyone else has stopped too — a lockstep match cannot go on without every player.');
+    // Any mid-match connection loss now tries to REJOIN first (the same
+    // journal-replay path a manual re-entry uses); the halt screen is the
+    // fallback when the retries run dry, not the first response.
+    netRecover();
   };
   s.onmessage=e=>{
+    if(netSock!==s)return;
     let m;try{m=JSON.parse(e.data);}catch(err){return;}
     netOn(m);
   };
@@ -2699,11 +2778,25 @@ function netOn(m){
       if(!bag){bag={};netIn.set(m.turn,bag);}
       bag[m.seat]=m.cmds;
       break;}
-    case 'desync':
+    case 'pong':
+      netPongAt=performance.now();break;
+    case 'desync':{
+      /* The hash wire format is "<state>.<inputs>" — split it and say WHICH
+         side disagreed. Inputs differing = the network layer delivered
+         different orders; states differing on identical inputs = the
+         simulations computed differently (device math, sim bug). */
+      let why='This is a bug in the game, not your connection. Nothing you did caused it.';
+      try{
+        const hs=Object.values(m.hashes||{}).map(s=>String(s).split('.'));
+        if(hs.length>1&&hs.every(x=>x.length===2)){
+          const st=new Set(hs.map(x=>x[0])),inp=new Set(hs.map(x=>x[1]));
+          if(inp.size>1)why='The players did not receive the same orders — a network-layer bug, not your connection.';
+          else if(st.size>1)why='The players received identical orders but computed different worlds — a simulation bug (possibly device math). Please report which phones were playing.';
+        }
+      }catch(e){}
       netHalt('The battle has drifted apart',
-        'Turn '+m.turn+' — the players stopped agreeing on the state of the world.',
-        'This is a bug in the game, not your connection. Nothing you did caused it.');
-      break;
+        'Turn '+m.turn+' — the players stopped agreeing on the state of the world.',why);
+      break;}
   }
 }
 /* ---- starting a match from a lobby ---- */
@@ -2735,6 +2828,8 @@ function netBegin(m){
   try{dailyRun=null;}catch(e){}   // a lockstep match is never the daily
   netTurn=0;netIn=new Map();netSent=-1;netStall=0;
   netSendFrom=0;netHumanAt=new Map();
+  netInHash=2166136261>>>0;
+  clearTimeout(netRejoinT);netRejoinT=null;netRejoinN=99;
   cmdQ=[];
   pendingSeed=m.seed>>>0;
   document.getElementById('mpOverlay').style.display='none';
@@ -2776,6 +2871,8 @@ function netRejoin(m){
   mission=null;netMode=true;
   try{dailyRun=null;}catch(e){}   // a lockstep match is never the daily
   netTurn=0;netIn=new Map();netSent=-1;netStall=0;netStallSeat=-1;
+  netInHash=2166136261>>>0;                 // the replay re-folds the same stream
+  clearTimeout(netRejoinT);netRejoinT=null;netRejoinN=99;  // recovery succeeded — stop knocking
   // Deliberately NOT seeded from the relay's current aiSeats: the journal's own
   // handovers rebuild this, and a seat that left, came back and left again would
   // otherwise end up mislabelled.
@@ -2843,6 +2940,7 @@ function netCatchUp(){
     const bag=R.cmds.get(netTurn);
     const arr=[];
     for(const p of netPlayers)arr[p.seat]=(bag&&bag[p.seat])||[];
+    netFoldCmds(arr);
     applyTick(arr);
     step(.05);
     netTurn++;
@@ -2970,12 +3068,16 @@ function netRunTurn(){
   }
   const arr=netSeatCmds(netTurn);
   if(!arr)return false;
+  netFoldCmds(arr);   // BEFORE applyTick — apply stamps c.p onto the objects
   applyTick(arr);
   netIn.delete(netTurn);
   step(.05);
   netTurn++;
   netTopUp();
-  if(netTurn%20===0)netSend({t:'hash',turn:netTurn,h:stateHash()});
+  // "<state>.<inputs>" — the relay compares the whole string, so it catches
+  // either half diverging with zero relay changes; the desync handler splits
+  // it back apart to say which half it was.
+  if(netTurn%20===0)netSend({t:'hash',turn:netTurn,h:stateHash()+'.'+netInHash.toString(16)});
   // Being the last one left is NOT a reason to hang up. An earlier version did
   // drop to offline here, which quietly made reconnect impossible in a two
   // player game — the very case where someone's phone dropping matters most.
@@ -2985,26 +3087,66 @@ function netRunTurn(){
 }
 function netHalt(title,sub,body){
   netMode=false;netClose();
+  clearTimeout(netProbeT);clearTimeout(netRejoinT);netRejoinT=null;netRejoinN=99;
   if(G)G.paused=true;
   document.getElementById('netHaltTitle').textContent=title;
   document.getElementById('netHaltSub').textContent=sub||'';
   document.getElementById('netHaltBody').textContent=body||'';
   document.getElementById('netHalt').style.display='flex';
 }
+/* ---- foreground recovery (phones) ----
+   iOS kills a backgrounded page's WebSocket without firing close — the object
+   still reports readyState 1 while send() goes nowhere (a zombie). So on every
+   return to the foreground the wire is VERIFIED with a ping; no pong in 2.5s
+   means dead, and dead means rejoin — the same relay journal-replay path a
+   manual re-entry uses, automated. */
+function netForeground(){
+  if(!netMode||netReplaying||netRejoinT)return;
+  if(!netSock||netSock.readyState!==1)return netRecover();
+  const sent=performance.now();
+  netSend({t:'ping'});
+  clearTimeout(netProbeT);
+  netProbeT=setTimeout(()=>{if(netMode&&!netReplaying&&netPongAt<sent)netRecover();},2500);
+}
+function netRecover(){
+  if(!netMode)return;
+  netClose();
+  if(netAlone())return netGoOffline('Connection lost — the battle goes on against the computer');
+  toast('Connection lost — reconnecting…');
+  netRejoinN=0;
+  netAutoRejoin();
+}
+/* The relay frees our seat only when its ping sweep notices the dead socket
+   (~15-20s), so early knocks get "every seat is taken" — keep knocking.
+   Success arrives as a 'rejoin' message, which routes into netRejoin() and
+   clears the retry timer there. */
+function netAutoRejoin(){
+  if(!netMode||!netRoom||netRejoinN>20){                    // ~80s of trying
+    if(netMode&&netRoom){clearTimeout(netRejoinT);netRejoinT=null;
+      netHalt('Connection lost','Could not reach the battle again.',
+        'The relay stopped answering for over a minute. If the others are still fighting, rejoin with the room code '+netRoom+'.');}
+    return;
+  }
+  netRejoinN++;
+  netConnect(()=>{netSend({t:'join',code:netRoom,
+    name:netName||localStorage.getItem('tq_name')||'Player',v:gameVer()});});
+  clearTimeout(netRejoinT);
+  netRejoinT=setTimeout(()=>{if(netMode&&!netReplaying)netAutoRejoin();},4000);
+}
 function dropoffFor(u){let best=null,bd=1e9;
   const fisher=UNITS[u.type].fisher;
   for(const b of G.blds)if(b.p===u.p&&b.built&&BLDS[b.type].drop){
     if(fisher&&b.type!=='dock')continue; // fishing ships land their catch at the Dock
-    const c=bldCenter(b),d=Math.hypot(c.x-u.x,c.y-u.y);if(d<bd){bd=d;best=b;}}
+    const c=bldCenter(b),d=hyp(c.x-u.x,c.y-u.y);if(d<bd){bd=d;best=b;}}
   return best;}
 function nearestRes(u,type){let best=null,bd=1e9;
   for(const k in G.res){const r=G.res[k];if(r.type!==type)continue;
-    const d=Math.hypot(r.x+.5-u.x,r.y+.5-u.y);if(d<bd){bd=d;best=k;}}
+    const d=hyp(r.x+.5-u.x,r.y+.5-u.y);if(d<bd){bd=d;best=k;}}
   return bd<15?best:null;}
 function freeFarm(u){let best=null,bd=1e9;
   for(const b of G.blds){if(b.p!==u.p||b.type!=='farm'||!b.built)continue;
     const occ=G.units.find(o=>o.farm===b.id&&o.id!==u.id&&o.hp>0);if(occ)continue;
-    const c=bldCenter(b),d=Math.hypot(c.x-u.x,c.y-u.y);if(d<bd){bd=d;best=b;}}
+    const c=bldCenter(b),d=hyp(c.x-u.x,c.y-u.y);if(d<bd){bd=d;best=b;}}
   return best;}
 
 /* ================= economy helpers ================= */
@@ -3182,7 +3324,7 @@ function step(dt){
             const ms=!bt&&!e.bld&&Math.random()<missChance(b.p);
             G.proj.push({x0:c.x,y0:c.y-1.2,
               x1:e.ex+(ms?(Math.random()-.5)*.9:0),y1:e.ey+(ms?(Math.random()-.5)*.9:0),t:0,
-              dur:Math.max(.16,Math.hypot(e.ex-c.x,e.ey-c.y)*(bt?.045:.07)),miss:ms,
+              dur:Math.max(.16,hyp(e.ex-c.x,e.ey-c.y)*(bt?.045:.07)),miss:ms,
               kind:bt?'ball':null});}
         }
       }
@@ -3369,7 +3511,7 @@ function step(dt){
       ||G.blds.some(b2=>b2.gar&&b2.gar.some(g2=>g2.type===mission.win.ut))  // garrisoned = alive, not arrived
       ||G.units.some(u2=>u2.gar&&u2.gar.some(g2=>g2.type===mission.win.ut));
     if(!hero)return endGame(false);          // the one you were sworn to protect is dead
-    if(hero.x!==undefined&&Math.hypot(hero.x-W.x,hero.y-W.y)<(W.r||3))return endGame(true);
+    if(hero.x!==undefined&&hyp(hero.x-W.x,hero.y-W.y)<(W.r||3))return endGame(true);
     // a slow pulse on the destination so the player always knows the road
     if((G.t%8)<dt){const pgs=G.pings||(G.pings=[]);
       pgs.push({x:W.x,y:W.y,t:G.t});if(pgs.length>6)pgs.shift();}
@@ -3407,7 +3549,7 @@ function ejectGarrison(b){
     const u=b.gar.pop();
     const spot=nearFree(b.tx+Math.floor(b.size/2),b.ty+b.size,6)||{x:b.tx,y:b.ty+b.size};
     u.x=spot.x+.5+(n%3)*.3;u.y=spot.y+.5+((n/3)|0)*.3;
-    u.hdg=Math.atan2(u.y-(b.ty+b.size/2),u.x-(b.tx+b.size/2));u.spd=0;u.vx=0;u.vy=0;
+    u.hdg=dAtan2(u.y-(b.ty+b.size/2),u.x-(b.tx+b.size/2));u.spd=0;u.vx=0;u.vy=0;
     u.state='idle';u.path=null;u.target=null;n++;
     G.units.push(u);
   }
@@ -3430,8 +3572,8 @@ function removeBld(i){
     // dust rolls outward from the footprint as it comes down
     for(let fi=0;fi<14;fi++){
       const an=Math.random()*6.283,rr=b.size*(.4+Math.random()*.7);
-      G.fx.push({x:cc.x+Math.cos(an)*rr,y:cc.y+Math.sin(an)*rr*.6,
-        vx:Math.cos(an)*.9,vy:Math.sin(an)*.4-.25,
+      G.fx.push({x:cc.x+dCos(an)*rr,y:cc.y+dSin(an)*rr*.6,
+        vx:dCos(an)*.9,vy:dSin(an)*.4-.25,
         life:1.3+Math.random()*.9,max:2.2,r:4+Math.random()*4,kind:'smoke',col:'163,148,116'});
     }
     for(let fi=0;fi<8;fi++)G.fx.push({x:cc.x+(Math.random()-.5)*b.size,y:cc.y+(Math.random()-.5)*b.size,
@@ -3455,13 +3597,13 @@ function removeBld(i){
 function followPath(u,dt){
   const d=unitDef(u);
   if(!u.path||!u.path.length){u.spd=0;u.vx=0;u.vy=0;return true;}
-  if(u.hdg===undefined)u.hdg=Math.atan2(u.path[0].y-u.y,u.path[0].x-u.x); // old-save seed
+  if(u.hdg===undefined)u.hdg=dAtan2(u.path[0].y-u.y,u.path[0].x-u.x); // old-save seed
   if(u.spd===undefined){u.spd=0;u.vx=0;u.vy=0;u.gaitPh=0;}
   // consume intermediate waypoints: within 0.34, or already passed (behind, within
   // 0.75 > cav turn radius so a missed corner always releases). Never the final one.
   while(u.path.length>1){
-    const w0=u.path[0],ddx=w0.x-u.x,ddy=w0.y-u.y,dd=Math.hypot(ddx,ddy);
-    const behind=ddx*Math.cos(u.hdg)+ddy*Math.sin(u.hdg)<0;
+    const w0=u.path[0],ddx=w0.x-u.x,ddy=w0.y-u.y,dd=hyp(ddx,ddy);
+    const behind=ddx*dCos(u.hdg)+ddy*dSin(u.hdg)<0;
     if(dd<=.34||(behind&&dd<.75))u.path.shift();else break;
   }
   const wp=u.path[0];
@@ -3477,7 +3619,7 @@ function followPath(u,dt){
       cmdAttack(u,wb,true);return false;
     }
   }
-  const dx=wp.x-u.x,dy=wp.y-u.y,dist=Math.hypot(dx,dy);
+  const dx=wp.x-u.x,dy=wp.y-u.y,dist=hyp(dx,dy);
   const last=u.path.length===1;
   // FINAL waypoint keeps the exact snap, checked BEFORE moving — no overshoot,
   // zero final-position error, so gather 1.8 / farm 1.85 / deposit size*.5+1.7 /
@@ -3486,7 +3628,7 @@ function followPath(u,dt){
     u.x=wp.x;u.y=wp.y;u.path.shift();u.spd=0;u.vx=0;u.vy=0;u.formSpd=null;return true;
   }
   const m=motParams(u);
-  const want=Math.atan2(dy,dx);
+  const want=dAtan2(dy,dx);
   // stranded inside a building footprint placed after pathing (old code walked
   // through blocked tiles freely) — beeline to the free waypoint, guard bypassed
   const curOk=walkTile(u.x,u.y,u.p,nav);
@@ -3497,7 +3639,7 @@ function followPath(u,dt){
     u.hdg=wrapA(u.hdg+Math.max(-t,Math.min(t,diff)));
   }
   // alignment-scaled speed: cavalry carves arcs instead of pivoting on the spot
-  const align=Math.pow(Math.max(0,Math.cos(wrapA(want-u.hdg))),m.k);
+  const align=dPowi(Math.max(0,dCos(wrapA(want-u.hdg))),m.k); // Math.pow is not IEEE-pinned; k is 1/2/3
   let vt=speedOf(u)*align;
   // movement-feel: a formation marches TOGETHER — commanded groups carry the
   // group's slowest speed (set by CMDS.move/amove, cleared on arrival/new orders)
@@ -3507,19 +3649,19 @@ function followPath(u,dt){
   if(u.spd<0)u.spd=0;
   // advance along heading; guard so arcs / cut corners never enter a blocked tile
   const stp=u.spd*dt,px0=u.x,py0=u.y;
-  const nx=u.x+Math.cos(u.hdg)*stp,ny=u.y+Math.sin(u.hdg)*stp;
+  const nx=u.x+dCos(u.hdg)*stp,ny=u.y+dSin(u.hdg)*stp;
   if(!curOk||walkTile(nx,ny,u.p,nav)){u.x=nx;u.y=ny;}
   else if(walkTile(nx,u.y,u.p,nav)){u.x=nx;u.spd*=.7;}
   else if(walkTile(u.x,ny,u.p,nav)){u.y=ny;u.spd*=.7;}
   else u.spd=0; // pinned: pivot in place next frames
-  u.vx=Math.cos(u.hdg)*u.spd;u.vy=Math.sin(u.hdg)*u.spd;
+  u.vx=dCos(u.hdg)*u.spd;u.vy=dSin(u.hdg)*u.spd;
   // distance-driven gait phase: feet plant, no foot-sliding at any speed
-  const moved=Math.hypot(u.x-px0,u.y-py0);
+  const moved=hyp(u.x-px0,u.y-py0);
   u.gaitPh=(u.gaitPh||0)+moved*(u.type==='elephant'?.55:d.cav?(u.spd>1.1?.62:.95):d.ram?.6:1.15);
   if(u.type==='ram')u.wheelRot=(u.wheelRot||0)+moved*8.1;
   // face compat: SCREEN-space heading sign (isoPt: screenX=(x-y)*IW),
   // 0.08 deadzone stops flip jitter on screen-vertical walks
-  const sdx=Math.cos(u.hdg)-Math.sin(u.hdg);
+  const sdx=dCos(u.hdg)-dSin(u.hdg);
   if(Math.abs(sdx)>.08)u.face=sdx>0?1:-1;
   return false;
 }
@@ -3547,7 +3689,7 @@ function creepToward(u,tx,ty,want,dt){
   // Stagger the resting distance per unit so a crowd rings the trunk in loose
   // bands instead of all converging on one point.
   want+=(u.id%4)*.17;
-  const dx=tx-u.x,dy=ty-u.y,d=Math.hypot(dx,dy);
+  const dx=tx-u.x,dy=ty-u.y,d=hyp(dx,dy);
   if(d<=want||d<1e-4)return;
   const step=Math.min(d-want,speedOf(u)*.55*dt);
   const nx=u.x+dx/d*step,ny=u.y+dy/d*step;
@@ -3567,9 +3709,9 @@ function nearestEnemy(p,x,y,r,unitsOnly){
   // otherwise abandon a battle to shoot the neighbour's sheep. Hunting is
   // always an explicit order.
   for(const u of G.units){if(allied(u.p,p)||u.hp<=0||isAnimal(u))continue;
-    const d=Math.hypot(u.x-x,u.y-y);if(d<bd){bd=d;best={ent:u,bld:false,ex:u.x,ey:u.y};}}
+    const d=hyp(u.x-x,u.y-y);if(d<bd){bd=d;best={ent:u,bld:false,ex:u.x,ey:u.y};}}
   if(!unitsOnly)for(const b of G.blds){if(allied(b.p,p))continue;
-    const c=bldCenter(b),d=Math.hypot(c.x-x,c.y-y)-b.size*.5;
+    const c=bldCenter(b),d=hyp(c.x-x,c.y-y)-b.size*.5;
     if(d<bd){bd=d;best={ent:b,bld:true,ex:c.x,ey:c.y};}}
   return best;
 }
@@ -3592,7 +3734,7 @@ function dealDamage(hit,amt,fromP,ranged){
   if(fromP!==localP&&hit.ent.p===localP){ // minimap attack ping (separate from the toast throttle)
     const pgs=G.pings||(G.pings=[]);
     const lp=pgs[pgs.length-1];
-    if(!lp||G.t-lp.t>2||Math.hypot(hx-lp.x,hy-lp.y)>10){
+    if(!lp||G.t-lp.t>2||hyp(hx-lp.x,hy-lp.y)>10){
       pgs.push({x:hx,y:hy,t:G.t});if(pgs.length>6)pgs.shift();}
   }
   if(tileVis(hx,hy)){
@@ -3618,8 +3760,8 @@ function updateUnit(u,dt){
         u.grazeT=2.5+SR()*4;
         const h=u.home||(u.home={x:u.x,y:u.y});
         const a=SR()*6.283,r=SR()*2.2;
-        const tx=Math.max(1,Math.min(MAP-2,Math.round(h.x+Math.cos(a)*r)));
-        const ty=Math.max(1,Math.min(MAP-2,Math.round(h.y+Math.sin(a)*r)));
+        const tx=Math.max(1,Math.min(MAP-2,Math.round(h.x+dCos(a)*r)));
+        const ty=Math.max(1,Math.min(MAP-2,Math.round(h.y+dSin(a)*r)));
         if(passable(tx,ty))u.path=uPath(u,tx,ty)||[];
       }
       // Sheep belong to whoever walks up to them (manual: they are "converted"
@@ -3631,7 +3773,7 @@ function updateUnit(u,dt){
           let best=null,bd=7;
           for(const o of G.units){
             if(o.hp<=0||o.p===GAIA||isAnimal(o))continue;
-            const dd=Math.hypot(o.x-u.x,o.y-u.y);
+            const dd=hyp(o.x-u.x,o.y-u.y);
             if(dd<bd){bd=dd;best=o;}
           }
           if(best){
@@ -3655,7 +3797,7 @@ function updateUnit(u,dt){
       if(u.type==='ram'){
         let bb=null,bd=6;
         for(const b2 of G.blds){if(b2.p===u.p)continue;
-          const c2=bldCenter(b2),dd=Math.hypot(c2.x-u.x,c2.y-u.y)-b2.size*.5;
+          const c2=bldCenter(b2),dd=hyp(c2.x-u.x,c2.y-u.y)-b2.size*.5;
           if(dd<bd){bd=dd;bb=b2;}}
         if(bb)cmdAttack(u,bb,true);
       }else if(d.monk){
@@ -3670,7 +3812,7 @@ function updateUnit(u,dt){
                 u.state='toMon';u.monB=mon.id;u.path=uPath(u,c2.x,c2.y,u.p)||[];break;}
               let rr=null,rd=26;
               for(const r2 of G.relics){if(r2.held||r2.mon)continue;
-                const dd=Math.hypot(r2.x+.5-u.x,r2.y+.5-u.y);
+                const dd=hyp(r2.x+.5-u.x,r2.y+.5-u.y);
                 if(dd<rd){rd=dd;rr=r2;}}
               if(rr){u.state='toRelic';u.relicT=rr.id;
                 u.path=uPath(u,rr.x,rr.y,u.p)||[];break;}
@@ -3679,7 +3821,7 @@ function updateUnit(u,dt){
           let best=null,bd=7;
           for(const f of G.units){
             if(!allied(f.p,u.p)||f.id===u.id||f.hp<=0||f.hp>=f.maxhp||isAnimal(f))continue;
-            const dd=Math.hypot(f.x-u.x,f.y-u.y);
+            const dd=hyp(f.x-u.x,f.y-u.y);
             if(dd<bd){bd=dd;best=f;}}
           if(best){u.state='toHeal';u.target={id:best.id,bld:false};
             u.path=uPath(u,best.x,best.y,u.p)||[];}
@@ -3687,7 +3829,7 @@ function updateUnit(u,dt){
             let foe=null,fd=7.5;
             for(const f of G.units){
               if(allied(f.p,u.p)||f.hp<=0||!canConvert(u,f,false))continue;
-              const dd=Math.hypot(f.x-u.x,f.y-u.y);
+              const dd=hyp(f.x-u.x,f.y-u.y);
               if(dd<fd){fd=dd;foe=f;}}
             if(foe)cmdConvert(u,foe,false);
           }
@@ -3701,7 +3843,7 @@ function updateUnit(u,dt){
           const home=G.blds.find(b=>b.p===u.p&&b.type===bt&&b.built);
           let far=null,fd=1e9;
           for(const b of G.blds){if(b.p===u.p||b.type!==bt||!b.built)continue;
-            const c=bldCenter(b),dd=Math.hypot(c.x-u.x,c.y-u.y);
+            const c=bldCenter(b),dd=hyp(c.x-u.x,c.y-u.y);
             if(dd<fd){fd=dd;far=b;}}
           if(home&&far){u.state='tradeOut';u.tradeA=home.id;u.tradeB=far.id;
             const c=bldCenter(far);u.path=uPath(u,c.x,c.y)||[];}
@@ -3721,10 +3863,10 @@ function updateUnit(u,dt){
       const far=G.blds.find(b=>b.id===u.tradeB&&b.built);
       if(!far){u.state='idle';break;}
       const done=followPath(u,dt);const c=bldCenter(far);
-      if(Math.hypot(c.x-u.x,c.y-u.y)<far.size*.5+1.9){
+      if(hyp(c.x-u.x,c.y-u.y)<far.size*.5+1.9){
         u.state='tradeBack';u.tradeDist=0;
         const home=G.blds.find(b=>b.id===u.tradeA&&b.built);
-        if(home){const hc=bldCenter(home);u.tradeDist=Math.hypot(hc.x-c.x,hc.y-c.y);
+        if(home){const hc=bldCenter(home);u.tradeDist=hyp(hc.x-c.x,hc.y-c.y);
           u.path=uPath(u,hc.x,hc.y)||[];}
         else u.state='idle';
       }else if(done){u.path=uPath(u,c.x,c.y)||[];if(!u.path.length)u.state='idle';}
@@ -3733,7 +3875,7 @@ function updateUnit(u,dt){
       const home=G.blds.find(b=>b.id===u.tradeA&&b.built);
       if(!home){u.state='idle';break;}
       const done=followPath(u,dt);const c=bldCenter(home);
-      if(Math.hypot(c.x-u.x,c.y-u.y)<home.size*.5+1.9){
+      if(hyp(c.x-u.x,c.y-u.y)<home.size*.5+1.9){
         let gold=Math.round(8+(u.tradeDist||0)*1.2); // manual: profit scales with distance
         if(ecoTier(u.p,'caravan'))gold=Math.round(gold*1.3);   // Caravan
         if(teamHas(u.p,'tradeGold'))gold=Math.round(gold*1.33); // Spanish team bonus
@@ -3748,14 +3890,14 @@ function updateUnit(u,dt){
       if(!t||t.hp<=0||allied(t.p,u.p)){u.state='idle';u.target=null;break;}
       const done=followPath(u,dt);
       const c=u.target.bld?bldCenter(t):t;
-      if(Math.hypot(c.x-u.x,c.y-u.y)<convRange(u.p)){u.state='convert';u.convT=0;u.path=null;}
+      if(hyp(c.x-u.x,c.y-u.y)<convRange(u.p)){u.state='convert';u.convT=0;u.path=null;}
       else if(done){u.path=uPath(u,c.x,c.y,u.p)||[];if(!u.path.length)u.state='idle';}
       break;}
     case 'convert':{
       const t=targetEnt(u.target);
       if(!t||t.hp<=0||allied(t.p,u.p)){u.state='idle';u.target=null;break;}
       const c=u.target.bld?bldCenter(t):t;
-      if(Math.hypot(c.x-u.x,c.y-u.y)>convRange(u.p)+1){u.state='toConv';
+      if(hyp(c.x-u.x,c.y-u.y)>convRange(u.p)+1){u.state='toConv';
         u.path=uPath(u,c.x,c.y,u.p)||[];break;}
       slewHdg(u,c.x,c.y,dt);
       u.convT=(u.convT||0)+dt;
@@ -3772,13 +3914,13 @@ function updateUnit(u,dt){
       const t=targetEnt(u.target);
       if(!t||t.hp<=0||t.hp>=t.maxhp){u.state='idle';u.target=null;break;}
       const done=followPath(u,dt);
-      if(Math.hypot(t.x-u.x,t.y-u.y)<2.2*(civOf(u.p).healRange||1)){u.state='heal';u.path=null;}
+      if(hyp(t.x-u.x,t.y-u.y)<2.2*(civOf(u.p).healRange||1)){u.state='heal';u.path=null;}
       else if(done){u.path=uPath(u,t.x,t.y,u.p)||[];if(!u.path.length)u.state='idle';}
       break;}
     case 'heal':{
       const t=targetEnt(u.target);
       if(!t||t.hp<=0||t.hp>=t.maxhp){u.state='idle';u.target=null;break;}
-      if(Math.hypot(t.x-u.x,t.y-u.y)>2.6*(civOf(u.p).healRange||1)){u.state='toHeal';
+      if(hyp(t.x-u.x,t.y-u.y)>2.6*(civOf(u.p).healRange||1)){u.state='toHeal';
         u.path=uPath(u,t.x,t.y,u.p)||[];break;}
       slewHdg(u,t.x,t.y,dt);
       t.hp=Math.min(t.maxhp,t.hp+(teamHas(u.p,'healFast')?9:6)*dt); // Byzantine TB
@@ -3787,7 +3929,7 @@ function updateUnit(u,dt){
       const r=G.relics.find(x=>x.id===u.relicT);
       if(!r||r.held||r.mon){u.state='idle';u.relicT=null;break;}
       const done=followPath(u,dt);
-      if(Math.hypot(r.x+.5-u.x,r.y+.5-u.y)<1.2){
+      if(hyp(r.x+.5-u.x,r.y+.5-u.y)<1.2){
         r.held=u.id;u.relic=r.id;u.relicT=null;u.state='idle';
         if(u.p===localP)toast('Relic recovered — bring it to a Monastery');
       }else if(done){u.path=uPath(u,r.x,r.y,u.p)||[];if(!u.path.length)u.state='idle';}
@@ -3796,7 +3938,7 @@ function updateUnit(u,dt){
       const b=G.blds.find(x=>x.id===u.monB);
       if(!b||!b.built||!u.relic){u.state='idle';u.monB=null;break;}
       const done=followPath(u,dt);const c=bldCenter(b);
-      if(Math.hypot(c.x-u.x,c.y-u.y)<b.size*.5+1.7){
+      if(hyp(c.x-u.x,c.y-u.y)<b.size*.5+1.7){
         const r=G.relics.find(x=>x.id===u.relic);
         if(r){r.mon=b.id;r.held=null;r.x=b.tx;r.y=b.ty;}
         u.relic=null;u.monB=null;u.state='idle';
@@ -3840,7 +3982,7 @@ function updateUnit(u,dt){
       const b=G.blds.find(x=>x.id===u.garB);
       if(!b||!b.built||b.gar.length>=bldGarCap(b)){u.state='idle';u.garB=null;break;}
       const done=followPath(u,dt);const c=bldCenter(b);
-      if(Math.hypot(c.x-u.x,c.y-u.y)<b.size*.5+1.7){u._gar=b;u.state='idle';u.garB=null;}
+      if(hyp(c.x-u.x,c.y-u.y)<b.size*.5+1.7){u._gar=b;u.state='idle';u.garB=null;}
       else if(done){u.path=uPath(u,c.x,c.y,u.p)||[];if(!u.path.length){u.state='idle';u.garB=null;}}
       break;}
     case 'toGarU':{ // climbing into a Battering Ram / boarding a Transport
@@ -3848,7 +3990,7 @@ function updateUnit(u,dt){
       if(!ram||!ram.gar||ram.gar.length>=UNITS[ram.type].garCap){u.state='idle';u.garU=null;break;}
       const done=followPath(u,dt);
       const reach=UNITS[ram.type].ship?2.1:1.2; // ships board from the bank
-      if(Math.hypot(ram.x-u.x,ram.y-u.y)<reach){u._garU=ram;u.state='idle';u.garU=null;}
+      if(hyp(ram.x-u.x,ram.y-u.y)<reach){u._garU=ram;u.state='idle';u.garU=null;}
       else if(done){u.path=uPath(u,ram.x,ram.y,u.p)||[];
         if(!u.path.length){u.state='idle';u.garU=null;}}
       break;}
@@ -3856,7 +3998,7 @@ function updateUnit(u,dt){
       const r=G.res[u.resKey];
       if(!r){u.state='idle';autoNext(u);break;}
       const done=followPath(u,dt);
-      if(Math.hypot(r.x+.5-u.x,r.y+.5-u.y)<1.8){u.state='gather';u.gatherT=0;}
+      if(hyp(r.x+.5-u.x,r.y+.5-u.y)<1.8){u.state='gather';u.gatherT=0;}
       else if(done){u.path=uPath(u,r.x,r.y,u.p)||[];if(!u.path.length)u.state='idle';}
       break;}
     case 'gather':{
@@ -3892,7 +4034,7 @@ function updateUnit(u,dt){
       const b=G.blds.find(x=>x.id===u.farm);
       if(!b){u.state='idle';break;}
       const done=followPath(u,dt);const c=bldCenter(b);
-      if(Math.hypot(c.x-u.x,c.y-u.y)<1.85){u.state='farming';u.gatherT=0;}
+      if(hyp(c.x-u.x,c.y-u.y)<1.85){u.state='farming';u.gatherT=0;}
       else if(done){u.path=uPath(u,c.x,c.y,u.p)||[];if(!u.path.length)u.state='idle';}
       break;}
     case 'farming':{
@@ -3918,7 +4060,7 @@ function updateUnit(u,dt){
       const done=followPath(u,dt);
       const b=dropoffFor(u);
       if(b){const c=bldCenter(b);
-        if(Math.hypot(c.x-u.x,c.y-u.y)<b.size*.5+1.7){
+        if(hyp(c.x-u.x,c.y-u.y)<b.size*.5+1.7){
           if(u.carryType){
             G.P[u.p][u.carryType[0]]+=u.carry;
             if(G.pstats)G.pstats[u.p].gath+=u.carry;
@@ -3939,7 +4081,7 @@ function updateUnit(u,dt){
       const b=targetEnt(u.target);
       if(!b||b.built){u.state='idle';if(b&&b.built)autoNext(u);break;}
       const done=followPath(u,dt);const c=bldCenter(b);
-      if(Math.hypot(c.x-u.x,c.y-u.y)<b.size*.5+1.7)u.state='building';
+      if(hyp(c.x-u.x,c.y-u.y)<b.size*.5+1.7)u.state='building';
       else if(done){u.path=uPath(u,c.x,c.y,u.p)||[];if(!u.path.length)u.state='idle';}
       break;}
     case 'building':{
@@ -3963,14 +4105,14 @@ function updateUnit(u,dt){
         else{
           let site=null,sd=8;
           for(const s2 of G.blds){if(s2.p!==u.p||s2.built)continue;
-            const c2=bldCenter(s2),dd=Math.hypot(c2.x-u.x,c2.y-u.y);
+            const c2=bldCenter(s2),dd=hyp(c2.x-u.x,c2.y-u.y);
             if(dd<sd){sd=dd;site=s2;}}
           if(site)cmdBuild(u,site);
           else if(b.type==='camp'){ // smarter villagers (manual Ch. II): a finished
             // Storage Camp sends its builder straight to the nearest resource
             let bk=null,bd2=6;
             for(const k2 in G.res){const r2=G.res[k2];
-              const dd=Math.hypot(r2.x+.5-u.x,r2.y+.5-u.y);
+              const dd=hyp(r2.x+.5-u.x,r2.y+.5-u.y);
               if(dd<bd2){bd2=dd;bk=k2;}}
             if(bk)cmdGather(u,bk);else u.state='idle';
           }
@@ -3998,7 +4140,7 @@ function updateUnit(u,dt){
         break;}
       const c=u.target.bld?bldCenter(t):t;
       const rad=u.target.bld?t.size*.5:.3;
-      const dist=Math.hypot(c.x-u.x,c.y-u.y)-rad;
+      const dist=hyp(c.x-u.x,c.y-u.y)-rad;
       const uRng=rangeOf(u);
       // engagement radius: ranged units keep their range; melee close right up
       const rng=u.target.bld?Math.max(uRng,1.25):Math.max(uRng,.62);
@@ -4006,7 +4148,7 @@ function updateUnit(u,dt){
       if(dist>rng&&u.autoTgt&&(u.stance|0)===2){
         u.state='idle';u.target=null;u.path=null;u.autoTgt=0;break;}
       if(u.autoTgt&&(u.stance|0)===1&&u.post
-        &&Math.hypot(u.x-u.post.x,u.y-u.post.y)>9){
+        &&hyp(u.x-u.post.x,u.y-u.post.y)>9){
         const px2=u.post.x,py2=u.post.y;u.post=null;u.target=null;u.autoTgt=0;
         cmdMove(u,px2,py2);break;}
       if(dist<=rng){
@@ -4018,7 +4160,7 @@ function updateUnit(u,dt){
             // fan to an id-keyed slot on the victim's ring so a mob surrounds
             // instead of queueing — deterministic (id + target id, no RNG)
             const a=((u.id*2654435761^t.id)>>>0)%8/8*6.2832;
-            creepToward(u,c.x+Math.cos(a)*want*.9,c.y+Math.sin(a)*want*.9,want*.35,dt);
+            creepToward(u,c.x+dCos(a)*want*.9,c.y+dSin(a)*want*.9,want*.35,dt);
           }else creepToward(u,c.x,c.y,want,dt);
         }
         if(d.treb&&!u.setup){ // a trebuchet unpacks before its first shot
@@ -4055,7 +4197,7 @@ function updateUnit(u,dt){
             dealDamage({ent:t,bld:u.target.bld},blast,u.p,false);
             for(const o of G.units){
               if(allied(o.p,u.p)||o.hp<=0||o.id===t.id)continue;
-              if(Math.hypot(o.x-bx,o.y-by)<1.9)dealDamage({ent:o,bld:false},Math.round(blast*.6),u.p,false);
+              if(hyp(o.x-bx,o.y-by)<1.9)dealDamage({ent:o,bld:false},Math.round(blast*.6),u.p,false);
             }
             u.hp=0;
             for(let fi=0;fi<6;fi++)G.fx.push({x:u.x,y:u.y-.3,vx:(Math.random()-.5)*2,
@@ -4067,7 +4209,7 @@ function updateUnit(u,dt){
           if(!u.target.bld&&isAnimal(t))animalHit(t,u); // it charges, or it bolts
           // heavy melee shoves its victim back a touch — sells the weight of the blow
           if(!u.target.bld&&!rangedKind&&dmg>=8&&t.hp>0&&!UNITS[t.type].ship){
-            const kx=t.x-u.x,ky=t.y-u.y,kd=Math.hypot(kx,ky)||1;
+            const kx=t.x-u.x,ky=t.y-u.y,kd=hyp(kx,ky)||1;
             const push=Math.min(.16,.012*dmg);
             const nx2=t.x+kx/kd*push,ny2=t.y+ky/kd*push;
             if(walkTile(nx2,ny2,t.p)){t.x=nx2;t.y=ny2;}
@@ -4088,12 +4230,12 @@ function updateUnit(u,dt){
           if(d.blast){ // mangonel line: the stone shatters across everyone near the impact
             for(const o of G.units){
               if(allied(o.p,u.p)||o.hp<=0||o.id===t.id)continue;
-              if(Math.hypot(o.x-c.x,o.y-c.y)<d.blast)
+              if(hyp(o.x-c.x,o.y-c.y)<d.blast)
                 dealDamage({ent:o,bld:false},Math.max(2,Math.round(dmg*.6)),u.p,'siege');
             }
           }
           if(d.pierce&&!u.target.bld){ // scorpion bolts pass through the ranks
-            const L=Math.hypot(c.x-u.x,c.y-u.y)||1,nx=(c.x-u.x)/L,ny=(c.y-u.y)/L;
+            const L=hyp(c.x-u.x,c.y-u.y)||1,nx=(c.x-u.x)/L,ny=(c.y-u.y)/L;
             for(const o of G.units){
               if(allied(o.p,u.p)||o.hp<=0||o.id===t.id)continue;
               const px2=o.x-u.x,py2=o.y-u.y,along=px2*nx+py2*ny;
@@ -4106,7 +4248,7 @@ function updateUnit(u,dt){
             // Logistica: trample damage to enemies pressed around the target
             for(const o of G.units){
               if(allied(o.p,u.p)||o.hp<=0||o.id===t.id)continue;
-              if(Math.hypot(o.x-c.x,o.y-c.y)<1.4)dealDamage({ent:o,bld:false},5,u.p,false);
+              if(hyp(o.x-c.x,o.y-c.y)<1.4)dealDamage({ent:o,bld:false},5,u.p,false);
             }
           }
           if(d.range>1){
@@ -4123,7 +4265,7 @@ function updateUnit(u,dt){
             const ms=!kind&&!noMiss&&!u.target.bld&&Math.random()<missChance(u.p);
             G.proj.push({x0:u.x,y0:u.y-.4,
               x1:c.x+(ms?(Math.random()-.5)*.9:0),y1:c.y+(ms?(Math.random()-.5)*.9:0),t:0,
-              dur:Math.max(.14,Math.hypot(c.x-u.x,c.y-u.y)*(kind==='ball'?.045:kind==='stone'?.11:.07)),
+              dur:Math.max(.14,hyp(c.x-u.x,c.y-u.y)*(kind==='ball'?.045:kind==='stone'?.11:.07)),
               miss:ms,kind,tid:(!kind&&!u.target.bld)?t.id:null}); // arrows remember their mark
             if(kind==='ball')G.fx.push({x:u.x,y:u.y-.5,vx:0,vy:-.3,life:.3,max:.3,r:3.5,kind:'smoke',col:'200,196,186'});
           }}
@@ -4210,7 +4352,7 @@ function aiThink(p,ai){
     ai.dockNext=G.t+25;
     let bestW=null,bd2=1e9;
     for(const w of (G.waterList||[])){
-      const dd=Math.hypot(w.x-tc.tx,w.y-tc.ty);
+      const dd=hyp(w.x-tc.tx,w.y-tc.ty);
       if(dd<bd2){bd2=dd;bestW=w;}}
     if(bestW){
       let spot=null;
@@ -4227,7 +4369,7 @@ function aiThink(p,ai){
     const dk=myBld('dock').find(b=>b.built);
     if(dk){
       ai.trapNext=G.t+40;
-      const fishNear=Object.values(G.res).some(r=>r.type==='fish'&&Math.hypot(r.x-dk.tx,r.y-dk.ty)<7);
+      const fishNear=Object.values(G.res).some(r=>r.type==='fish'&&hyp(r.x-dk.tx,r.y-dk.ty)<7);
       if(!fishNear){const w0=st.w;CMDS.fishtrap({id:dk.id,p});
         if(st.w<w0)ai.trapN=(ai.trapN||0)+1;}
     }
@@ -4243,11 +4385,11 @@ function aiThink(p,ai){
      and gaps where trees or water refuse a segment are simply left. */
   if(st.age>=1&&!ai.walled&&st.w>=200&&G.t>150){
     ai.walled=1;
-    const dir=Math.atan2(MAP/2-(tc.ty+1),MAP/2-(tc.tx+1));
+    const dir=dAtan2(MAP/2-(tc.ty+1),MAP/2-(tc.tx+1));
     const seen={};
     for(let k2=-4;k2<=4;k2++){
       const a=dir+k2*.16;
-      const wx=Math.round(tc.tx+1+Math.cos(a)*8),wy=Math.round(tc.ty+1+Math.sin(a)*8);
+      const wx=Math.round(tc.tx+1+dCos(a)*8),wy=Math.round(tc.ty+1+dSin(a)*8);
       const key=wx+','+wy;
       if(seen[key])continue;seen[key]=1;
       const type=k2===0?'gate':'wall';    // one gate in the middle of the line
@@ -4268,7 +4410,7 @@ function aiThink(p,ai){
       if(!v.resKey||!G.res[v.resKey])return false;
       const r=G.res[v.resKey];let bd=99;
       for(const b of G.blds)if(b.p===p&&b.built&&BLDS[b.type].drop){
-        const c=bldCenter(b);bd=Math.min(bd,Math.hypot(c.x-r.x,c.y-r.y));}
+        const c=bldCenter(b);bd=Math.min(bd,hyp(c.x-r.x,c.y-r.y));}
       return bd>7;});
     if(far){const r=G.res[far.resKey];aiPlace('camp',r.x,r.y,p);}
   }
@@ -4292,7 +4434,7 @@ function aiThink(p,ai){
       for(const a of G.units){
         if(a.hp<=0||!isAnimal(a))continue;
         if(UNITS[a.type].fierce&&vills.length<8)continue; // boar wait for a real crew
-        const dd=Math.hypot(a.x-(tc.tx+1),a.y-(tc.ty+1));
+        const dd=hyp(a.x-(tc.tx+1),a.y-(tc.ty+1));
         if(dd>(st.age===0?16:11))continue;
         const score=dd/((UNITS[a.type].meat||100)/100); // near and fat wins
         if(score<bs2){bs2=score;best=a;}
@@ -4305,14 +4447,14 @@ function aiThink(p,ai){
           if(v.state==='toBuild'||v.state==='building')continue;   // builders keep building
           if(v.target&&!v.target.bld)continue;                     // already on a kill
           if(v.hp<v.maxhp*.6)continue;                             // the walking wounded stay home
-          if(Math.hypot(v.x-best.x,v.y-best.y)>18)continue;
+          if(hyp(v.x-best.x,v.y-best.y)>18)continue;
           cmdAttack(v,best,false);sent++;
         }
       }
     }
   }
   // farms if food scarce
-  const foodLeft=Object.values(G.res).some(r=>r.type==='food'&&Math.hypot(r.x-tc.tx,r.y-tc.ty)<14);
+  const foodLeft=Object.values(G.res).some(r=>r.type==='food'&&hyp(r.x-tc.tx,r.y-tc.ty)<14);
   if(!foodLeft&&myBld('farm').length<Math.ceil(vills.length/2)&&st.w>=60
      &&G.blds.filter(b=>b.p===p&&!b.built&&b.type==='farm').length<2)aiPlace('farm',undefined,undefined,p);
   // research the unique technology once the castle stands and coffers allow
@@ -4399,13 +4541,13 @@ function aiThink(p,ai){
   const tcC={x:tc.tx+1,y:tc.ty+1};
   const danger=G.units.some(e=>!allied(e.p,p)&&e.hp>0
     &&e.type!=='villager'&&!UNITS[e.type].passive&&!UNITS[e.type].fisher&&!isAnimal(e)
-    &&Math.hypot(e.x-tcC.x,e.y-tcC.y)<8); // a boar in the fields is not an invasion
+    &&hyp(e.x-tcC.x,e.y-tcC.y)<8); // a boar in the fields is not an invasion
   if(danger){
     ai.lastDanger=G.t;
     for(const v of vills){
       if(v.state==='toGar'||v._gar)continue;
       if(tc.gar.length>=bldGarCap(tc))break;
-      if(Math.hypot(v.x-tcC.x,v.y-tcC.y)<8)cmdGarrison(v,tc);
+      if(hyp(v.x-tcC.x,v.y-tcC.y)<8)cmdGarrison(v,tc);
     }
   }else if(ai.lastDanger&&G.t-ai.lastDanger>10){
     ai.lastDanger=null;
@@ -4489,7 +4631,7 @@ function nearestEnemyBld(fromB,p){
   }
   const c=bldCenter(fromB);let best=null,bd=1e9;
   for(const b of G.blds){if(allied(b.p,p))continue;
-    const bc=bldCenter(b),d=Math.hypot(bc.x-c.x,bc.y-c.y);
+    const bc=bldCenter(b),d=hyp(bc.x-c.x,bc.y-c.y);
     if(d<bd){bd=d;best={ent:b,bld:true};}}
   return best;
 }
@@ -4501,7 +4643,7 @@ function aiPlace(type,ncx,ncy,p){
   for(let r=2;r<12;r++){
     for(let a=0;a<16;a++){
       const ang=a/16*Math.PI*2;
-      const tx=Math.round(ox+Math.cos(ang)*r),ty=Math.round(oy+Math.sin(ang)*r);
+      const tx=Math.round(ox+dCos(ang)*r),ty=Math.round(oy+dSin(ang)*r);
       if(canPlace(tx,ty,def.size,1)){
         const bc=bldCostOf(p,type);
         if(!canAfford(p,bc))return;
@@ -4727,7 +4869,7 @@ function loadGame(key){
     if(!st.uni)st.uni={};if(!st.eco)st.eco={};if(!st.mon)st.mon={};
   }
   // old saves lack motion state — default it (units + garrisoned units)
-  const seedMot=u=>{if(u.hdg===undefined)u.hdg=Math.atan2(MAP/2-u.y,MAP/2-u.x);
+  const seedMot=u=>{if(u.hdg===undefined)u.hdg=dAtan2(MAP/2-u.y,MAP/2-u.x); // hdg feeds movement — deterministic math only
     if(u.spd===undefined)u.spd=0;if(u.vx===undefined){u.vx=0;u.vy=0;}
     if(u.gaitPh===undefined)u.gaitPh=0;
     if(UNITS[u.type].garCap&&!u.gar)u.gar=[];};
@@ -4754,7 +4896,17 @@ function updateContBtn(){
 function autoSave(){
   if(G&&!G.over&&!netMode&&!REC.play)saveGame('tq_autosave');
 }
-document.addEventListener('visibilitychange',()=>{if(document.hidden)autoSave();});
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){autoSave();return;}
+  /* Returning to the foreground. iOS suspends JS within seconds of a screen
+     lock or app switch and silently kills WebSockets — the socket object still
+     LOOKS open while send() does nothing. Never wait for a timeout: verify the
+     wire now, re-arm the wake lock, and wake the audio (iOS also suspends the
+     AudioContext across interruptions like calls and Siri). */
+  wakeAcquire();
+  if(typeof AC!=='undefined'&&AC&&AC.state!=='running'){try{AC.resume().catch(()=>{});}catch(e){}}
+  netForeground();
+});
 window.addEventListener('pagehide',autoSave);
 /* ================= end / toast ================= */
 function endGame(win){
@@ -11847,11 +11999,13 @@ const mpEl=id=>document.getElementById(id);
 function mpStatus(s){mpEl('mpStatus').textContent=s||'';}
 function mpShow(){
   netReset();resetNet();
+  netPrewarm();   // wake the free-tier relay while the player types their name
   mpEl('mpConnect').style.display='';
   mpEl('mpRoom').style.display='none';
   mpEl('mpName').value=localStorage.getItem('tq_name')||'';
   mpEl('mpCode').value='';
   mpStatus(netAvailable()?'':'Multiplayer needs the web app at tiny-conquerors.onrender.com — the preview sandbox blocks connections.');
+  if(MATH_DRIFT)mpStatus('⚠ This device computes numbers differently from the tested build — a match may fall out of step. Playable, but expect possible desyncs.');
   mpEl('mpOverlay').style.display='flex';
 }
 function mpShowRoom(){
@@ -11918,14 +12072,24 @@ mpEl('mpBack').onclick=()=>{netReset();resetNet();mpEl('mpOverlay').style.displa
 mpEl('mpHost').onclick=()=>{
   const name=(mpEl('mpName').value||'Player').trim();
   localStorage.setItem('tq_name',name);netName=name;
-  netConnect(()=>{netSend({t:'host',name});netSend({t:'seat',civ:mpCiv});netSend({t:'cfg',cfg:mpCfg});});
+  // v: the build stamp — the relay refuses mixed-version rooms (the service
+  // worker updates politely, so peers on different builds are ROUTINE, and a
+  // mixed room is a guaranteed desync).
+  netConnect(()=>{netSend({t:'host',name,v:gameVer()});netSend({t:'seat',civ:mpCiv});netSend({t:'cfg',cfg:mpCfg});});
 };
 mpEl('mpJoin').onclick=()=>{
   const name=(mpEl('mpName').value||'Player').trim();
   const code=(mpEl('mpCode').value||'').toUpperCase().trim();
   if(code.length!==4){mpStatus('A room code is four letters');return;}
   localStorage.setItem('tq_name',name);netName=name;
-  netConnect(()=>{netSend({t:'join',code,name});netSend({t:'seat',civ:mpCiv});});
+  netConnect(()=>{netSend({t:'join',code,name,v:gameVer()});netSend({t:'seat',civ:mpCiv});});
+};
+mpEl('mpInvite').onclick=()=>{
+  const url=location.origin+location.pathname+'?room='+netRoom;
+  const done=()=>mpStatus('Invite link copied — send it to a friend');
+  if(navigator.clipboard&&navigator.clipboard.writeText)
+    navigator.clipboard.writeText(url).then(done,()=>mpStatus(url));
+  else mpStatus(url);
 };
 mpEl('mpStart').onclick=()=>{
   if(!netHost)return;
@@ -12096,8 +12260,83 @@ function begin(){
       +(allies.length?' beside the '+allies.join(', '):'')
       +' — against the '+foes.join(', ')+'!');
   }
+  wakeAcquire();   // battles are watched hands-off; a dimming screen kills iOS sockets
   last=performance.now();
 }
+/* ============ mobile resilience (the iOS survival kit) ============ */
+/* Screen wake lock: an RTS is WATCHED — long stretches with no touch dim the
+   screen, and on iOS a dimmed screen suspends the page and kills the socket.
+   Auto-released by the OS on backgrounding; the visibilitychange handler in
+   the fog/save module re-acquires it on every return. */
+let wakeLockS=null;
+function wakeAcquire(){
+  try{
+    if(!('wakeLock' in navigator)||wakeLockS||document.hidden||!G||G.over)return;
+    navigator.wakeLock.request('screen').then(w=>{
+      wakeLockS=w;
+      w.addEventListener('release',()=>{wakeLockS=null;});
+    }).catch(()=>{});
+  }catch(e){}
+}
+/* iOS suspends the AudioContext across interruptions (calls, Siri, screen
+   lock) and does not always resume it — any tap after that revives it. */
+document.addEventListener('pointerup',()=>{
+  try{if(typeof AC!=='undefined'&&AC&&AC.state!=='running')AC.resume().catch(()=>{});}catch(e){}
+},{passive:true});
+/* Warm the free-tier relay: it sleeps after 15 idle minutes and takes ~50s to
+   wake, which used to land on the FIRST Host press. A fire-and-forget fetch at
+   page load and again when the lobby opens hides the cold start behind the
+   player's own setup time. no-cors: /healthz has no CORS headers, but the
+   request still reaches (and wakes) the server. */
+function netHttpUrl(){
+  const h=location.hostname;
+  if(h==='localhost'||h==='127.0.0.1')return 'http://localhost:8080';
+  return 'https://tiny-conquerors-relay.onrender.com';
+}
+function netPrewarm(){
+  if(!netAvailable())return;
+  try{fetch(netHttpUrl()+'/healthz',{mode:'no-cors',cache:'no-store'}).catch(()=>{});}catch(e){}
+}
+netPrewarm();
+/* Join-by-URL: ?room=CODE deep-links straight into the join flow — phones
+   share via messaging apps, and a tappable link beats reading a code aloud. */
+addEventListener('load',()=>{
+  try{
+    const c=(new URLSearchParams(location.search).get('room')||'')
+      .toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4);
+    if(c.length===4&&netAvailable()){
+      mpShow();
+      mpEl('mpCode').value=c;
+      mpStatus('Invited to room '+c+' — enter your name and press Join');
+    }
+  }catch(e){}
+});
+/* Add-to-Home-Screen hint, iOS only, second visit onward, dismissible once.
+   Installing is not vanity there: it exempts the game from Safari's 7-day
+   storage eviction (saves!), removes the URL bar, and disarms the left-edge
+   back-swipe that can yank a player out of a battle. Appended INSIDE .scroll —
+   startOverlay.lastElementChild must stay the build stamp (bench sniffer). */
+(function(){
+  try{
+    const ua=navigator.userAgent||'';
+    const iOS=/iP(hone|ad|od)/.test(ua)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+    const standalone=navigator.standalone===true||(matchMedia&&matchMedia('(display-mode: standalone)').matches);
+    if(!iOS||standalone||localStorage.getItem('tq_a2hs'))return;
+    const visits=(+localStorage.getItem('tq_visits')||0)+1;
+    localStorage.setItem('tq_visits',String(visits));
+    if(visits<2)return;   // suggest to a RETURNING visitor — first-timers just want to play
+    addEventListener('load',()=>{
+      const ov=document.getElementById('startOverlay');if(!ov)return;
+      const scroll=ov.querySelector('.scroll');if(!scroll)return;
+      const d=document.createElement('div');
+      d.style.cssText='margin:10px auto 0;background:#efe2bd;border:2px solid #6b5330;border-radius:10px;padding:9px 12px;font-size:12.5px;color:#241a10;text-align:left;display:flex;gap:8px;align-items:center';
+      d.innerHTML='<span style="font-size:20px">📲</span><span style="flex:1">Add to your Home Screen to play fullscreen and keep your saves safe: tap <b>Share</b> → <b>Add to Home Screen</b></span>'
+        +'<button style="border:none;background:none;font-size:16px;padding:6px;cursor:pointer" aria-label="Dismiss">✕</button>';
+      d.querySelector('button').onclick=()=>{try{localStorage.setItem('tq_a2hs','1');}catch(e){}d.remove();};
+      scroll.appendChild(d);
+    });
+  }catch(e){}
+})();
 /* ═══════════════════ 3D RENDERER (rewrite, stage 1) ═══════════════════
    Raw WebGL — no library, because the artifact CSP blocks external scripts and
    the game has to stay one self-contained file.

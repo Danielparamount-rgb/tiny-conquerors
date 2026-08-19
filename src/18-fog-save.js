@@ -164,7 +164,7 @@ function loadGame(key){
     if(!st.uni)st.uni={};if(!st.eco)st.eco={};if(!st.mon)st.mon={};
   }
   // old saves lack motion state — default it (units + garrisoned units)
-  const seedMot=u=>{if(u.hdg===undefined)u.hdg=Math.atan2(MAP/2-u.y,MAP/2-u.x);
+  const seedMot=u=>{if(u.hdg===undefined)u.hdg=dAtan2(MAP/2-u.y,MAP/2-u.x); // hdg feeds movement — deterministic math only
     if(u.spd===undefined)u.spd=0;if(u.vx===undefined){u.vx=0;u.vy=0;}
     if(u.gaitPh===undefined)u.gaitPh=0;
     if(UNITS[u.type].garCap&&!u.gar)u.gar=[];};
@@ -191,7 +191,17 @@ function updateContBtn(){
 function autoSave(){
   if(G&&!G.over&&!netMode&&!REC.play)saveGame('tq_autosave');
 }
-document.addEventListener('visibilitychange',()=>{if(document.hidden)autoSave();});
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){autoSave();return;}
+  /* Returning to the foreground. iOS suspends JS within seconds of a screen
+     lock or app switch and silently kills WebSockets — the socket object still
+     LOOKS open while send() does nothing. Never wait for a timeout: verify the
+     wire now, re-arm the wake lock, and wake the audio (iOS also suspends the
+     AudioContext across interruptions like calls and Siri). */
+  wakeAcquire();
+  if(typeof AC!=='undefined'&&AC&&AC.state!=='running'){try{AC.resume().catch(()=>{});}catch(e){}}
+  netForeground();
+});
 window.addEventListener('pagehide',autoSave);
 /* ================= end / toast ================= */
 function endGame(win){

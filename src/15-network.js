@@ -27,6 +27,20 @@ let netSendFrom=0;            // first turn we answer for; null while an AI hold
 let netReplay=null;           // the catch-up in progress, if any
 let netReplaying=false;       // suppresses the feed chatter while thousands of turns fly past
 let netLeftName='';           // who dropped, for the message when the stall runs out
+/* Rolling hash of every command list actually APPLIED, folded turn by turn.
+   Shipped beside stateHash: if the input hashes diverge the network layer
+   delivered different orders; if they match while the state hashes diverge the
+   simulations computed differently. That split is the single most useful fact
+   a desync report can carry. */
+let netInHash=2166136261>>>0;
+function netFoldCmds(arr){
+  const s=JSON.stringify(arr);   // JSON round-trips key order + float text identically on every engine
+  let h=netInHash;
+  for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}
+  netInHash=h>>>0;
+}
+let netPongAt=0,netProbeT=null,netRejoinT=null,netRejoinN=99; // 99 = no recovery in progress
+function gameVer(){return (typeof window!=='undefined'&&window.GAMEVER)||'dev';}
 function netUrl(){
   const h=location.hostname;
   if(h==='localhost'||h==='127.0.0.1')return 'ws://localhost:8080';
@@ -48,6 +62,8 @@ function netReset(){
   netLobby={players:[],cfg:null,host:0};netPlayers=[];
   netGone=new Set();netAiAt=new Map();netHumanAt=new Map();netLeftName='';
   netSendFrom=0;netReplay=null;netReplaying=false;
+  netInHash=2166136261>>>0;
+  clearTimeout(netProbeT);clearTimeout(netRejoinT);netRejoinT=null;netRejoinN=99;
   const ov=document.getElementById('netCatch');if(ov)ov.style.display='none';
 }
 function netConnect(then){
@@ -57,23 +73,32 @@ function netConnect(then){
   let s;
   try{s=new WebSocket(netUrl());}catch(e){mpStatus('Could not reach the relay');return;}
   netSock=s;
-  s.onopen=()=>{mpStatus('');then&&then();};
+  // Every handler ignores a socket that is no longer THE socket — the
+  // auto-rejoin loop can have a stale connection attempt still dying in the
+  // background, and its close must not null out its replacement.
+  s.onopen=()=>{if(netSock!==s)return;mpStatus('');then&&then();};
   s.onerror=()=>{
+    if(netSock!==s)return;
     // Two honest possibilities, and the player can't tell them apart from here:
     // the free relay is cold-starting, or this is the artifact preview, whose
     // sandbox blocks every outbound connection.
     mpStatus('Could not reach the relay. If this is the shared preview link, use the web app at tiny-conquerors.onrender.com — otherwise the relay is waking up, try again in half a minute.');
   };
   s.onclose=()=>{
+    if(netSock!==s)return;
     netSock=null;
     if(!netMode)return mpStatus('Disconnected');
+    if(netRejoinT)return;   // auto-rejoin already knocking — let it keep trying
     // If we were the last person in the room anyway, losing the relay costs us
     // nothing — carry on offline against the computers instead of stopping.
     if(netAlone())return netGoOffline('The relay is gone; the battle goes on against the computer');
-    netHalt('Connection lost','The relay stopped answering.',
-      'Everyone else has stopped too — a lockstep match cannot go on without every player.');
+    // Any mid-match connection loss now tries to REJOIN first (the same
+    // journal-replay path a manual re-entry uses); the halt screen is the
+    // fallback when the retries run dry, not the first response.
+    netRecover();
   };
   s.onmessage=e=>{
+    if(netSock!==s)return;
     let m;try{m=JSON.parse(e.data);}catch(err){return;}
     netOn(m);
   };
@@ -120,11 +145,25 @@ function netOn(m){
       if(!bag){bag={};netIn.set(m.turn,bag);}
       bag[m.seat]=m.cmds;
       break;}
-    case 'desync':
+    case 'pong':
+      netPongAt=performance.now();break;
+    case 'desync':{
+      /* The hash wire format is "<state>.<inputs>" — split it and say WHICH
+         side disagreed. Inputs differing = the network layer delivered
+         different orders; states differing on identical inputs = the
+         simulations computed differently (device math, sim bug). */
+      let why='This is a bug in the game, not your connection. Nothing you did caused it.';
+      try{
+        const hs=Object.values(m.hashes||{}).map(s=>String(s).split('.'));
+        if(hs.length>1&&hs.every(x=>x.length===2)){
+          const st=new Set(hs.map(x=>x[0])),inp=new Set(hs.map(x=>x[1]));
+          if(inp.size>1)why='The players did not receive the same orders — a network-layer bug, not your connection.';
+          else if(st.size>1)why='The players received identical orders but computed different worlds — a simulation bug (possibly device math). Please report which phones were playing.';
+        }
+      }catch(e){}
       netHalt('The battle has drifted apart',
-        'Turn '+m.turn+' — the players stopped agreeing on the state of the world.',
-        'This is a bug in the game, not your connection. Nothing you did caused it.');
-      break;
+        'Turn '+m.turn+' — the players stopped agreeing on the state of the world.',why);
+      break;}
   }
 }
 /* ---- starting a match from a lobby ---- */
@@ -156,6 +195,8 @@ function netBegin(m){
   try{dailyRun=null;}catch(e){}   // a lockstep match is never the daily
   netTurn=0;netIn=new Map();netSent=-1;netStall=0;
   netSendFrom=0;netHumanAt=new Map();
+  netInHash=2166136261>>>0;
+  clearTimeout(netRejoinT);netRejoinT=null;netRejoinN=99;
   cmdQ=[];
   pendingSeed=m.seed>>>0;
   document.getElementById('mpOverlay').style.display='none';
@@ -197,6 +238,8 @@ function netRejoin(m){
   mission=null;netMode=true;
   try{dailyRun=null;}catch(e){}   // a lockstep match is never the daily
   netTurn=0;netIn=new Map();netSent=-1;netStall=0;netStallSeat=-1;
+  netInHash=2166136261>>>0;                 // the replay re-folds the same stream
+  clearTimeout(netRejoinT);netRejoinT=null;netRejoinN=99;  // recovery succeeded — stop knocking
   // Deliberately NOT seeded from the relay's current aiSeats: the journal's own
   // handovers rebuild this, and a seat that left, came back and left again would
   // otherwise end up mislabelled.
@@ -264,6 +307,7 @@ function netCatchUp(){
     const bag=R.cmds.get(netTurn);
     const arr=[];
     for(const p of netPlayers)arr[p.seat]=(bag&&bag[p.seat])||[];
+    netFoldCmds(arr);
     applyTick(arr);
     step(.05);
     netTurn++;
@@ -391,12 +435,16 @@ function netRunTurn(){
   }
   const arr=netSeatCmds(netTurn);
   if(!arr)return false;
+  netFoldCmds(arr);   // BEFORE applyTick — apply stamps c.p onto the objects
   applyTick(arr);
   netIn.delete(netTurn);
   step(.05);
   netTurn++;
   netTopUp();
-  if(netTurn%20===0)netSend({t:'hash',turn:netTurn,h:stateHash()});
+  // "<state>.<inputs>" — the relay compares the whole string, so it catches
+  // either half diverging with zero relay changes; the desync handler splits
+  // it back apart to say which half it was.
+  if(netTurn%20===0)netSend({t:'hash',turn:netTurn,h:stateHash()+'.'+netInHash.toString(16)});
   // Being the last one left is NOT a reason to hang up. An earlier version did
   // drop to offline here, which quietly made reconnect impossible in a two
   // player game — the very case where someone's phone dropping matters most.
@@ -406,25 +454,65 @@ function netRunTurn(){
 }
 function netHalt(title,sub,body){
   netMode=false;netClose();
+  clearTimeout(netProbeT);clearTimeout(netRejoinT);netRejoinT=null;netRejoinN=99;
   if(G)G.paused=true;
   document.getElementById('netHaltTitle').textContent=title;
   document.getElementById('netHaltSub').textContent=sub||'';
   document.getElementById('netHaltBody').textContent=body||'';
   document.getElementById('netHalt').style.display='flex';
 }
+/* ---- foreground recovery (phones) ----
+   iOS kills a backgrounded page's WebSocket without firing close — the object
+   still reports readyState 1 while send() goes nowhere (a zombie). So on every
+   return to the foreground the wire is VERIFIED with a ping; no pong in 2.5s
+   means dead, and dead means rejoin — the same relay journal-replay path a
+   manual re-entry uses, automated. */
+function netForeground(){
+  if(!netMode||netReplaying||netRejoinT)return;
+  if(!netSock||netSock.readyState!==1)return netRecover();
+  const sent=performance.now();
+  netSend({t:'ping'});
+  clearTimeout(netProbeT);
+  netProbeT=setTimeout(()=>{if(netMode&&!netReplaying&&netPongAt<sent)netRecover();},2500);
+}
+function netRecover(){
+  if(!netMode)return;
+  netClose();
+  if(netAlone())return netGoOffline('Connection lost — the battle goes on against the computer');
+  toast('Connection lost — reconnecting…');
+  netRejoinN=0;
+  netAutoRejoin();
+}
+/* The relay frees our seat only when its ping sweep notices the dead socket
+   (~15-20s), so early knocks get "every seat is taken" — keep knocking.
+   Success arrives as a 'rejoin' message, which routes into netRejoin() and
+   clears the retry timer there. */
+function netAutoRejoin(){
+  if(!netMode||!netRoom||netRejoinN>20){                    // ~80s of trying
+    if(netMode&&netRoom){clearTimeout(netRejoinT);netRejoinT=null;
+      netHalt('Connection lost','Could not reach the battle again.',
+        'The relay stopped answering for over a minute. If the others are still fighting, rejoin with the room code '+netRoom+'.');}
+    return;
+  }
+  netRejoinN++;
+  netConnect(()=>{netSend({t:'join',code:netRoom,
+    name:netName||localStorage.getItem('tq_name')||'Player',v:gameVer()});});
+  clearTimeout(netRejoinT);
+  netRejoinT=setTimeout(()=>{if(netMode&&!netReplaying)netAutoRejoin();},4000);
+}
 function dropoffFor(u){let best=null,bd=1e9;
   const fisher=UNITS[u.type].fisher;
   for(const b of G.blds)if(b.p===u.p&&b.built&&BLDS[b.type].drop){
     if(fisher&&b.type!=='dock')continue; // fishing ships land their catch at the Dock
-    const c=bldCenter(b),d=Math.hypot(c.x-u.x,c.y-u.y);if(d<bd){bd=d;best=b;}}
+    const c=bldCenter(b),d=hyp(c.x-u.x,c.y-u.y);if(d<bd){bd=d;best=b;}}
   return best;}
 function nearestRes(u,type){let best=null,bd=1e9;
   for(const k in G.res){const r=G.res[k];if(r.type!==type)continue;
-    const d=Math.hypot(r.x+.5-u.x,r.y+.5-u.y);if(d<bd){bd=d;best=k;}}
+    const d=hyp(r.x+.5-u.x,r.y+.5-u.y);if(d<bd){bd=d;best=k;}}
   return bd<15?best:null;}
 function freeFarm(u){let best=null,bd=1e9;
   for(const b of G.blds){if(b.p!==u.p||b.type!=='farm'||!b.built)continue;
     const occ=G.units.find(o=>o.farm===b.id&&o.id!==u.id&&o.hp>0);if(occ)continue;
-    const c=bldCenter(b),d=Math.hypot(c.x-u.x,c.y-u.y);if(d<bd){bd=d;best=b;}}
+    const c=bldCenter(b),d=hyp(c.x-u.x,c.y-u.y);if(d<bd){bd=d;best=b;}}
   return best;}
 

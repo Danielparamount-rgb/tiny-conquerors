@@ -28,6 +28,9 @@ $tail = @'
 <script>
 (function(){
   var BUILD = '__BUILD_VERSION__';
+  // The game reads this for the multiplayer version gate (gameVer() falls back
+  // to 'dev' when the wrapper is absent, i.e. local test.html / the artifact).
+  window.GAMEVER = BUILD;
   addEventListener('load', function(){
     var ov = document.getElementById('startOverlay');
     if (!ov) return;

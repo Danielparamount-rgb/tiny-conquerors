@@ -56,7 +56,7 @@ function aiThink(p,ai){
     ai.dockNext=G.t+25;
     let bestW=null,bd2=1e9;
     for(const w of (G.waterList||[])){
-      const dd=Math.hypot(w.x-tc.tx,w.y-tc.ty);
+      const dd=hyp(w.x-tc.tx,w.y-tc.ty);
       if(dd<bd2){bd2=dd;bestW=w;}}
     if(bestW){
       let spot=null;
@@ -73,7 +73,7 @@ function aiThink(p,ai){
     const dk=myBld('dock').find(b=>b.built);
     if(dk){
       ai.trapNext=G.t+40;
-      const fishNear=Object.values(G.res).some(r=>r.type==='fish'&&Math.hypot(r.x-dk.tx,r.y-dk.ty)<7);
+      const fishNear=Object.values(G.res).some(r=>r.type==='fish'&&hyp(r.x-dk.tx,r.y-dk.ty)<7);
       if(!fishNear){const w0=st.w;CMDS.fishtrap({id:dk.id,p});
         if(st.w<w0)ai.trapN=(ai.trapN||0)+1;}
     }
@@ -89,11 +89,11 @@ function aiThink(p,ai){
      and gaps where trees or water refuse a segment are simply left. */
   if(st.age>=1&&!ai.walled&&st.w>=200&&G.t>150){
     ai.walled=1;
-    const dir=Math.atan2(MAP/2-(tc.ty+1),MAP/2-(tc.tx+1));
+    const dir=dAtan2(MAP/2-(tc.ty+1),MAP/2-(tc.tx+1));
     const seen={};
     for(let k2=-4;k2<=4;k2++){
       const a=dir+k2*.16;
-      const wx=Math.round(tc.tx+1+Math.cos(a)*8),wy=Math.round(tc.ty+1+Math.sin(a)*8);
+      const wx=Math.round(tc.tx+1+dCos(a)*8),wy=Math.round(tc.ty+1+dSin(a)*8);
       const key=wx+','+wy;
       if(seen[key])continue;seen[key]=1;
       const type=k2===0?'gate':'wall';    // one gate in the middle of the line
@@ -114,7 +114,7 @@ function aiThink(p,ai){
       if(!v.resKey||!G.res[v.resKey])return false;
       const r=G.res[v.resKey];let bd=99;
       for(const b of G.blds)if(b.p===p&&b.built&&BLDS[b.type].drop){
-        const c=bldCenter(b);bd=Math.min(bd,Math.hypot(c.x-r.x,c.y-r.y));}
+        const c=bldCenter(b);bd=Math.min(bd,hyp(c.x-r.x,c.y-r.y));}
       return bd>7;});
     if(far){const r=G.res[far.resKey];aiPlace('camp',r.x,r.y,p);}
   }
@@ -138,7 +138,7 @@ function aiThink(p,ai){
       for(const a of G.units){
         if(a.hp<=0||!isAnimal(a))continue;
         if(UNITS[a.type].fierce&&vills.length<8)continue; // boar wait for a real crew
-        const dd=Math.hypot(a.x-(tc.tx+1),a.y-(tc.ty+1));
+        const dd=hyp(a.x-(tc.tx+1),a.y-(tc.ty+1));
         if(dd>(st.age===0?16:11))continue;
         const score=dd/((UNITS[a.type].meat||100)/100); // near and fat wins
         if(score<bs2){bs2=score;best=a;}
@@ -151,14 +151,14 @@ function aiThink(p,ai){
           if(v.state==='toBuild'||v.state==='building')continue;   // builders keep building
           if(v.target&&!v.target.bld)continue;                     // already on a kill
           if(v.hp<v.maxhp*.6)continue;                             // the walking wounded stay home
-          if(Math.hypot(v.x-best.x,v.y-best.y)>18)continue;
+          if(hyp(v.x-best.x,v.y-best.y)>18)continue;
           cmdAttack(v,best,false);sent++;
         }
       }
     }
   }
   // farms if food scarce
-  const foodLeft=Object.values(G.res).some(r=>r.type==='food'&&Math.hypot(r.x-tc.tx,r.y-tc.ty)<14);
+  const foodLeft=Object.values(G.res).some(r=>r.type==='food'&&hyp(r.x-tc.tx,r.y-tc.ty)<14);
   if(!foodLeft&&myBld('farm').length<Math.ceil(vills.length/2)&&st.w>=60
      &&G.blds.filter(b=>b.p===p&&!b.built&&b.type==='farm').length<2)aiPlace('farm',undefined,undefined,p);
   // research the unique technology once the castle stands and coffers allow
@@ -245,13 +245,13 @@ function aiThink(p,ai){
   const tcC={x:tc.tx+1,y:tc.ty+1};
   const danger=G.units.some(e=>!allied(e.p,p)&&e.hp>0
     &&e.type!=='villager'&&!UNITS[e.type].passive&&!UNITS[e.type].fisher&&!isAnimal(e)
-    &&Math.hypot(e.x-tcC.x,e.y-tcC.y)<8); // a boar in the fields is not an invasion
+    &&hyp(e.x-tcC.x,e.y-tcC.y)<8); // a boar in the fields is not an invasion
   if(danger){
     ai.lastDanger=G.t;
     for(const v of vills){
       if(v.state==='toGar'||v._gar)continue;
       if(tc.gar.length>=bldGarCap(tc))break;
-      if(Math.hypot(v.x-tcC.x,v.y-tcC.y)<8)cmdGarrison(v,tc);
+      if(hyp(v.x-tcC.x,v.y-tcC.y)<8)cmdGarrison(v,tc);
     }
   }else if(ai.lastDanger&&G.t-ai.lastDanger>10){
     ai.lastDanger=null;
@@ -335,7 +335,7 @@ function nearestEnemyBld(fromB,p){
   }
   const c=bldCenter(fromB);let best=null,bd=1e9;
   for(const b of G.blds){if(allied(b.p,p))continue;
-    const bc=bldCenter(b),d=Math.hypot(bc.x-c.x,bc.y-c.y);
+    const bc=bldCenter(b),d=hyp(bc.x-c.x,bc.y-c.y);
     if(d<bd){bd=d;best={ent:b,bld:true};}}
   return best;
 }
@@ -347,7 +347,7 @@ function aiPlace(type,ncx,ncy,p){
   for(let r=2;r<12;r++){
     for(let a=0;a<16;a++){
       const ang=a/16*Math.PI*2;
-      const tx=Math.round(ox+Math.cos(ang)*r),ty=Math.round(oy+Math.sin(ang)*r);
+      const tx=Math.round(ox+dCos(ang)*r),ty=Math.round(oy+dSin(ang)*r);
       if(canPlace(tx,ty,def.size,1)){
         const bc=bldCostOf(p,type);
         if(!canAfford(p,bc))return;

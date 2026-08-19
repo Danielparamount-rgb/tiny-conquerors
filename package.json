@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node test/determinism.mjs"
+    "test": "node test/determinism.mjs",
+    "test:mp": "node test/mp.mjs"
   },
   "devDependencies": {
     "puppeteer": "^23.0.0"
