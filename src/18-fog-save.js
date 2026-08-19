@@ -357,7 +357,7 @@ function updateScores(){
     for(const b of G.blds)if(b.p===p&&b.built)s+=cv(BLDS[b.type].cost);
     const dead=!G.blds.some(b=>b.p===p&&b.type==='tc');
     html+='<div style="color:'+TEAMS[p].trim+(dead?';opacity:.45':'')+'">'
-      +CIVS[G.P[p].civ].name+(p===localP?' (You)':'')+' '+s
+      +CIVS[G.P[p].civ].name+(p===localP?' (You)':(G.ais&&G.ais[p]?' '+PERS_NAMES[aiPers(p)]:''))+' '+s
       +' ('+AGES[G.P[p].age].replace(' Age','')+')</div>';
   }
   if(rows.length<NP)html+='<div style="color:#c9b587">+'+(NP-rows.length)+' more</div>';

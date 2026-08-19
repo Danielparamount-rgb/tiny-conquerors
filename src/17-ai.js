@@ -4,8 +4,20 @@ function aiJoinDefense(u){
   if(ai&&ai.attacking){const tb=G.blds.find(b=>b.id===ai.tgtId);
     if(tb){u.wave=tb.id;cmdAttack(u,tb,true);}}
 }
+/* AI PERSONALITIES (roadmap #7). Each computer lord gets a temperament,
+   derived by pure hash from (gameSeed, seat) — NO RNG stream is consumed, so
+   old seeds still reproduce old games tick for tick. Every effect gates on
+   G.t>150 or Feudal, the same discipline that kept the smarter-ai pass off
+   the determinism baselines:
+     0 the Swift    smaller waves, far more often — the rusher
+     1 the Patient  a deeper economy, then huge late waves — the boomer
+     2 the Stone    walls early, adds towers, hits rarely but heavy — the turtle
+     3 the Restless standard tempo, a touch more frequent — the raider */
+const PERS_NAMES=['the Swift','the Patient','the Stone','the Restless'];
+function aiPers(p){return hash2((gameSeed^(p*2654435761))>>>0,(gameSeed>>>16)^(p*13+5))%4;}
 function aiThink(p,ai){
   const cfg=DIFF[diffSel],st=G.P[p];
+  const pers=aiPers(p),persOn=G.t>150;
   const tc=G.blds.find(b=>b.p===p&&b.type==='tc');if(!tc)return;
   const vills=G.units.filter(u=>u.p===p&&u.type==='villager'&&u.hp>0);
   const army=G.units.filter(u=>u.p===p&&u.type!=='villager'&&u.hp>0&&!isAnimal(u));
@@ -15,7 +27,8 @@ function aiThink(p,ai){
   if(popCap(p)-popUsed(p)<4&&popCap(p)<POP_MAX&&!G.blds.some(b=>b.p===p&&!b.built&&b.type==='house')
      &&st.w>=25)aiPlace('house',undefined,undefined,p);
   // villagers
-  const vTarget=cfg.vT[st.age];
+  let vTarget=cfg.vT[st.age];
+  if(persOn&&pers===1)vTarget+=st.age>=1?5:2;   // the Patient booms harder
   if(vills.length+tc.queue.filter(q=>q==='villager').length<vTarget
      &&tc.queue.length<2&&st.f>=50&&popUsed(p)<popCap(p))
     {pay(p,UNITS.villager.cost);tc.queue.push('villager');}
@@ -30,6 +43,12 @@ function aiThink(p,ai){
   if(st.age>=1&&!myBld('range').length&&!G.blds.some(b=>b.p===p&&!b.built&&b.type==='range')&&st.w>=150)aiPlace('range',undefined,undefined,p);
   if(st.age>=1&&!CIVS[st.civ].noStable&&!myBld('stable').length&&!G.blds.some(b=>b.p===p&&!b.built&&b.type==='stable')&&st.w>=150)aiPlace('stable',undefined,undefined,p);
   if(st.age>=1&&!myBld('blacksmith').length&&!G.blds.some(b=>b.p===p&&!b.built&&b.type==='blacksmith')&&st.w>=250)aiPlace('blacksmith',undefined,undefined,p);
+  // the Stone raises watch towers behind its wall (two, Feudal on, gated late)
+  if(persOn&&pers===2&&st.age>=1&&(ai.perst||0)<2&&st.w>=180&&st.g>=100&&G.t>=(ai.persNext||0)){
+    ai.persNext=G.t+40;
+    const nT=myBld('tower').length;
+    if(nT<2){aiPlace('tower',undefined,undefined,p);ai.perst=nT+1;}
+  }
   // a dock on the stretch of river nearest the base (checked on a cooldown —
   // canPlaceDock flood-fills, so don't hammer it every think tick)
   if(st.age>=1&&st.w>=220&&G.t>=(ai.dockNext||0)
@@ -282,11 +301,14 @@ function aiThink(p,ai){
   }
   // attack waves
   if(G.t>=ai.nextAtk){
-    const need=Math.min(4+ai.wave*cfg.waveGrow,18);
+    // temperament shapes the drumbeat — but only after the opening (persOn)
+    const wMul=persOn?[.6,1.35,1.55,.85][pers]:1;
+    const nMul=persOn?[.7,1.45,1.25,1][pers]:1;
+    const need=Math.min(Math.max(3,Math.round((4+ai.wave*cfg.waveGrow)*nMul)),24);
     if(army.length>=need){
       const tgt=nearestEnemyBld(tc,p);
       if(tgt){
-        ai.wave++;ai.nextAtk=G.t+cfg.waveEvery;ai.attacking=true;ai.tgtId=tgt.ent.id;
+        ai.wave++;ai.nextAtk=G.t+cfg.waveEvery*wMul;ai.attacking=true;ai.tgtId=tgt.ent.id;
         for(const a of army){a.wave=tgt.ent.id;cmdAttack(a,tgt.ent,tgt.bld);}
         if(tgt.ent.p===localP){feed('Warning! An enemy army marches on your town!',true);snd('horn');
           const wc=tgt.bld?bldCenter(tgt.ent):tgt.ent;
