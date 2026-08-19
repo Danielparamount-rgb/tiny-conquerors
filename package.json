@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "test": "node test/determinism.mjs",
-    "test:mp": "node test/mp.mjs"
+    "test:mp": "node test/mp.mjs",
+    "test:mp2": "node test/mp2v2.mjs"
   },
   "devDependencies": {
     "puppeteer": "^23.0.0"

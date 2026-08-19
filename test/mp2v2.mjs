@@ -109,25 +109,49 @@ check('state hashes identical 4-way', new Set(mid.map(m => m.h)).size === 1, mid
 check('input hashes identical 4-way', new Set(mid.map(m => m.ih)).size === 1, mid.map(m => m.ih).join(','));
 check('orders flowed from every seat', ordered.every(Boolean));
 
-// teammate drop: Bob (seat 1) vanishes; survivors must agree past the takeover
+/* Phase 1 — the v73 AUTO-REJOIN heals a dropped socket: Bob's connection dies,
+   the AI takes his banner on the relay-named turn, the auto-rejoin loop gets
+   his seat back, and all FOUR peers converge hash-identical afterwards. */
 await B.evaluate(() => { netSock.close(); });
-await new Promise(r => setTimeout(r, 22000));   // relay ping sweep: 3 misses x 5s
-const T2 = 1400;
-for (let round = 0; round < 500; round++) {
-  const ts = await Promise.all([A, C, D].map(p => p.evaluate((T2) => {
+const T2 = 1200;
+for (let round = 0; round < 900; round++) {
+  const ts = await Promise.all(pages.map(p => p.evaluate((T2) => {
+    if (netReplaying) return netTurn;              // never pump into a live replay
     let g = 0; while (g++ < 60 && netTurn < T2 && netRunTurn()); return netTurn;
   }, T2)));
   if (ts.every(t => t >= T2)) break;
-  await new Promise(r => setTimeout(r, 15));
+  await new Promise(r => setTimeout(r, 40));
 }
-const end = await Promise.all([A, C, D].map(p => p.evaluate(() => ({
+const p1 = await Promise.all(pages.map(p => p.evaluate(() => ({
   t: netTurn, h: stateHash(), ih: (netInHash >>> 0).toString(16),
-  aiHolds: !!G.ais[1], gone: netGone.has(1),
+  seatBack: !G.ais[1] && !netGone.has(1),
 }))));
-check('survivors reached turn 1400', end.every(m => m.t >= T2), end.map(m => m.t).join(','));
-check('AI took the dropped teammate on all survivors', end.every(m => m.aiHolds && m.gone));
-check('survivor state hashes identical past takeover', new Set(end.map(m => m.h)).size === 1, end.map(m => m.h).join(','));
-check('survivor input hashes identical', new Set(end.map(m => m.ih)).size === 1);
+check('auto-rejoin: all four reached turn 1200', p1.every(m => m.t >= T2), p1.map(m => m.t).join(','));
+check('auto-rejoin: Bob holds his own banner again on every peer', p1.every(m => m.seatBack));
+check('auto-rejoin: state hashes identical 4-way', new Set(p1.map(m => m.h)).size === 1, p1.map(m => m.h).join(','));
+check('auto-rejoin: input hashes identical 4-way', new Set(p1.map(m => m.ih)).size === 1);
+
+/* Phase 2 — a TRUE death (page closed, timers and all): the computer keeps the
+   seat and the three survivors carry on hash-identical. */
+await D.close();
+const T3 = 1800;
+const surv = [A, B, C];
+for (let round = 0; round < 900; round++) {
+  const ts = await Promise.all(surv.map(p => p.evaluate((T3) => {
+    if (netReplaying) return netTurn;
+    let g = 0; while (g++ < 60 && netTurn < T3 && netRunTurn()); return netTurn;
+  }, T3)));
+  if (ts.every(t => t >= T3)) break;
+  await new Promise(r => setTimeout(r, 40));
+}
+const p2 = await Promise.all(surv.map(p => p.evaluate(() => ({
+  t: netTurn, h: stateHash(), ih: (netInHash >>> 0).toString(16),
+  aiHolds: !!G.ais[3], gone: netGone.has(3),
+}))));
+check('true drop: survivors reached turn 1800', p2.every(m => m.t >= T3), p2.map(m => m.t).join(','));
+check('true drop: AI holds the dead seat on every survivor', p2.every(m => m.aiHolds && m.gone));
+check('true drop: state hashes identical 3-way', new Set(p2.map(m => m.h)).size === 1, p2.map(m => m.h).join(','));
+check('true drop: input hashes identical 3-way', new Set(p2.map(m => m.ih)).size === 1);
 
 await browser.close(); server.close(); relay.kill();
 console.log(failed ? `\n${failed} check(s) FAILED` : '\n2v2 checks passed.');

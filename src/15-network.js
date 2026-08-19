@@ -366,13 +366,28 @@ function netSeatCmds(turn){
     // that it left. So every peer fills the same blanks with the same nothing,
     // and none of them has to guess.
     if(netGone.has(p.seat)){arr[p.seat]=[];continue;}
+    // Same guarantee, turn-scoped, for a REJOINER: a seat with an AI-takeover
+    // scheduled on a FUTURE turn is a seat that dropped — everything it ever
+    // sent is already in the journal/live buffer, so a missing list before the
+    // flip is genuinely empty. Live peers cover this window via netGone; a
+    // rejoiner's netGone was reset and only refills when the replay reaches the
+    // flip turn, which left the rejoiner deadlocked on its OWN seat's silent
+    // gap (last-sent-turn .. takeover-turn). Real lists always win (checked
+    // above), so this can never overwrite anything.
+    const flip=netAiAt.get(p.seat);
+    if(flip!==undefined&&flip>turn){arr[p.seat]=[];continue;}
     return null;                // still genuinely waiting on a live player
   }
   return arr;
 }
 function netWaitingOn(turn){
   const bag=netIn.get(turn)||{};
-  for(const p of netPlayers)if(!bag[p.seat]&&!netGone.has(p.seat))return p;
+  for(const p of netPlayers){
+    if(bag[p.seat]||netGone.has(p.seat))continue;
+    const flip=netAiAt.get(p.seat);
+    if(flip!==undefined&&flip>turn)continue;   // silent-by-construction (see netSeatCmds)
+    return p;
+  }
   return null;
 }
 /* The computer picks up a dropped player's banner. This runs on an agreed turn
