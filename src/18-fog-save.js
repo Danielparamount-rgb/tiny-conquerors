@@ -97,7 +97,7 @@ function saveGame(key){
     // migrates v1 saves forward — bump this ONLY alongside a migration path.
     const data={v:2,ts:Date.now(),
       pstats:G.pstats||null,tl:G.tl||null,tlT:G.tlT,ageAt:G.ageAt||null,
-      t:G.t,mapSel,diffSel,turboSel,regicide:G.regicide||0,seed:gameSeed,uid,np:NP,mapN:MAP,starts:START,teams:G.teams,
+      t:G.t,mapSel,mapReal:mapRealSel,diffSel,turboSel,regicide:G.regicide||0,seed:gameSeed,uid,np:NP,mapN:MAP,starts:START,teams:G.teams,
       wonderT:G.wonderT||null,relicT:G.relicT||null,
       mission:mission?mission.id:null,
       P:G.P,ais:G.ais,relics:G.relics,groups:G.groups,stats:G.stats,cam:G.cam,
@@ -113,7 +113,8 @@ function loadGame(key){
   let data;
   try{data=JSON.parse(localStorage.getItem(key||'tq_save'));}catch(e){return false;}
   if(!data||(data.v!==1&&data.v!==2))return false;
-  mapSel=data.mapSel;diffSel=data.diffSel;turboSel=data.turboSel||0;uid=data.uid||1;
+  mapSel=data.mapSel;mapRealSel=data.mapReal!==undefined?data.mapReal:(data.mapSel||0);
+  diffSel=data.diffSel;turboSel=data.turboSel||0;uid=data.uid||1;
   const savedRegicide=data.regicide||0;   // applied to G after the literal below
   seedSim(data.seed||1);
   NP=data.np||data.P.length||2;

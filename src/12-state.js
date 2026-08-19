@@ -1,5 +1,6 @@
 /* ================= state ================= */
 let G=null, diffSel=0, civSel=0, mapSel=0, playersSel=2, teamSel=0, turboSel=0, regicideSel=0, NP=2, uid=1;
+let mapRealSel=0; // mapSel with 'Surprise me' (5) resolved to a real generator
 /* Nature owns the wildlife. Player slots run 0..7, so 8 is always free; giving
    the animals a real player index means they path, take damage, die and draw
    through exactly the same code as everything else. G.P/G.teams/G.ais are
@@ -27,10 +28,103 @@ function SRi(n){return Math.floor(SR()*n);}            // integer [0,n)
 // Turbo pace (CD WHATSNEW): work rates x2.5 (military training, construction,
 // gathering, carry), trade x2 — economy unit training stays normal.
 function TB(){return turboSel?2.5:1;}
+
+function genMapArena(){
+  // every lord walled in stone from the first minute — boom, then break out.
+  // The AI needs no teaching: its waves target the NEAREST enemy building,
+  // which for a walled foe is the ring itself, so it batters its way in.
+  G.map=Array.from({length:MAP},()=>Array(MAP).fill(0));
+  G.water={};G.ford={};
+  G.elev=new Uint8Array(MAP*MAP);
+  const rng=(n)=>SRi(n);
+  const placeRes=(type,cx,cy,n)=>{let placed=0,tries=0;
+    while(placed<n&&tries++<220){const x=cx+rng(5)-2,y=cy+rng(5)-2;
+      if(x<1||y<1||x>=MAP-1||y>=MAP-1)continue;const k=x+','+y;
+      if(G.map[y][x]||G.res[k])continue;
+      G.res[k]={type,amt:RES_META[type].amt,x,y};G.map[y][x]=1;placed++;}};
+  // a few low hills in the open field
+  for(let hb=0,nH=Math.round(5*MAP*MAP/4096);hb<nH;hb++){
+    const hx=6+rng(MAP-12),hy=6+rng(MAP-12),hr=3+rng(2);
+    if(START.some(([bx,by])=>Math.hypot(hx-bx,hy-by)<14))continue;
+    for(let y=hy-hr;y<=hy+hr;y++)for(let x=hx-hr;x<=hx+hr;x++){
+      if(x<1||y<1||x>=MAP-1||y>=MAP-1)continue;
+      if(Math.hypot(x-hx,y-hy)<=hr-.2+((x*7+y*13)%2)*.5)G.elev[y*MAP+x]=1;
+    }
+  }
+  // the walls, gate facing the centre of the world
+  const R=9;
+  for(let p=0;p<NP;p++){
+    const [bx,by]=START[p];
+    const gateOnX=Math.abs(MAP/2-bx)>=Math.abs(MAP/2-by);
+    const gx=Math.sign(MAP/2-bx)||1,gy=Math.sign(MAP/2-by)||1;
+    for(let d=-R;d<=R;d++){
+      const ring=[[bx+d,by-R,'n'],[bx+d,by+R,'s'],[bx-R,by+d,'w'],[bx+R,by+d,'e']];
+      for(const [wx,wy,side] of ring){
+        if(wx<1||wy<1||wx>=MAP-1||wy>=MAP-1)continue;
+        if(G.map[wy][wx])continue;                    // ring corners come round twice
+        const gateSide=gateOnX?(side===(gx>0?'e':'w')):(side===(gy>0?'s':'n'));
+        addBld(p,(gateSide&&Math.abs(d)<=1)?'sgate':'swall',wx,wy,true);
+      }
+    }
+    // everything a boom needs, INSIDE the ring
+    const dx=Math.sign(MAP/2-bx)||1,dy=Math.sign(MAP/2-by)||1;
+    placeRes('food',bx+4*dx,by-4*dy,6);
+    placeRes('gold',bx-5*dx,by+4*dy,5);
+    placeRes('wood',bx-5*dx,by-5*dy,9);
+    placeRes('wood',bx+5*dx,by+5*dy,9);
+  }
+  // the centre prize — the reason to leave home
+  placeRes('gold',MAP*.5|0,MAP*.5|0,8);
+  placeRes('food',MAP*.5|0,MAP*.42|0,5);
+  placeRes('gold',MAP*.3|0,MAP*.3|0,4);placeRes('gold',MAP*.7|0,MAP*.7|0,4);
+  // sparse neutral woods in no-man's-land
+  for(let b=0,nF=Math.round(6*MAP*MAP/4096);b<nF;b++){
+    const cx=3+rng(MAP-6),cy=3+rng(MAP-6);
+    if(START.some(([sx2,sy2])=>Math.hypot(cx-sx2,cy-sy2)<R+4))continue;
+    placeForest(cx,cy,14+rng(24),11);
+  }
+}
+function genMapHighlands(){
+  // rolling open hills, scattered woods, NO water — the high ground is the map
+  G.map=Array.from({length:MAP},()=>Array(MAP).fill(0));
+  G.water={};G.ford={};
+  G.elev=new Uint8Array(MAP*MAP);
+  const rng=(n)=>SRi(n);
+  for(let hb=0,nH=Math.round(16*MAP*MAP/4096);hb<nH;hb++){
+    const hx=5+rng(MAP-10),hy=5+rng(MAP-10),hr=3+rng(4);
+    if(START.some(([bx,by])=>Math.hypot(hx-bx,hy-by)<9))continue;
+    for(let y=hy-hr;y<=hy+hr;y++)for(let x=hx-hr;x<=hx+hr;x++){
+      if(x<1||y<1||x>=MAP-1||y>=MAP-1)continue;
+      if(Math.hypot(x-hx,y-hy)<=hr-.2+((x*7+y*13)%2)*.5)G.elev[y*MAP+x]=1;
+    }
+  }
+  const placeRes=(type,cx,cy,n)=>{let placed=0,tries=0;
+    while(placed<n&&tries++<220){const x=cx+rng(5)-2,y=cy+rng(5)-2;
+      if(x<1||y<1||x>=MAP-1||y>=MAP-1)continue;const k=x+','+y;
+      if(G.map[y][x]||G.res[k])continue;
+      G.res[k]={type,amt:RES_META[type].amt,x,y};G.map[y][x]=1;placed++;}};
+  for(let b=0,nF=Math.round(11*MAP*MAP/4096);b<nF;b++){
+    const cx=3+rng(MAP-6),cy=3+rng(MAP-6);
+    placeForest(cx,cy,18+rng(34),11);
+  }
+  for(const [bx,by] of START){
+    const dx=Math.sign(MAP/2-bx)||1,dy=Math.sign(MAP/2-by)||1;
+    placeRes('food',bx+5*dx,by-4*dy,6);
+    placeRes('food',bx-3*dx,by+6*dy,4);
+    placeRes('gold',bx+8*dx,by+8*dy,5);
+    placeRes('wood',bx+dx,by+9*dy,9);placeRes('wood',bx+9*dx,by+dy,9);
+  }
+  placeRes('gold',MAP*.5|0,MAP*.5|0,6);
+  placeRes('gold',MAP*.22|0,MAP*.72|0,4);placeRes('gold',MAP*.78|0,MAP*.28|0,4);
+  placeRes('food',MAP*.38|0,MAP*.3|0,5);placeRes('food',MAP*.62|0,MAP*.7|0,5);
+}
 const MAPS=[
   {name:'River Crossing',blurb:'A river divides the land — armies must cross at the sandy fords.'},
   {name:'Black Forest',blurb:'Endless dark woodland. Narrow trails link the clearings — wall a chokepoint, turtle up, and strike when ready. Wood is everywhere; gold is contested.'},
-  {name:'Hallowed Ground',blurb:'Open steppe strewn with holy relics — every lord starts with a Monastery and a Monk. Claim the relics for gold, or hoard them all and win outright.'}];
+  {name:'Hallowed Ground',blurb:'Open steppe strewn with holy relics — every lord starts with a Monastery and a Monk. Claim the relics for gold, or hoard them all and win outright.'},
+  {name:'Arena',blurb:'Every lord begins behind a ring of stone. Boom in safety, then batter your way out — the centre holds the gold worth fighting for.'},
+  {name:'Highlands',blurb:'Rolling open hills and scattered woods. No water, no walls to hide behind — high ground is the only fortress here.'},
+  {name:'Surprise me',blurb:'The battlefield is drawn from the match seed — nobody knows until the fog lifts.'}];
 let mission=null;
 /* Mission setups run in begin(), right after newGame() — the map exists, the
    Town Halls stand, nothing has moved yet. These two helpers keep the setups
@@ -200,7 +294,10 @@ function newGame(){
   // Black Forest fills every tile that isn't a carved clearing, so it carries
   // ~8x the trees of an open map — it stays one size down to keep zoomed-out
   // frames fast (12k trees at 128 dropped the whole map view to ~22fps).
-  setMapSize(mapSel===1?(NP<=4?96:112):(NP<=2?96:NP<=4?112:128));
+  // 'Surprise me' resolves HERE, from the match seed — lockstep peers, replays
+  // and reloads all resolve the same battlefield from the same number
+  mapRealSel=mapSel===5?SRi(5):mapSel;
+  setMapSize(mapRealSel===1?(NP<=4?96:112):(NP<=2?96:NP<=4?112:128));
   START=genStarts(NP);
   // team assignment: FFA / two teams / everyone against you.
   // "you" is localP, not slot 0 — in a match you may be sitting in any seat.
@@ -263,7 +360,7 @@ function newGame(){
     const nv=3+(CIVS[G.P[p].civ].startVills||0);
     for(let i=0;i<nv;i++)addUnit(p,'villager',bx-1+i%3,by+3+(i/3|0));
     if(G.regicide)addUnit(p,'king',bx+3,by+2);   // Regicide: every lord starts with a King
-    if(mapSel===2&&!mission){ // Hallowed Ground: every lord starts with the cloth
+    if(mapRealSel===2&&!mission){ // Hallowed Ground: every lord starts with the cloth
       let placed=null;
       for(let r=3;r<9&&!placed;r++)for(let a=0;a<12&&!placed;a++){
         const tx=Math.round(bx+Math.cos(a/12*6.283)*r),ty=Math.round(by+Math.sin(a/12*6.283)*r);
@@ -290,8 +387,10 @@ let terrainVer=0,elevVer=0,fogVer=0;
 let resVer=0,resGen=0;
 function genMap(){
   miniResDirty=true;elevVer++;resVer++;resGen++;
-  if(mapSel===1)genMapForest();
-  else if(mapSel===2)genMapHallowed();
+  if(mapRealSel===1)genMapForest();
+  else if(mapRealSel===2)genMapHallowed();
+  else if(mapRealSel===3)genMapArena();
+  else if(mapRealSel===4)genMapHighlands();
   else genMapRiver();
   // Belt and braces: no generator may leave anything inside a Town Hall's
   // footprint or hard against it. Cheaper than auditing every placement path.
@@ -388,7 +487,7 @@ function animalHit(t,from){
 function placeRelics(){
   G.relics=[];
   let spots;
-  if(mapSel===2){ // Hallowed Ground: relics everywhere (HALLOWED.RMS concept)
+  if(mapRealSel===2){ // Hallowed Ground: relics everywhere (HALLOWED.RMS concept)
     spots=[];
     let guard=0;
     while(spots.length<8&&guard++<300){
@@ -397,7 +496,7 @@ function placeRelics(){
       if(spots.some(([sx,sy])=>Math.hypot(x-sx,y-sy)<7))continue;
       spots.push([x,y]);
     }
-  }else spots=mapSel===1
+  }else spots=mapRealSel===1
     ?[[32,32],[13,13],[MAP-14,MAP-14],[32,44]]
     :[[MAP*.3|0,MAP*.55|0],[MAP*.7|0,MAP*.45|0],[MAP*.2|0,MAP*.15|0],[MAP*.85|0,MAP*.8|0]];
   let rid=1;
