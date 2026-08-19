@@ -2236,6 +2236,9 @@ function drawBld(b){
       ctx.restore();
     }
   }
+  // forge-rendered town (G1); the procedural sprite below stays the fallback
+  // AND the metrics source for the flash/HP/queue overlays
+  const bR=bsprDraw(b,pt,bl);
   const stage=b.built?0:Math.min(2,Math.floor(3*b.prog/BLDS[b.type].bt));
   const sp=getBldSpr(b.type,b.p,b.built,stage,hash2(b.tx,b.ty)%3,wxSnowLvl);
   // buildings draw larger than their footprint art (BLD_VS2D — tuned by
@@ -2243,10 +2246,12 @@ function drawBld(b){
   // so they gain presence without shifting their base. VISUAL ONLY. Walls and
   // farms stay footprint-true: they tile edge-to-edge.
   const BS=d.thin||d.farm?1:BLD_VS2D;
-  if(BS===1)ctx.drawImage(sp.c,pt.x-sp.ox,pt.y-sp.oy,sp.w,sp.h);
-  else{
-    const southY=pt.y+2*b.size*IH;
-    ctx.drawImage(sp.c,pt.x-sp.ox*BS,southY-(sp.oy+2*b.size*IH)*BS,sp.w*BS,sp.h*BS);
+  if(!bR){
+    if(BS===1)ctx.drawImage(sp.c,pt.x-sp.ox,pt.y-sp.oy,sp.w,sp.h);
+    else{
+      const southY=pt.y+2*b.size*IH;
+      ctx.drawImage(sp.c,pt.x-sp.ox*BS,southY-(sp.oy+2*b.size*IH)*BS,sp.w*BS,sp.h*BS);
+    }
   }
   if(BLDS[b.type].gate&&b.built){
     let open=false;
@@ -2268,7 +2273,8 @@ function drawBld(b){
   if(b.flash>0){
     ctx.globalAlpha=Math.min(.4,b.flash*2.6);
     ctx.fillStyle='#fff';
-    ctx.fillRect(pt.x-sp.ox,pt.y-sp.oy,sp.w,sp.h);
+    if(bR)ctx.fillRect(bR.x,bR.y,bR.w,bR.h);
+    else ctx.fillRect(pt.x-sp.ox,pt.y-sp.oy,sp.w,sp.h);
     ctx.globalAlpha=1;
   }
   if(b.built&&b.hp<b.maxhp*.75&&!d.thin&&!d.farm)drawFlames(b);
@@ -3951,6 +3957,84 @@ function toggleSprites(){
   const b=document.getElementById('sprBtn');if(b)b.classList.toggle('sel',spritesOn);
   toast(spritesOn?(USPR.meta?'Rendered sprites':'Rendered sprites (no sheets found - procedural art)')
                  :'Procedural art');
+}
+/* ===== Blender BUILDING sprites (graphics campaign G1) =====================
+   The same forge, camera and toon materials the units already use, applied to
+   the town. One image per (building, age) plus a team mask, rendered at 2x the
+   game's native tile scale (atlas ppt = 52 px per IW). drawBld tries bsprDraw
+   first and falls back to the procedural art whenever it returns false — the
+   identical safety story sprDraw established. Construction sites, rubble and
+   the thin wall tiler stay procedural on purpose. */
+const BSPR={meta:null,base:'',img:{},tint:{},tried:false};
+function bsprInit(){
+  if(BSPR.tried)return;BSPR.tried=true;
+  const paths=['bsprites/','app/bsprites/'];
+  (function next(i){
+    if(i>=paths.length)return;
+    fetch(paths[i]+'bsprites.json').then(r=>r.ok?r.json():Promise.reject(0))
+      .then(j=>{BSPR.meta=j;BSPR.base=paths[i];})
+      .catch(()=>next(i+1));
+  })(0);
+}
+function bimg(k,src){
+  let v=BSPR.img[k];
+  if(v===undefined){
+    BSPR.img[k]=null;
+    const im=new Image();
+    im.onload=()=>{BSPR.img[k]=im;};im.onerror=()=>{BSPR.img[k]=false;};
+    im.src=BSPR.base+src;
+    return null;
+  }
+  return v||null;
+}
+function bsprGet(type,age,team,sl){
+  const e=BSPR.meta.blds[type];if(!e)return null;
+  const A=e.ages[age];if(!A)return null;
+  const ck=type+'/'+age+'/'+team+'/'+(sl|0);
+  const hit=BSPR.tint[ck];if(hit)return hit;
+  const base=bimg(type+'/'+age,A.sheet);if(!base)return null;
+  let out=base;
+  if(team!==0){
+    const msk=bimg(type+'/'+age+'/m',A.mask);if(!msk)return null;
+    out=sprTint(base,msk,team);          // the unit tinter works on any sheet
+  }
+  if(sl){ // snow settles on the new roofs exactly like it did on the old
+    const c=document.createElement('canvas');c.width=A.w;c.height=A.h;
+    c.getContext('2d').drawImage(out,0,0);
+    snowRim(c,sl);out=c;
+  }
+  BSPR.tint[ck]=out;return out;
+}
+function bsprDraw(b,pt0,bl){
+  if(!spritesOn||!BSPR.meta)return false;
+  const d=BLDS[b.type];
+  if(d.thin||!b.built)return false;        // walls tile; sites scaffold — both stay procedural
+  const e=BSPR.meta.blds[b.type];if(!e)return false;
+  const P=G.P[b.p];
+  const age=Math.min(3,(P&&P.age)|0);
+  const A=e.ages[age];if(!A)return false;
+  const img=bsprGet(b.type,age,b.p,wxSnowLvl);if(!img)return false;
+  const ps=isoPt(b.tx+b.size,b.ty+b.size); // the footprint's south corner
+  ps.y-=bl;
+  const BS=d.farm?1:BLD_VS2D;
+  /* ppt = sheet px per IW-halfwidth (52 at R=2), so game px per sheet px is
+     26/ppt; times the visual scale BS. Written out so a future ppt change
+     (an HD pack at R=3, say) needs no code edit. */
+  const kk=BS*26/BSPR.meta.ppt;
+  const rx=ps.x-A.ax*kk,ry=ps.y-A.ay*kk,rw=A.w*kk,rh=A.h*kk;
+  // soft SE contact shadow so the art sits ON the ground instead of floating —
+  // same sun the sheets were lit by (key from the upper-left)
+  if(!d.farm){
+    const pc2=isoPt(b.tx+b.size/2,b.ty+b.size/2);pc2.y-=bl;
+    ctx.globalAlpha=.16;
+    ctx.fillStyle='#1c1408';
+    ctx.beginPath();
+    ctx.ellipse(pc2.x+b.size*4,pc2.y+2,b.size*IW*.92,b.size*IH*.85,0,0,7);
+    ctx.fill();
+    ctx.globalAlpha=1;
+  }
+  ctx.drawImage(img,rx,ry,rw,rh);
+  return {x:rx,y:ry,w:rw,h:rh};  // the caller draws the flash over this rect
 }
 function drawUnit(u){
   const pp=isoE(u.x,u.y),px=pp.x,py=pp.y;

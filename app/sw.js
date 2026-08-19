@@ -1,6 +1,6 @@
 ﻿// Tiny Conquerors service worker - offline-capable, but never stale.
 // Bump VERSION on every deploy; old caches are purged on activate.
-const VERSION = 'tq-v63';
+const VERSION = 'tq-v64';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 // Unit sprite sheets get their own cache that VERSION bumps do NOT purge: they
 // are ~23MB, immutable per filename, and re-downloading the lot on every deploy
@@ -53,7 +53,7 @@ self.addEventListener('fetch', e => {
   }
 
   // Sprite sheets: cache-first out of the long-lived sprite cache.
-  if (e.request.url.indexOf('/sprites/') !== -1) {
+  if (e.request.url.indexOf('/sprites/') !== -1 || e.request.url.indexOf('/bsprites/') !== -1) {
     e.respondWith(caches.open(SPRITES).then(c =>
       c.match(e.request).then(hit => hit || fetch(e.request).then(res => {
         if (res.ok) c.put(e.request, res.clone());

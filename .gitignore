@@ -16,3 +16,5 @@ spr-*.png
 
 # CI test harness
 node_modules/
+blender/btmp/
+blender/bsheets/

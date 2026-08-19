@@ -3503,6 +3503,7 @@ document.getElementById('d3Btn').addEventListener('click',toggle3D);
 const _sprBtn=document.getElementById('sprBtn');
 if(_sprBtn)_sprBtn.addEventListener('click',toggleSprites);
 sprInit();
+bsprInit();   // building sheets (graphics campaign G1)
 R3.loadModels();   // sculpted 3D unit meshes for the WebGL renderer
 /* The standalone rotate handler that used to live here is GONE. It bound a
    SECOND independent pointerdown to #view3 and would now fight the shared
