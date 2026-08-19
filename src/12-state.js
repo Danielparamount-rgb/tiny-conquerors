@@ -257,6 +257,125 @@ const MISSIONS=[
        G.P[p].age=3;G.P[p].w+=600;G.P[p].g+=500;}
    },
    obj:'Build a Wonder and hold it until the countdown ends. Both warlords will come for it.'},
+  /* ---- THE CAMPAIGN ARCS (2026-08-19): three historical threads, four
+     missions each, every mission built on a system the skirmish already has.
+     Arc openers carry arcStart so the arcs unlock independently. ---- */
+  // ATTILA THE HUN — the Scourge of God (civ 15: no houses, all horse)
+  {id:8,arc:'Attila the Hun',arcStart:true,civ:15,name:'The Scourge Rides',map:4,diff:1,
+   blurb:'The steppe is yours by birthright. Take the rest of it by horse.',
+   win:{type:'raze'},
+   setup(){const st=G.P[localP];st.age=1;st.f+=200;
+     missionSquad(localP,'scout',6,START[localP][0]+3,START[localP][1]+4);
+     G.P[1].age=1;},
+   obj:'Raze the enemy Town Hall. Huns need no houses — every stick of wood is an army.'},
+  {id:9,arc:'Attila the Hun',civ:15,name:'Tribute or Torch',map:0,diff:1,
+   blurb:'Rome pays gold to those it fears. Make yourself worth fearing.',
+   win:{type:'wealth',n:2000},
+   setup(){const st=G.P[localP];st.age=1;st.w+=150;
+     missionBld(localP,'market',START[localP][0],START[localP][1],3,9);
+     missionSquad(localP,'scout',3,START[localP][0]+3,START[localP][1]+4);},
+   obj:'Amass 2000 gold — trade for it, mine it, or burn it out of them. Trade Carts earn more the farther they travel.'},
+  {id:10,arc:'Attila the Hun',civ:15,name:'The Walls Must Fall',map:3,diff:2,
+   blurb:'They believe stone can keep out the Scourge of God. Correct them.',
+   win:{type:'raze'},
+   setup(){const st=G.P[localP];st.age=2;st.w+=400;st.g+=300;st.f+=200;
+     missionBld(localP,'siege',START[localP][0],START[localP][1],3,8);
+     addUnit(localP,'ram',START[localP][0]+2,START[localP][1]+4);
+     addUnit(localP,'ram',START[localP][0]+3,START[localP][1]+4);
+     G.P[1].age=2;G.P[1].w+=300;G.P[1].g+=200;
+     missionBld(1,'castle',START[1][0],START[1][1],3,7);},
+   obj:'The Arena is his fortress — and his cage. Breach the ring and raze the Town Hall. Rams eat stone; cavalry eats what runs out.'},
+  {id:11,arc:'Attila the Hun',civ:15,name:'The Catalaunian Fields',map:4,diff:2,foes:2,vsWorld:true,
+   blurb:'Rome and the Visigoths stand together at last — against you. History remembers who walked away.',
+   win:{type:'survive',time:900},
+   setup(){const st=G.P[localP];st.age=2;st.f+=400;st.w+=500;st.g+=300;
+     missionSquad(localP,'scout',4,START[localP][0]+3,START[localP][1]+4);
+     missionSquad(localP,'tarkan',3,START[localP][0]-2,START[localP][1]+4);
+     for(let p=0;p<NP;p++){if(p===localP)continue;G.P[p].age=2;G.P[p].w+=300;G.P[p].g+=200;}},
+   obj:'Survive for 15 minutes against the allied world. The high ground is worth a second army.'},
+  // EL CID — the Lord of Valencia (civ 17, Spanish)
+  {id:12,arc:'El Cid',arcStart:true,civ:17,name:'Into Exile',map:2,diff:1,
+   blurb:'Banished by the king you served. Ride for the far hills with the men who still follow.',
+   win:{type:'escort',ut:'king'},
+   setup(){
+     const [bx,by]=START[localP];
+     addUnit(localP,'king',bx+2,by+4);
+     missionSquad(localP,'knight',3,bx+3,by+4);
+     missionSquad(localP,'spearman',3,bx+1,by+5);
+     const st=G.P[localP];st.age=2;st.f+=200;
+     // the road out: the corner farthest from home, past whoever holds the middle
+     const cx=bx<MAP/2?MAP-6:6,cy=by<MAP/2?MAP-6:6;
+     G.mEscort={x:cx,y:cy,r:3};
+     G.P[1].age=2;},
+   obj:'Bring El Cid (your King) alive to the far corner of the land — the minimap pulse marks the road. If he falls, all falls.'},
+  {id:13,arc:'El Cid',civ:17,name:'A Sword for Hire',map:0,diff:2,
+   blurb:'An exile eats by his blade. A warlord pays for a town razed — and asks no questions.',
+   win:{type:'raze'},
+   setup(){const st=G.P[localP];st.age=2;st.f+=300;st.w+=300;st.g+=350;
+     missionBld(localP,'castle',START[localP][0],START[localP][1],3,8);
+     missionSquad(localP,'conquistador',3,START[localP][0]+3,START[localP][1]+4);
+     G.P[1].age=2;G.P[1].w+=350;G.P[1].g+=250;},
+   obj:'Raze the enemy Town Hall. Your Castle trains Conquistadors — mounted guns that reload on the move.'},
+  {id:14,arc:'El Cid',civ:17,name:'The Siege of Valencia',map:0,diff:2,foes:2,vsWorld:true,
+   blurb:'You took a city of your own at last. Now every banner in the south marches to take it back.',
+   win:{type:'survive',time:720},
+   setup(){
+     const [bx,by]=START[localP];const st=G.P[localP];
+     st.age=2;st.f+=400;st.w+=600;st.g+=300;
+     missionBld(localP,'castle',bx,by,3,7);
+     missionBld(localP,'tower',bx,by,5,9);
+     missionBld(localP,'tower',bx,by,5,10);
+     missionSquad(localP,'spearman',4,bx+2,by+4);
+     missionSquad(localP,'archer',4,bx-2,by+4);
+     for(let p=0;p<NP;p++){if(p===localP)continue;G.P[p].age=2;G.P[p].w+=300;G.P[p].g+=250;}},
+   obj:'Hold Valencia for 12 minutes. Spanish builders work a third faster — use every quiet second to add stone.'},
+  {id:15,arc:'El Cid',civ:17,name:'The Last Ride',map:4,diff:2,
+   blurb:'The legend says they strapped the dead Campeador into his saddle and the enemy broke at the sight. Write the legend.',
+   win:{type:'raze'},   // the regicide check fires first — this line is the fallback
+   setup(){
+     G.regicide=1;
+     for(let p=0;p<NP;p++)addUnit(p,'king',START[p][0]+3,START[p][1]+2);
+     const st=G.P[localP];st.age=2;st.f+=300;st.w+=300;st.g+=300;
+     missionSquad(localP,'knight',4,START[localP][0]+3,START[localP][1]+4);
+     G.P[1].age=2;G.P[1].w+=300;G.P[1].g+=300;},
+   obj:'Regicide: kill the enemy king, and keep El Cid alive — garrison him if you must. The kingdom follows the crown.'},
+  // MONTEZUMA — the Fifth Sun (civ 13, Aztecs)
+  {id:16,arc:'Montezuma',arcStart:true,civ:13,name:'The Flower War',map:2,diff:1,
+   blurb:'The gods do not want land. The gods want captives. The Flower War provides.',
+   win:{type:'kills',n:30},
+   setup(){const st=G.P[localP];st.age=1;st.f+=250;
+     missionSquad(localP,'eagle',4,START[localP][0]+3,START[localP][1]+4);
+     G.P[1].age=1;},
+   obj:'Slay 30 enemy soldiers. Eagle Warriors run like the wind — strike, withdraw, strike again. Lose your Town Hall and all is lost.'},
+  {id:17,arc:'Montezuma',civ:13,name:'Gold of the Gods',map:2,diff:2,
+   blurb:'The old shrines hold what the temples need. Send the priests, and guard their road.',
+   win:{type:'relics',n:4},
+   setup(){const st=G.P[localP];st.age=2;st.w+=250;st.g+=150;
+     const [bx,by]=START[localP];
+     missionBld(localP,'monastery',bx,by,3,9);
+     addUnit(localP,'monk',bx+1,by+4);addUnit(localP,'monk',bx+2,by+4);
+     G.P[1].age=2;},
+   obj:'Enshrine 4 relics. Aztec monks are hardier than most — but an escort of Jaguars is hardier still.'},
+  {id:18,arc:'Montezuma',civ:13,name:'La Noche Triste',map:0,diff:2,foes:2,vsWorld:true,
+   blurb:'The strangers and their allies come across the causeways in the dark. The lake will remember this night.',
+   win:{type:'survive',time:600},
+   setup(){const st=G.P[localP];st.age=2;st.f+=350;st.w+=400;st.g+=250;
+     missionSquad(localP,'jaguar',3,START[localP][0]+3,START[localP][1]+4);
+     missionSquad(localP,'eagle',3,START[localP][0]-2,START[localP][1]+4);
+     for(let p=0;p<NP;p++){if(p===localP)continue;G.P[p].age=2;G.P[p].w+=350;G.P[p].g+=250;}},
+   obj:'Survive the night — 10 minutes. Wall the fords; they must come to you across the water.'},
+  {id:19,arc:'Montezuma',civ:13,name:'The Fifth Sun',map:1,diff:2,foes:2,
+   blurb:'Every age of the world has ended in fire. Raise the great temple, and hold the sky up yourself.',
+   win:{type:'wonder'},
+   setup(){
+     const st=G.P[localP];st.age=3;st.f+=900;st.w+=1500;st.g+=1200;
+     const [bx,by]=START[localP];
+     missionBld(localP,'castle',bx,by,3,8);
+     missionBld(localP,'university',bx,by,3,10);
+     missionSquad(localP,'jaguar',4,bx+2,by+4);
+     missionSquad(localP,'eagle',4,bx-2,by+4);
+     for(let p=0;p<NP;p++){if(p===localP)continue;G.P[p].age=3;G.P[p].w+=700;G.P[p].g+=600;}},
+   obj:'Build the Wonder in the deep forest and defend it to the end of the countdown. The trails are few — own them.'},
 ];
 /* Fingerprint of everything that IS the game state. Two peers running the same
    seed and the same commands must agree on this every tick; the first tick they

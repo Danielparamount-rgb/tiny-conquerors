@@ -100,19 +100,52 @@ mpEl('netHaltBtn').onclick=()=>{
   mpEl('startOverlay').style.display='flex';
   updateContBtn();
 };
+/* Campaign progress: a SET of completed mission ids ('tq_camp2'), migrated
+   from the old linear counter. Arcs unlock independently — an arc opener
+   (arcStart) is always playable; within an arc, finishing a mission opens
+   the next. */
+function campDone(){
+  try{
+    let d=JSON.parse(localStorage.getItem('tq_camp2')||'null');
+    if(!d){ // migrate the pre-arc linear counter
+      const old=+(localStorage.getItem('tq_camp')||0);
+      d=[];for(let i=0;i<old;i++)d.push(i);
+      localStorage.setItem('tq_camp2',JSON.stringify(d));
+    }
+    return new Set(d);
+  }catch(e){return new Set();}
+}
+function campMark(id){
+  try{
+    const d=campDone();d.add(id);
+    localStorage.setItem('tq_camp2',JSON.stringify([...d]));
+  }catch(e){}
+}
 function showCampaign(){
-  const prog=+(localStorage.getItem('tq_camp')||0);
+  const done=campDone();
   const list=document.getElementById('campList');list.innerHTML='';
+  let lastArc=null,arcIdx=0;
   MISSIONS.forEach(mn=>{
-    const done=mn.id<prog,locked=mn.id>prog;
+    const arc=mn.arc||'The Squire\'s Road';
+    if(arc!==lastArc){
+      lastArc=arc;arcIdx=0;
+      const h=document.createElement('p');
+      h.style.cssText='margin:14px 0 4px;font-family:Georgia,serif;letter-spacing:.08em;color:#8a6a1a;font-weight:700;text-align:left';
+      h.textContent='⚜ '+arc;
+      list.appendChild(h);
+    }
+    arcIdx++;
+    const isDone=done.has(mn.id);
+    const locked=!(mn.arcStart||mn.id===0||done.has(mn.id-1));
     const btn=document.createElement('button');
     btn.className='bigbtn';
-    btn.innerHTML='<b>'+(mn.id+1)+'. '+mn.name+(done?' ✓':locked?' 🔒':'')+'</b><small>'+mn.blurb+'</small>';
+    btn.innerHTML='<b>'+arcIdx+'. '+mn.name+(isDone?' ✓':locked?' 🔒':'')+'</b><small>'+mn.blurb+'</small>';
     if(locked)btn.disabled=true;
     else btn.onclick=()=>{
       initAudio();if(AC&&AC.state==='suspended')AC.resume();
       resetNet();
       mission=mn;mapSel=mn.map;diffSel=mn.diff;
+      if(mn.civ!==undefined)civSel=mn.civ;   // the arcs cast you as their lord
       document.getElementById('campOverlay').style.display='none';
       document.getElementById('startOverlay').style.display='none';
       begin();

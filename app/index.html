@@ -1277,6 +1277,125 @@ const MISSIONS=[
        G.P[p].age=3;G.P[p].w+=600;G.P[p].g+=500;}
    },
    obj:'Build a Wonder and hold it until the countdown ends. Both warlords will come for it.'},
+  /* ---- THE CAMPAIGN ARCS (2026-08-19): three historical threads, four
+     missions each, every mission built on a system the skirmish already has.
+     Arc openers carry arcStart so the arcs unlock independently. ---- */
+  // ATTILA THE HUN — the Scourge of God (civ 15: no houses, all horse)
+  {id:8,arc:'Attila the Hun',arcStart:true,civ:15,name:'The Scourge Rides',map:4,diff:1,
+   blurb:'The steppe is yours by birthright. Take the rest of it by horse.',
+   win:{type:'raze'},
+   setup(){const st=G.P[localP];st.age=1;st.f+=200;
+     missionSquad(localP,'scout',6,START[localP][0]+3,START[localP][1]+4);
+     G.P[1].age=1;},
+   obj:'Raze the enemy Town Hall. Huns need no houses — every stick of wood is an army.'},
+  {id:9,arc:'Attila the Hun',civ:15,name:'Tribute or Torch',map:0,diff:1,
+   blurb:'Rome pays gold to those it fears. Make yourself worth fearing.',
+   win:{type:'wealth',n:2000},
+   setup(){const st=G.P[localP];st.age=1;st.w+=150;
+     missionBld(localP,'market',START[localP][0],START[localP][1],3,9);
+     missionSquad(localP,'scout',3,START[localP][0]+3,START[localP][1]+4);},
+   obj:'Amass 2000 gold — trade for it, mine it, or burn it out of them. Trade Carts earn more the farther they travel.'},
+  {id:10,arc:'Attila the Hun',civ:15,name:'The Walls Must Fall',map:3,diff:2,
+   blurb:'They believe stone can keep out the Scourge of God. Correct them.',
+   win:{type:'raze'},
+   setup(){const st=G.P[localP];st.age=2;st.w+=400;st.g+=300;st.f+=200;
+     missionBld(localP,'siege',START[localP][0],START[localP][1],3,8);
+     addUnit(localP,'ram',START[localP][0]+2,START[localP][1]+4);
+     addUnit(localP,'ram',START[localP][0]+3,START[localP][1]+4);
+     G.P[1].age=2;G.P[1].w+=300;G.P[1].g+=200;
+     missionBld(1,'castle',START[1][0],START[1][1],3,7);},
+   obj:'The Arena is his fortress — and his cage. Breach the ring and raze the Town Hall. Rams eat stone; cavalry eats what runs out.'},
+  {id:11,arc:'Attila the Hun',civ:15,name:'The Catalaunian Fields',map:4,diff:2,foes:2,vsWorld:true,
+   blurb:'Rome and the Visigoths stand together at last — against you. History remembers who walked away.',
+   win:{type:'survive',time:900},
+   setup(){const st=G.P[localP];st.age=2;st.f+=400;st.w+=500;st.g+=300;
+     missionSquad(localP,'scout',4,START[localP][0]+3,START[localP][1]+4);
+     missionSquad(localP,'tarkan',3,START[localP][0]-2,START[localP][1]+4);
+     for(let p=0;p<NP;p++){if(p===localP)continue;G.P[p].age=2;G.P[p].w+=300;G.P[p].g+=200;}},
+   obj:'Survive for 15 minutes against the allied world. The high ground is worth a second army.'},
+  // EL CID — the Lord of Valencia (civ 17, Spanish)
+  {id:12,arc:'El Cid',arcStart:true,civ:17,name:'Into Exile',map:2,diff:1,
+   blurb:'Banished by the king you served. Ride for the far hills with the men who still follow.',
+   win:{type:'escort',ut:'king'},
+   setup(){
+     const [bx,by]=START[localP];
+     addUnit(localP,'king',bx+2,by+4);
+     missionSquad(localP,'knight',3,bx+3,by+4);
+     missionSquad(localP,'spearman',3,bx+1,by+5);
+     const st=G.P[localP];st.age=2;st.f+=200;
+     // the road out: the corner farthest from home, past whoever holds the middle
+     const cx=bx<MAP/2?MAP-6:6,cy=by<MAP/2?MAP-6:6;
+     G.mEscort={x:cx,y:cy,r:3};
+     G.P[1].age=2;},
+   obj:'Bring El Cid (your King) alive to the far corner of the land — the minimap pulse marks the road. If he falls, all falls.'},
+  {id:13,arc:'El Cid',civ:17,name:'A Sword for Hire',map:0,diff:2,
+   blurb:'An exile eats by his blade. A warlord pays for a town razed — and asks no questions.',
+   win:{type:'raze'},
+   setup(){const st=G.P[localP];st.age=2;st.f+=300;st.w+=300;st.g+=350;
+     missionBld(localP,'castle',START[localP][0],START[localP][1],3,8);
+     missionSquad(localP,'conquistador',3,START[localP][0]+3,START[localP][1]+4);
+     G.P[1].age=2;G.P[1].w+=350;G.P[1].g+=250;},
+   obj:'Raze the enemy Town Hall. Your Castle trains Conquistadors — mounted guns that reload on the move.'},
+  {id:14,arc:'El Cid',civ:17,name:'The Siege of Valencia',map:0,diff:2,foes:2,vsWorld:true,
+   blurb:'You took a city of your own at last. Now every banner in the south marches to take it back.',
+   win:{type:'survive',time:720},
+   setup(){
+     const [bx,by]=START[localP];const st=G.P[localP];
+     st.age=2;st.f+=400;st.w+=600;st.g+=300;
+     missionBld(localP,'castle',bx,by,3,7);
+     missionBld(localP,'tower',bx,by,5,9);
+     missionBld(localP,'tower',bx,by,5,10);
+     missionSquad(localP,'spearman',4,bx+2,by+4);
+     missionSquad(localP,'archer',4,bx-2,by+4);
+     for(let p=0;p<NP;p++){if(p===localP)continue;G.P[p].age=2;G.P[p].w+=300;G.P[p].g+=250;}},
+   obj:'Hold Valencia for 12 minutes. Spanish builders work a third faster — use every quiet second to add stone.'},
+  {id:15,arc:'El Cid',civ:17,name:'The Last Ride',map:4,diff:2,
+   blurb:'The legend says they strapped the dead Campeador into his saddle and the enemy broke at the sight. Write the legend.',
+   win:{type:'raze'},   // the regicide check fires first — this line is the fallback
+   setup(){
+     G.regicide=1;
+     for(let p=0;p<NP;p++)addUnit(p,'king',START[p][0]+3,START[p][1]+2);
+     const st=G.P[localP];st.age=2;st.f+=300;st.w+=300;st.g+=300;
+     missionSquad(localP,'knight',4,START[localP][0]+3,START[localP][1]+4);
+     G.P[1].age=2;G.P[1].w+=300;G.P[1].g+=300;},
+   obj:'Regicide: kill the enemy king, and keep El Cid alive — garrison him if you must. The kingdom follows the crown.'},
+  // MONTEZUMA — the Fifth Sun (civ 13, Aztecs)
+  {id:16,arc:'Montezuma',arcStart:true,civ:13,name:'The Flower War',map:2,diff:1,
+   blurb:'The gods do not want land. The gods want captives. The Flower War provides.',
+   win:{type:'kills',n:30},
+   setup(){const st=G.P[localP];st.age=1;st.f+=250;
+     missionSquad(localP,'eagle',4,START[localP][0]+3,START[localP][1]+4);
+     G.P[1].age=1;},
+   obj:'Slay 30 enemy soldiers. Eagle Warriors run like the wind — strike, withdraw, strike again. Lose your Town Hall and all is lost.'},
+  {id:17,arc:'Montezuma',civ:13,name:'Gold of the Gods',map:2,diff:2,
+   blurb:'The old shrines hold what the temples need. Send the priests, and guard their road.',
+   win:{type:'relics',n:4},
+   setup(){const st=G.P[localP];st.age=2;st.w+=250;st.g+=150;
+     const [bx,by]=START[localP];
+     missionBld(localP,'monastery',bx,by,3,9);
+     addUnit(localP,'monk',bx+1,by+4);addUnit(localP,'monk',bx+2,by+4);
+     G.P[1].age=2;},
+   obj:'Enshrine 4 relics. Aztec monks are hardier than most — but an escort of Jaguars is hardier still.'},
+  {id:18,arc:'Montezuma',civ:13,name:'La Noche Triste',map:0,diff:2,foes:2,vsWorld:true,
+   blurb:'The strangers and their allies come across the causeways in the dark. The lake will remember this night.',
+   win:{type:'survive',time:600},
+   setup(){const st=G.P[localP];st.age=2;st.f+=350;st.w+=400;st.g+=250;
+     missionSquad(localP,'jaguar',3,START[localP][0]+3,START[localP][1]+4);
+     missionSquad(localP,'eagle',3,START[localP][0]-2,START[localP][1]+4);
+     for(let p=0;p<NP;p++){if(p===localP)continue;G.P[p].age=2;G.P[p].w+=350;G.P[p].g+=250;}},
+   obj:'Survive the night — 10 minutes. Wall the fords; they must come to you across the water.'},
+  {id:19,arc:'Montezuma',civ:13,name:'The Fifth Sun',map:1,diff:2,foes:2,
+   blurb:'Every age of the world has ended in fire. Raise the great temple, and hold the sky up yourself.',
+   win:{type:'wonder'},
+   setup(){
+     const st=G.P[localP];st.age=3;st.f+=900;st.w+=1500;st.g+=1200;
+     const [bx,by]=START[localP];
+     missionBld(localP,'castle',bx,by,3,8);
+     missionBld(localP,'university',bx,by,3,10);
+     missionSquad(localP,'jaguar',4,bx+2,by+4);
+     missionSquad(localP,'eagle',4,bx-2,by+4);
+     for(let p=0;p<NP;p++){if(p===localP)continue;G.P[p].age=3;G.P[p].w+=700;G.P[p].g+=600;}},
+   obj:'Build the Wonder in the deep forest and defend it to the end of the countdown. The trails are few — own them.'},
 ];
 /* Fingerprint of everything that IS the game state. Two peers running the same
    seed and the same commands must agree on this every tick; the first tick they
@@ -3251,6 +3370,20 @@ function step(dt){
   }
   // win/lose
   if(mission&&mission.win.type==='survive'&&G.t>=mission.win.time)return endGame(true);
+  // campaign-arc win types (2026-08-19): wealth, kills, escort
+  if(mission&&mission.win.type==='wealth'&&G.P[localP].g>=mission.win.n)return endGame(true);
+  if(mission&&mission.win.type==='kills'&&G.pstats&&G.pstats[localP].kills>=mission.win.n)return endGame(true);
+  if(mission&&mission.win.type==='escort'&&G.mEscort){
+    const W=G.mEscort;
+    const hero=G.units.find(u2=>u2.p===localP&&u2.type===mission.win.ut&&u2.hp>0)
+      ||G.blds.some(b2=>b2.gar&&b2.gar.some(g2=>g2.type===mission.win.ut))  // garrisoned = alive, not arrived
+      ||G.units.some(u2=>u2.gar&&u2.gar.some(g2=>g2.type===mission.win.ut));
+    if(!hero)return endGame(false);          // the one you were sworn to protect is dead
+    if(hero.x!==undefined&&Math.hypot(hero.x-W.x,hero.y-W.y)<(W.r||3))return endGame(true);
+    // a slow pulse on the destination so the player always knows the road
+    if((G.t%8)<dt){const pgs=G.pings||(G.pings=[]);
+      pgs.push({x:W.x,y:W.y,t:G.t});if(pgs.length>6)pgs.shift();}
+  }
   if(mission&&mission.win.type==='relics'){
     const dep=G.relics.filter(r=>{if(!r.mon)return false;
       const b=G.blds.find(bb=>bb.id===r.mon);return b&&b.p===localP;}).length;
@@ -4538,7 +4671,7 @@ function saveGame(key){
     const data={v:2,ts:Date.now(),
       pstats:G.pstats||null,tl:G.tl||null,tlT:G.tlT,ageAt:G.ageAt||null,
       t:G.t,mapSel,mapReal:mapRealSel,diffSel,turboSel,regicide:G.regicide||0,seed:gameSeed,uid,np:NP,mapN:MAP,starts:START,teams:G.teams,
-      wonderT:G.wonderT||null,relicT:G.relicT||null,
+      wonderT:G.wonderT||null,relicT:G.relicT||null,mEscort:G.mEscort||null,
       mission:mission?mission.id:null,
       P:G.P,ais:G.ais,relics:G.relics,groups:G.groups,stats:G.stats,cam:G.cam,
       units:G.units.map(strip),
@@ -4573,6 +4706,7 @@ function loadGame(key){
      stats:data.stats,lastRaidToast:-99,
      map:data.map,water:data.water,ford:data.ford};
   G.regicide=savedRegicide;
+  G.mEscort=data.mEscort||null;
   // v1 → v2 migration: older saves lack the summary tallies — default them
   G.pstats=data.pstats||Array.from({length:GAIA+1},()=>({tr:0,lost:0,kills:0,razed:0,blost:0,gath:0}));
   G.tl=data.tl||[];G.tlT=data.tlT===undefined?10:data.tlT;
@@ -4644,10 +4778,11 @@ function endGame(win){
   let sub=win?'The enemy Town Hall lies in ruins.':'Your Town Hall has fallen.';
   if(mission){
     if(win){
-      const prog=+(localStorage.getItem('tq_camp')||0);
-      if(mission.id+1>prog)localStorage.setItem('tq_camp',mission.id+1);
+      campMark(mission.id);   // the arc-aware progress set (migrates tq_camp)
+      const arcAll=MISSIONS.filter(m2=>(m2.arc||'')===(mission.arc||''));
+      const arcDone=arcAll.every(m2=>campDone().has(m2.id));
       sub='Mission complete: '+mission.name+
-        (mission.id<MISSIONS.length-1?' — the next trial awaits!':' — the campaign is won!');
+        (arcDone?' — '+(mission.arc||'the campaign')+' is won!':' — the next trial awaits!');
     }else sub='Mission failed: '+mission.name+'. Try again, my liege.';
   }
   if(REC.play)sub='Replay over — that is how the battle went.';
@@ -11817,19 +11952,52 @@ mpEl('netHaltBtn').onclick=()=>{
   mpEl('startOverlay').style.display='flex';
   updateContBtn();
 };
+/* Campaign progress: a SET of completed mission ids ('tq_camp2'), migrated
+   from the old linear counter. Arcs unlock independently — an arc opener
+   (arcStart) is always playable; within an arc, finishing a mission opens
+   the next. */
+function campDone(){
+  try{
+    let d=JSON.parse(localStorage.getItem('tq_camp2')||'null');
+    if(!d){ // migrate the pre-arc linear counter
+      const old=+(localStorage.getItem('tq_camp')||0);
+      d=[];for(let i=0;i<old;i++)d.push(i);
+      localStorage.setItem('tq_camp2',JSON.stringify(d));
+    }
+    return new Set(d);
+  }catch(e){return new Set();}
+}
+function campMark(id){
+  try{
+    const d=campDone();d.add(id);
+    localStorage.setItem('tq_camp2',JSON.stringify([...d]));
+  }catch(e){}
+}
 function showCampaign(){
-  const prog=+(localStorage.getItem('tq_camp')||0);
+  const done=campDone();
   const list=document.getElementById('campList');list.innerHTML='';
+  let lastArc=null,arcIdx=0;
   MISSIONS.forEach(mn=>{
-    const done=mn.id<prog,locked=mn.id>prog;
+    const arc=mn.arc||'The Squire\'s Road';
+    if(arc!==lastArc){
+      lastArc=arc;arcIdx=0;
+      const h=document.createElement('p');
+      h.style.cssText='margin:14px 0 4px;font-family:Georgia,serif;letter-spacing:.08em;color:#8a6a1a;font-weight:700;text-align:left';
+      h.textContent='⚜ '+arc;
+      list.appendChild(h);
+    }
+    arcIdx++;
+    const isDone=done.has(mn.id);
+    const locked=!(mn.arcStart||mn.id===0||done.has(mn.id-1));
     const btn=document.createElement('button');
     btn.className='bigbtn';
-    btn.innerHTML='<b>'+(mn.id+1)+'. '+mn.name+(done?' ✓':locked?' 🔒':'')+'</b><small>'+mn.blurb+'</small>';
+    btn.innerHTML='<b>'+arcIdx+'. '+mn.name+(isDone?' ✓':locked?' 🔒':'')+'</b><small>'+mn.blurb+'</small>';
     if(locked)btn.disabled=true;
     else btn.onclick=()=>{
       initAudio();if(AC&&AC.state==='suspended')AC.resume();
       resetNet();
       mission=mn;mapSel=mn.map;diffSel=mn.diff;
+      if(mn.civ!==undefined)civSel=mn.civ;   // the arcs cast you as their lord
       document.getElementById('campOverlay').style.display='none';
       document.getElementById('startOverlay').style.display='none';
       begin();
@@ -15909,7 +16077,7 @@ requestAnimationFrame(frame);
 
 <script>
 (function(){
-  var BUILD = 'tq-v71';
+  var BUILD = 'tq-v72';
   addEventListener('load', function(){
     var ov = document.getElementById('startOverlay');
     if (!ov) return;

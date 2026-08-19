@@ -98,7 +98,7 @@ function saveGame(key){
     const data={v:2,ts:Date.now(),
       pstats:G.pstats||null,tl:G.tl||null,tlT:G.tlT,ageAt:G.ageAt||null,
       t:G.t,mapSel,mapReal:mapRealSel,diffSel,turboSel,regicide:G.regicide||0,seed:gameSeed,uid,np:NP,mapN:MAP,starts:START,teams:G.teams,
-      wonderT:G.wonderT||null,relicT:G.relicT||null,
+      wonderT:G.wonderT||null,relicT:G.relicT||null,mEscort:G.mEscort||null,
       mission:mission?mission.id:null,
       P:G.P,ais:G.ais,relics:G.relics,groups:G.groups,stats:G.stats,cam:G.cam,
       units:G.units.map(strip),
@@ -133,6 +133,7 @@ function loadGame(key){
      stats:data.stats,lastRaidToast:-99,
      map:data.map,water:data.water,ford:data.ford};
   G.regicide=savedRegicide;
+  G.mEscort=data.mEscort||null;
   // v1 → v2 migration: older saves lack the summary tallies — default them
   G.pstats=data.pstats||Array.from({length:GAIA+1},()=>({tr:0,lost:0,kills:0,razed:0,blost:0,gath:0}));
   G.tl=data.tl||[];G.tlT=data.tlT===undefined?10:data.tlT;
@@ -204,10 +205,11 @@ function endGame(win){
   let sub=win?'The enemy Town Hall lies in ruins.':'Your Town Hall has fallen.';
   if(mission){
     if(win){
-      const prog=+(localStorage.getItem('tq_camp')||0);
-      if(mission.id+1>prog)localStorage.setItem('tq_camp',mission.id+1);
+      campMark(mission.id);   // the arc-aware progress set (migrates tq_camp)
+      const arcAll=MISSIONS.filter(m2=>(m2.arc||'')===(mission.arc||''));
+      const arcDone=arcAll.every(m2=>campDone().has(m2.id));
       sub='Mission complete: '+mission.name+
-        (mission.id<MISSIONS.length-1?' — the next trial awaits!':' — the campaign is won!');
+        (arcDone?' — '+(mission.arc||'the campaign')+' is won!':' — the next trial awaits!');
     }else sub='Mission failed: '+mission.name+'. Try again, my liege.';
   }
   if(REC.play)sub='Replay over — that is how the battle went.';

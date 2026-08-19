@@ -351,6 +351,20 @@ function step(dt){
   }
   // win/lose
   if(mission&&mission.win.type==='survive'&&G.t>=mission.win.time)return endGame(true);
+  // campaign-arc win types (2026-08-19): wealth, kills, escort
+  if(mission&&mission.win.type==='wealth'&&G.P[localP].g>=mission.win.n)return endGame(true);
+  if(mission&&mission.win.type==='kills'&&G.pstats&&G.pstats[localP].kills>=mission.win.n)return endGame(true);
+  if(mission&&mission.win.type==='escort'&&G.mEscort){
+    const W=G.mEscort;
+    const hero=G.units.find(u2=>u2.p===localP&&u2.type===mission.win.ut&&u2.hp>0)
+      ||G.blds.some(b2=>b2.gar&&b2.gar.some(g2=>g2.type===mission.win.ut))  // garrisoned = alive, not arrived
+      ||G.units.some(u2=>u2.gar&&u2.gar.some(g2=>g2.type===mission.win.ut));
+    if(!hero)return endGame(false);          // the one you were sworn to protect is dead
+    if(hero.x!==undefined&&Math.hypot(hero.x-W.x,hero.y-W.y)<(W.r||3))return endGame(true);
+    // a slow pulse on the destination so the player always knows the road
+    if((G.t%8)<dt){const pgs=G.pings||(G.pings=[]);
+      pgs.push({x:W.x,y:W.y,t:G.t});if(pgs.length>6)pgs.shift();}
+  }
   if(mission&&mission.win.type==='relics'){
     const dep=G.relics.filter(r=>{if(!r.mon)return false;
       const b=G.blds.find(bb=>bb.id===r.mon);return b&&b.p===localP;}).length;
