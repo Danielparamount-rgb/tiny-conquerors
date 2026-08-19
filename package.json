@@ -1,0 +1,14 @@
+{
+  "name": "tiny-conquerors-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test/determinism.mjs"
+  },
+  "devDependencies": {
+    "puppeteer": "^23.0.0"
+  },
+  "allowScripts": {
+    "puppeteer@23.11.1": true
+  }
+}

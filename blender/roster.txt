@@ -1,0 +1,8 @@
+46 units, 7 cols, reading left-to-right top-to-bottom:
+  villager, militia, spearman, pikeman, archer, crossbowman, skirmisher
+  handcannon, petard, monk, king, longbow, axeman, berserker
+  huskarl, teuton, woad, samurai, jaguar, eagle, plumed
+  chukonu, janissary, scout, knight, cataphract, mameluke, mangudai
+  missionary, ram, mangonel, scorpion, treb, bombard, fishing
+  cog, transport, galley, longboat, fireship, demo, turtle
+  cannongalleon, sheep, deer, boar

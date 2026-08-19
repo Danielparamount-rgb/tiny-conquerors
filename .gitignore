@@ -5,3 +5,14 @@ test-old.html
 # ...except the screenshots the shell page ships with (app/ is the deployed bundle)
 !app/shots/*.jpg
 relay/node_modules/
+
+# Blender unit forge: sources and scratch renders stay local.
+# app/sprites/ IS deployed (the game fetches it) so it is NOT ignored.
+blender/sheets/
+blender/blends/
+blender/out*/
+blender/roster.png
+spr-*.png
+
+# CI test harness
+node_modules/

@@ -1,7 +1,13 @@
 ﻿// Tiny Conquerors service worker - offline-capable, but never stale.
 // Bump VERSION on every deploy; old caches are purged on activate.
-const VERSION = 'tq-v61';
+const VERSION = 'tq-v63';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
+// Unit sprite sheets get their own cache that VERSION bumps do NOT purge: they
+// are ~23MB, immutable per filename, and re-downloading the lot on every deploy
+// would be brutal on a phone. Nothing here is precached - they stream in lazily
+// as unit types first appear, and the game falls back to its procedural art
+// until they land.
+const SPRITES = 'tq-sprites-v1';
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
@@ -10,7 +16,7 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys.filter(k => k !== VERSION && k !== SPRITES).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -43,6 +49,17 @@ self.addEventListener('fetch', e => {
         new Promise(r => setTimeout(() => r(null), 4000))
       ]).then(res => res || caches.match('./index.html').then(hit => hit || fetch(e.request)))
     );
+    return;
+  }
+
+  // Sprite sheets: cache-first out of the long-lived sprite cache.
+  if (e.request.url.indexOf('/sprites/') !== -1) {
+    e.respondWith(caches.open(SPRITES).then(c =>
+      c.match(e.request).then(hit => hit || fetch(e.request).then(res => {
+        if (res.ok) c.put(e.request, res.clone());
+        return res;
+      }))
+    ));
     return;
   }
 

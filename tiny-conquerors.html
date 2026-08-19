@@ -76,6 +76,31 @@
     color:var(--parch);font-size:18px;line-height:1;
     box-shadow:0 2px 4px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,230,180,.12);}
   #zoomBtns button:active{transform:translateY(1px);}
+  /* quick-chat wheel: a compact taunt grid beside the buttons, multiplayer only */
+  #chatWheel{position:absolute;top:114px;right:50px;z-index:4;display:grid;
+    grid-template-columns:repeat(2,minmax(96px,1fr));gap:5px;padding:8px;
+    background:linear-gradient(rgba(52,44,32,.97),rgba(34,28,20,.97));
+    border:2px solid #6b5330;border-radius:10px;box-shadow:0 4px 14px rgba(0,0,0,.5);}
+  #chatWheel button{padding:7px 8px;border-radius:7px;border:1px solid #6a6355;
+    background:rgba(30,26,20,.8);color:var(--parch);font:inherit;font-size:11.5px;text-align:left;}
+  #chatWheel button:active{background:rgba(90,74,40,.9);}
+  #repBar button{padding:5px 10px;border-radius:7px;border:1px solid #6a6355;
+    background:rgba(52,44,32,.9);color:var(--parch);font:inherit;font-size:12px;}
+  #repBar button.sel{border-color:var(--gold);color:var(--gold);}
+  #endTable table{border-collapse:collapse;margin:4px auto;}
+  #endTable td,#endTable th{padding:2.5px 7px;border-bottom:1px solid rgba(107,83,48,.4);text-align:right;}
+  #endTable th{color:#8a6a1a;font-weight:700;}
+  #endTable td:first-child,#endTable th:first-child{text-align:left;}
+  .setRow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:7px 0;}
+  .setRow>span{font-size:13px;}
+  .setRow .diff{margin:0;}
+  .setRow input[type=range]{width:130px;}
+  button:focus-visible{outline:2px solid var(--gold);outline-offset:1px;}
+  body.lefty #zoomBtns{right:auto;left:8px;}
+  body.lefty #minimap{right:auto;left:8px;}
+  body.lefty #chatWheel{right:auto;left:50px;}
+  body.bigui .cmd{font-size:13px;}
+  body.bigui #btnRow button.cmd{min-height:70px;}
   #boxBtn.armed{border-color:var(--gold);color:var(--gold);background:rgba(60,45,20,.9);}
   /* always-on deselect: dim when there's nothing to clear, red-hot when there is */
   #deselBtn{opacity:.4;transition:opacity .12s,border-color .12s,color .12s;}
@@ -301,9 +326,12 @@
       <button id="idleBtn" aria-label="Idle villager" title="Jump to an idle villager (.)">🧑‍🌾</button>
       <button id="deselBtn" aria-label="Deselect" title="Deselect everything (Esc)">✕</button>
       <button id="d3Btn" aria-label="Toggle 3D view" title="Switch between the 2D and 3D renderers">3D</button>
+      <button id="sprBtn" class="sel" aria-label="Toggle rendered sprites" title="Switch between pre-rendered sprites and the procedural art">✦</button>
       <button id="camBtn" aria-label="Reset camera angle" title="Reset the camera angle (R)">⟲</button>
+      <button id="chatBtn" aria-label="Quick chat" title="Send a quick message to the other players" style="display:none">💬</button>
       <button id="panelBtn" aria-label="Hide panel" title="Hide the command panel for a bigger map">▾</button>
     </div>
+    <div id="chatWheel" style="display:none" role="menu" aria-label="Quick chat"></div>
     <div id="clock" class="ovt"></div>
     <div id="feed" class="ovt"></div>
     <div id="ticker" class="ovt"><div id="army"></div><div id="score"></div></div>
@@ -379,6 +407,7 @@
     <div class="diff">
       <button data-tb="0" class="sel">Standard pace</button>
       <button data-tb="1">⚡ Turbo</button>
+      <button data-tb="2">🔥 Blitz</button>
     </div>
     <div class="diff">
       <button data-rg="0" class="sel">Conquest</button>
@@ -389,7 +418,14 @@
     <button class="bigbtn alt" id="campBtn">📜 &nbsp;Campaign</button>
     <button class="bigbtn alt" id="mpBtn">🤝 &nbsp;Play with Friends</button>
     <button class="bigbtn alt" id="contBtn" style="display:none">▶ &nbsp;Continue saved game</button>
+    <button class="bigbtn alt" id="recoverBtn" style="display:none">🛟 &nbsp;Recover interrupted game</button>
+    <div style="display:flex;gap:8px">
+      <button class="bigbtn alt" id="replaysBtn" style="flex:1">🎬 &nbsp;Replays</button>
+      <button class="bigbtn alt" id="setBtn" style="flex:1">⚙ &nbsp;Settings</button>
+    </div>
     <div class="rule"></div>
+    <details id="record"><summary>🏛 &nbsp;My record</summary><div id="recordBody" class="sub" style="text-align:left"></div></details>
+    <details id="whatsnew"><summary>🆕 &nbsp;What's new<b id="newDot" style="display:none;color:#c9a227"> ●</b></summary><div id="whatsnewBody" class="sub" style="text-align:left"></div></details>
     <details id="howto"><summary>📖 &nbsp;How to play</summary>
     <p><b>Touch controls</b><br>
     • <b>Tap</b> a villager or building to select it — commands appear below.<br>
@@ -401,6 +437,7 @@
     <p><b>New:</b> tap your Town Hall, Tower or Castle with units selected to <b>garrison</b> them inside (each adds arrow damage — ungarrison from the building's panel). Soldiers have an <b>⚔ Attack-move</b> button: they'll fight their way to wherever you point. Save anytime from the pause menu, and try the <b>📜 Campaign</b> — now eight missions, ending with a siege train, a war fought entirely by ship, and a Wonder to defend against two warlords at once.</p>
     <p><b>The hunt:</b> the land is stocked. <b>Sheep</b> wander near every town and belong to whoever walks up to them — herd them home with a Scout and slaughter them at your leisure (100 food each, and they cost no population). <b>Deer</b> bolt the moment you shoot at them. <b>Wild Boar</b> are worth 340 food and will gore the hunter who wakes them, so send a crowd, not a man. A slain beast leaves a carcass your villagers butcher like a berry bush. Goths hunt boar hard and carry more meat, Mongols butcher half again as fast, and no one can steal a Celt's flock.</p>
     <p><b>Also new:</b> upgrade to <b>Stone Walls</b> in the Castle Age, trade at the <b>Market</b>, and build a <b>Monastery</b> — its Monks heal your troops and can carry the golden <b>relics</b> scattered around the map back home for a steady gold income. On a keyboard, Ctrl+1–9 sets control groups.</p>
+    <p><b>Command like a king:</b> select a Barracks (or any production building) and tap the ground to plant a <b>rally flag</b> — tap a tree, gold pile or farm and new villagers walk straight to work. Soldiers have <b>stances</b> (aggressive, defensive, stand ground, no attack), a <b>⇄ Patrol</b> button, and <b>formations</b>. On a keyboard, <b>shift-click</b> queues waypoints and shift-clicking a train button queues five at once (on a phone, <b>hold</b> the button). The Market can send <b>tribute</b> to an ally, and in multiplayer the 💬 button sends quick messages while a double-tap on the minimap <b>pings</b> your team. After every battle: a full <b>summary with score graphs</b>, a <b>rematch</b> button, and a <b>replay</b> you can save and watch back at up to 16× from the 🎬 menu.</p>
     <p><b>The Conquerors update:</b> all <b>18 civilizations</b>, each with true bonuses, a unique unit, and a <b>unique technology</b> researched at the Castle. Units now upgrade through their lines as you age — Militia become Champions, Scouts become Hussars. Garrison infantry <b>inside Battering Rams</b> to speed and strengthen them, and blow gates open with the <b>Petard</b>. The Aztecs and Mayans field fleet <b>Eagle Warriors</b> instead of cavalry, and the Huns never build a single house. Raise a <b>Blacksmith</b> to forge attack and armor upgrades through the ages, and research <b>Parthian Tactics</b> at the Archery Range to harden your horse archers. Build a <b>Dock</b> on the riverbank for Fishing Ships, Trade Cogs, Transports, and war Galleys — Vikings launch <b>Longboats</b> and Koreans the armored <b>Turtle Ship</b>.</p>
     <div class="rule"></div>
     <p><b>Keyboard (when played on a computer)</b><br>
@@ -415,8 +452,38 @@
     <h1 id="endTitle">Victory</h1>
     <p class="sub" id="endSub"></p>
     <p id="endStats" style="text-align:center"></p>
+    <canvas id="endGraph" width="440" height="150" style="width:100%;max-width:440px;display:block;margin:6px auto;border-radius:8px" aria-label="Score over time"></canvas>
+    <div id="endTable" style="font-size:11.5px;overflow-x:auto"></div>
     <button class="bigbtn" id="againBtn">Play Again</button>
+    <button class="bigbtn alt" id="rematchBtn">⚔ &nbsp;Rematch — same foes</button>
+    <button class="bigbtn alt" id="saveRepBtn">🎬 &nbsp;Save replay</button>
   </div>
+</div>
+
+<div class="overlay" id="replayOverlay" style="display:none">
+  <div class="scroll">
+    <h1 style="font-size:24px">Replays</h1>
+    <p class="sub">Recorded battles — watch them back at speed</p>
+    <div id="replayList"></div>
+    <button class="bigbtn alt" id="replayBack">← Back</button>
+  </div>
+</div>
+
+<div class="overlay" id="setOverlay" style="display:none" role="dialog" aria-label="Settings">
+  <div class="scroll">
+    <h1 style="font-size:24px">Settings</h1>
+    <div id="setList"></div>
+    <button class="bigbtn alt" id="setBack">← Back</button>
+  </div>
+</div>
+
+<div id="repBar" style="display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:8px;z-index:9;
+  gap:6px;padding:7px 10px;background:rgba(30,24,16,.94);border:2px solid #6b5330;border-radius:10px;align-items:center">
+  <b style="color:#e8d9ad;font-size:12px">REPLAY</b>
+  <button class="repSpd" data-s="1">1×</button>
+  <button class="repSpd" data-s="4">4×</button>
+  <button class="repSpd" data-s="16">16×</button>
+  <button id="repExit">Exit</button>
 </div>
 
 <div class="overlay" id="menuOverlay" style="display:none">
@@ -424,6 +491,7 @@
     <h1 style="font-size:22px">Paused</h1>
     <button class="bigbtn" id="resumeBtn">Resume</button>
     <button class="bigbtn alt" id="saveBtn">💾 Save Game</button>
+    <button class="bigbtn alt" id="menuSetBtn">⚙ Settings</button>
     <button class="bigbtn alt" id="restartBtn">Restart Battle</button>
   </div>
 </div>
@@ -484,10 +552,12 @@
         <div class="diff">
           <button data-mt="0" class="sel">Free-for-all</button>
           <button data-mt="1">Two teams</button>
+          <button data-mt="2">🤝 Co-op vs AI</button>
         </div>
         <div class="diff">
           <button data-mb="0" class="sel">Standard</button>
           <button data-mb="1">⚡ Turbo</button>
+          <button data-mb="2">🔥 Blitz</button>
         </div>
         <div class="diff">
           <button data-mr="0" class="sel">Conquest</button>
@@ -524,6 +594,31 @@
 
 <script>
 'use strict';
+/* ================= player options (persisted, read-before-anything) ========
+   OPT holds every toggle the Settings panel offers. Missing keys mean "the
+   default": haptics on, coach on, weather on, telemetry OFF (opt-in). */
+const OPT=(()=>{try{return Object.assign({},JSON.parse(localStorage.getItem('tq_opts')||'{}'));}catch(e){return{};}})();
+function saveOpts(){try{localStorage.setItem('tq_opts',JSON.stringify(OPT));}catch(e){}}
+function buzz(p){if(OPT.haptics!==false&&navigator.vibrate)try{navigator.vibrate(p);}catch(e){}}
+/* tiny corner chip for background asset downloads — silence reads as broken */
+function dlChip(txt){
+  let c=document.getElementById('dlChip');
+  if(!txt){if(c)c.style.display='none';return;}
+  if(!c){
+    c=document.createElement('div');c.id='dlChip';
+    c.style.cssText='position:fixed;left:8px;bottom:8px;z-index:9;padding:5px 10px;'
+      +'background:rgba(30,24,16,.9);border:1px solid #6b5330;border-radius:8px;'
+      +'color:#cbb98a;font:11.5px system-ui;pointer-events:none';
+    document.body.appendChild(c);
+  }
+  c.style.display='';c.textContent=txt;
+}
+try{document.documentElement.lang=document.documentElement.lang||'en';}catch(e){}
+/* Localization scaffold: T('key','English fallback'). A translation ships as a
+   replacement STR table; untranslated keys fall back to the inline English, so
+   extraction can proceed string by string without ever breaking the page. */
+let STR={};
+function T(key,fallback){return STR[key]!==undefined?STR[key]:fallback;}
 /* ================= constants ================= */
 let MAP=64; const TILE=26;
 let START=[[8,53],[53,9],[10,10]];
@@ -768,6 +863,8 @@ function trainTimeOf(b,ut){
   if(UNITS[ut].ship&&ecoTier(b.p,'shipw'))t*=.85;           // 1.0B: Shipwright speeds the slips
   // Turbo: military trains 2.5x faster; economy units keep their pace (WHATSNEW)
   if(turboSel&&ut!=='villager'&&!UNITS[ut].fisher&&!UNITS[ut].passive)t/=2.5;
+  // Blitz (~10-minute matches): EVERYTHING trains faster, villagers included
+  if(turboSel===2)t*=.7;
   return t;
 }
 /* Blacksmith upgrade lines (manual pp. 46-47). Armor becomes flat damage
@@ -1145,7 +1242,12 @@ function newGame(){
      wallMap:{},gateMap:{},wallA:null,pendLine:null,
      P,ais,teams,relics:[],groups:{},
      sel:[],placing:null,pend:null,amode:false,cam:{x:0,y:0,z:1},
-     stats:{trained:0,razed:0},lastRaidToast:-99};
+     stats:{trained:0,razed:0},lastRaidToast:-99,
+     // per-player tallies + score timeline for the post-game summary.
+     // Deterministic (every peer counts the same events), never hashed.
+     pstats:Array.from({length:GAIA+1},()=>({tr:0,lost:0,kills:0,razed:0,blost:0,gath:0})),
+     tl:[],tlT:10,
+     ageAt:Array.from({length:GAIA+1},()=>[0,0,0,0])};
   G.vis=new Uint8Array(MAP*MAP);G.visT=0;
   // Regicide is a match property fixed at start: kings spawn in the start
   // loop and the win check switches to king survival. Skirmish-only; the
@@ -1768,11 +1870,13 @@ function latShove(u,dx,dy,mag){
 }
 /* ================= commands ================= */
 function cmdMove(u,tx,ty){u.state='move';u.target=null;u.resKey=null;u.farm=null;u.am=null;
+  u.wq=null;u.pat=null; // a fresh order wipes queued waypoints and any patrol beat
   u.setup=null; // a moving trebuchet packs its arm away
   u.path=uPath(u,tx,ty,u.p)||[];}
 function cmdAmove(u,tx,ty){
   if(u.type==='villager'||UNITS[u.type].monk)return cmdMove(u,tx,ty);
   u.state='amove';u.am={x:tx,y:ty};u.target=null;u.resKey=null;u.farm=null;u.scanT=0;
+  u.wq=null;u.pat=null;
   u.path=uPath(u,tx,ty,u.p)||[];}
 function cmdGarrison(u,b){
   if(u.type==='ram')return;
@@ -1783,12 +1887,21 @@ function cmdGarrisonRam(u,carrier){ // infantry ride rams; anyone boards transpo
   if(carrier.type==='ram'&&!INF.has(u.type))return;
   u.state='toGarU';u.garU=carrier.id;u.target=null;u.resKey=null;u.farm=null;u.am=null;
   u.path=uPath(u,carrier.x,carrier.y,u.p)||[];}
-function groupDest(n,i,tx,ty){
-  // spread a group into a loose grid instead of stacking on one tile
+function groupDest(n,i,tx,ty,f){
+  // spread a group into a formation instead of stacking on one tile.
+  // f: 0 box (default — the original grid), 1 line abreast, 2 loose, 3 column.
+  // The formation id travels IN the command so every lockstep peer spreads
+  // the same group the same way.
   if(n===1)return[tx,ty];
-  const cols=Math.ceil(Math.sqrt(n)),rows=Math.ceil(n/cols);
-  let x=Math.round(tx+((i%cols)-(cols-1)/2)*1.4);
-  let y=Math.round(ty+(Math.floor(i/cols)-(rows-1)/2)*1.4);
+  f=f|0;
+  let cols,sp=1.4;
+  if(f===1){cols=Math.min(n,10);sp=1.15;}
+  else if(f===2){cols=Math.ceil(Math.sqrt(n));sp=2.4;}
+  else if(f===3){cols=2;sp=1.15;}
+  else cols=Math.ceil(Math.sqrt(n));
+  const rows=Math.ceil(n/cols);
+  let x=Math.round(tx+((i%cols)-(cols-1)/2)*sp);
+  let y=Math.round(ty+(Math.floor(i/cols)-(rows-1)/2)*sp);
   x=Math.max(0,Math.min(MAP-1,x));y=Math.max(0,Math.min(MAP-1,y));
   if(!passable(x,y)){const a=nearFree(x,y,3);if(a){x=a.x;y=a.y;}else{x=tx;y=ty;}}
   return[x,y];}
@@ -1889,6 +2002,7 @@ function resetNet(){
   netSendFrom=0;netReplay=null;netReplaying=false;
 }
 function issue(k,d){
+  if(REC.play)return null;      // a replay is watched, not commanded
   const c=Object.assign({k,p:localP},d);
   cmdQ.push(c);
   if(!netMode)drainCmds();      // solo: no round trip, apply at once
@@ -1900,7 +2014,68 @@ function drainCmds(){
   // execute every local order twice, and only on this machine.
   if(netMode||!cmdQ.length)return;
   const q=cmdQ;cmdQ=[];
-  for(const c of q)applyCmd(c);
+  for(const c of q){
+    // replay recorder: every solo order, stamped with the tick it landed on.
+    // Same determinism multiplayer rests on — seed + orders = the whole match.
+    if(REC.rec&&!REC.play)REC.rec.cmds.push([Math.round(G.t/.05),c]);
+    applyCmd(c);
+  }
+}
+/* ================= replays ==================================================
+   A replay is the match seed + settings + the tick-stamped command stream —
+   the exact trick the multiplayer reconnect already uses (the relay journals
+   commands and rebuilds the match by replaying them). Solo games record
+   automatically; "Save replay" on the end screen keeps the last one. */
+let REC={rec:null,play:null,idx:0,speed:1,last:null};
+function recBegin(){
+  if(netMode||REC.play){REC.rec=null;return;}
+  REC.rec={v:1,seed:gameSeed,cmds:[],
+    cfg:{m:mapSel,d:diffSel,tb:turboSel,t:teamSel,n:playersSel,c:civSel,
+         rg:regicideSel,mi:mission?mission.id:null}};
+}
+function recFinish(){
+  if(!REC.rec||REC.play)return;
+  REC.rec.endT=Math.round(G.t);
+  REC.last=REC.rec;REC.rec=null;
+}
+function replayList(){
+  try{return JSON.parse(localStorage.getItem('tq_replays')||'[]');}catch(e){return[];}
+}
+function replaySave(r){
+  if(!r)return false;
+  try{
+    const list=replayList();
+    const d=new Date();
+    r.name=(d.getMonth()+1)+'/'+d.getDate()+' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)
+      +' — '+CIVS[r.cfg.c].name+', '+MAPS[r.cfg.m].name+', '
+      +Math.floor((r.endT||0)/60)+'m';
+    list.unshift(r);
+    while(list.length>6)list.pop();          // keep the six most recent
+    localStorage.setItem('tq_replays',JSON.stringify(list));
+    return true;
+  }catch(e){return false;}                   // quota — an old long replay can blow it
+}
+function playReplay(r){
+  resetNet();
+  REC.rec=null;REC.play=r;REC.idx=0;REC.speed=1;
+  mission=r.cfg.mi!=null?(MISSIONS.find(m=>m.id===r.cfg.mi)||null):null;
+  mapSel=r.cfg.m;diffSel=r.cfg.d;turboSel=r.cfg.tb;teamSel=r.cfg.t;
+  playersSel=r.cfg.n;civSel=r.cfg.c;regicideSel=r.cfg.rg;
+  pendingSeed=r.seed>>>0;
+  document.getElementById('startOverlay').style.display='none';
+  document.getElementById('replayOverlay').style.display='none';
+  initAudio();if(AC&&AC.state==='suspended')AC.resume();
+  begin();
+  const rb=document.getElementById('repBar');if(rb)rb.style.display='flex';
+  toast('Replay — watching a recorded battle');
+}
+function exitReplay(){
+  REC.play=null;REC.idx=0;
+  const rb=document.getElementById('repBar');if(rb)rb.style.display='none';
+  if(G)G.over=true;
+  document.getElementById('endOverlay').style.display='none';
+  document.getElementById('startOverlay').style.display='flex';
+  updateContBtn();
 }
 function takeCmds(){const q=cmdQ;cmdQ=[];return q;}
 function applyCmd(c){const h=CMDS[c.k];if(h)h(c);}
@@ -1929,16 +2104,21 @@ function cmdBld(c,id){
 }
 const CMDS={
   move(c){const us=cmdUnits(c),n=us.length;
-    for(let i=0;i<n;i++){const d=groupDest(n,i,c.x,c.y);cmdMove(us[i],d[0],d[1]);}},
+    for(let i=0;i<n;i++){const u=us[i],d=groupDest(n,i,c.x,c.y,c.f);
+      // shift-queue: append a waypoint to a unit already walking a route
+      if(c.sh&&(u.state==='move'||(u.wq&&u.wq.length))){
+        if(!u.wq)u.wq=[];
+        if(u.wq.length<12)u.wq.push([d[0],d[1]]);
+      }else cmdMove(u,d[0],d[1]);}},
   amove(c){const us=cmdUnits(c),n=us.length;
-    for(let i=0;i<n;i++){const d=groupDest(n,i,c.x,c.y);cmdAmove(us[i],d[0],d[1]);}},
+    for(let i=0;i<n;i++){const d=groupDest(n,i,c.x,c.y,c.f);cmdAmove(us[i],d[0],d[1]);}},
   stop(c){for(const u of cmdUnits(c)){u.state='idle';u.path=null;u.target=null;
-    u.resKey=null;u.farm=null;u.am=null;u.spd=0;u.vx=0;u.vy=0;}},
+    u.resKey=null;u.farm=null;u.am=null;u.wq=null;u.pat=null;u.spd=0;u.vx=0;u.vy=0;}},
   attack(c){
     const t=c.bld?G.blds.find(b=>b.id===c.id):G.units.find(u=>u.id===c.id);
     // your own flock is a legitimate target — that is what a sheep is FOR
     if(!t||t.hp<=0||(allied(t.p,c.p)&&!isAnimal(t)))return;
-    for(const u of cmdUnits(c))cmdAttack(u,t,!!c.bld);},
+    for(const u of cmdUnits(c)){cmdAttack(u,t,!!c.bld);u.autoTgt=0;u.pat=null;u.wq=null;}},
   gather(c){if(!G.res[c.key])return;for(const u of cmdUnits(c))cmdGather(u,c.key);},
   farm(c){const b=cmdBld(c);if(!b||b.type!=='farm'||!b.built)return;
     for(const u of cmdUnits(c))cmdFarm(u,b);},
@@ -2090,7 +2270,75 @@ const CMDS={
       if(u&&u.p===c.p){u.hp=0;continue;}
       const b=G.blds.find(x=>x.id===id);
       if(b&&b.p===c.p&&b.type!=='tc')b.hp=0;}},
+  /* Rally point on a production building. New units walk (or gather/farm) to
+     it the moment they step out of the door. Lives on the building record, so
+     it serializes with saves; set only through this handler, so lockstep peers
+     always agree on it. */
+  rally(c){
+    const b=cmdBld(c);if(!b||!b.built)return;
+    if(!trainsFor(b,c.p).length)return;
+    if(c.off){b.rally=null;if(b.p===localP)toast('Rally point cleared');return;}
+    if(!(c.x>=0&&c.y>=0&&c.x<MAP&&c.y<MAP))return;
+    // NB the resource key travels as c.rk — c.k is the command KIND (issue()
+    // stamps it), and a field called k here would overwrite it in transit.
+    b.rally={x:c.x,y:c.y,k:(c.rk&&G.res[c.rk])?c.rk:null,fid:c.fid||null};
+    if(b.p===localP){snd('click');toast(b.rally.k?'Rally point set — new villagers will gather there'
+      :b.rally.fid?'Rally point set — new villagers will work that farm':'Rally point set');}},
+  /* Unit stances: 0 aggressive (default — exactly the old behaviour),
+     1 defensive (short leash, returns to post), 2 stand ground, 3 no attack. */
+  stance(c){
+    const s=c.s|0;if(s<0||s>3)return;
+    for(const u of cmdUnits(c)){
+      if(u.type==='villager'||isAnimal(u))continue;
+      u.stance=s;u.post=null;
+      if(s===3&&u.state==='attack'&&u.autoTgt){u.state='idle';u.target=null;u.path=null;}
+    }
+    if(c.p===localP)refreshPanel();},
+  /* Patrol between where the unit stands and the tapped point, engaging
+     whatever it meets (the attack case resumes the beat when the target
+     dies, exactly like attack-move does). */
+  patrol(c){
+    const us=cmdUnits(c),n=us.length;
+    for(let i=0;i<n;i++){const u=us[i];
+      if(UNITS[u.type].passive||isAnimal(u))continue;
+      const d=groupDest(n,i,c.x,c.y,c.f);
+      u.pat={ax:Math.round(u.x),ay:Math.round(u.y),bx:d[0],by:d[1],leg:1};
+      u.state='patrol';u.target=null;u.resKey=null;u.farm=null;u.am=null;u.setup=null;u.scanT=0;
+      u.path=uPath(u,d[0],d[1],u.p)||[];}},
+  /* Tribute: send 100 of a resource to another lord for a 25% carrying fee
+     (the manual's default rate). Needs a Market — that is who moves the goods. */
+  tribute(c){
+    const p=c.p,to=c.to|0;
+    if(to===p||to<0||to>=NP||!G.P[to])return;
+    if(!G.blds.some(b=>b.p===p&&b.type==='market'&&b.built))return;
+    if(!'fwg'.includes(c.give))return;
+    const need=125;                    // 100 delivered + 25 fee
+    if(G.P[p][c.give]<need)return;
+    G.P[p][c.give]-=need;G.P[to][c.give]+=100;
+    const RN={f:'food',w:'wood',g:'gold'};
+    if(p===localP){snd('done');updateTop();feed('Tribute sent — 100 '+RN[c.give]);}
+    if(to===localP){snd('done');updateTop();
+      const who=netPlayers.find(pp=>pp.seat===p);
+      feed((who?who.name:CIVS[G.P[p].civ].name)+' sends you 100 '+RN[c.give]);}},
+  /* Map ping — travels through the command layer so allies on other machines
+     see it too. Drawn only for the sender's team. */
+  ping(c){
+    if(!(c.x>=0&&c.y>=0&&c.x<MAP&&c.y<MAP))return;
+    const pgs=G.pings||(G.pings=[]);
+    pgs.push({x:c.x,y:c.y,t:G.t,p:c.p});if(pgs.length>6)pgs.shift();
+    if(allied(c.p,localP)&&c.p!==localP){
+      const who=netPlayers.find(pp=>pp.seat===c.p);
+      feed((who?who.name:CIVS[G.P[c.p].civ].name)+' pings the map');snd('sel');}},
+  /* Quick chat: a taunt id, not free text — nothing to type on a phone and
+     nothing to moderate. Rides the same lockstep pipe as every other order. */
+  taunt(c){
+    const n=c.n|0;if(n<0||n>=TAUNTS.length)return;
+    const who=netPlayers.find(pp=>pp.seat===c.p);
+    feed((who?who.name:CIVS[G.P[c.p].civ].name)+': '+TAUNTS[n]);
+    if(c.p!==localP)snd('sel');},
 };
+const TAUNTS=['Yes','No','Attack now!','Defend the base!','I need food','I need wood',
+  'I need gold','Building a Wonder','Well played!','Help me!','On my way','Wait for my signal'];
 /* ===================== lockstep networking (steps 3-5) =====================
    Peers exchange COMMANDS, never state. Every machine runs the identical
    deterministic simulation, so if they agree on which commands happened on
@@ -2240,6 +2488,9 @@ function netBegin(m){
     netTeams=[];
     const half=Math.ceil(NP/2);
     for(let q=0;q<NP;q++)netTeams[q]=q<half?0:1;
+  }else if((cfg.team|0)===2){ // Co-op vs AI: every human on one side, the computers on the other
+    netTeams=[];
+    for(let q=0;q<NP;q++)netTeams[q]=humanSlots.includes(q)?0:1;
   }
   mission=null;
   netMode=true;
@@ -2279,6 +2530,9 @@ function netRejoin(m){
   if((cfg.team|0)===1){
     netTeams=[];const half=Math.ceil(NP/2);
     for(let q=0;q<NP;q++)netTeams[q]=q<half?0:1;
+  }else if((cfg.team|0)===2){ // Co-op vs AI — same rule as the start applier
+    netTeams=[];
+    for(let q=0;q<NP;q++)netTeams[q]=humanSlots.includes(q)?0:1;
   }
   mission=null;netMode=true;
   netTurn=0;netIn=new Map();netSent=-1;netStall=0;netStallSeat=-1;
@@ -2555,6 +2809,7 @@ function ageCostOf(p,age){
   const cv=civOf(p),base=AGE_COST[age];if(!base)return base;let m=1;
   if(cv.techDisc)m=cv.techDisc[age];              // Chinese: ages cost less
   if(age===3&&cv.impDisc)m=cv.impDisc;            // Byzantines: cheap Imperial
+  if(turboSel===2)m*=.6;                          // Blitz: ages come cheap and fast
   if(m===1)return base;
   const c={};for(const k in base)c[k]=Math.round(base[k]*m);return c;
 }
@@ -2578,10 +2833,35 @@ function costStr(c){const parts=[];if(c.f)parts.push(c.f+'🍖'.replace('🍖','
 
 /* ================= update loop ================= */
 function step(dt){
+  // Replay playback injects the recorded orders for this tick BEFORE the
+  // normal drain, at the same boundary solo play applied them originally.
+  if(REC.play){
+    const tk=Math.round(G.t/.05);
+    const cs=REC.play.cmds;
+    while(REC.idx<cs.length&&cs[REC.idx][0]<=tk){applyCmd(cs[REC.idx][1]);REC.idx++;}
+    if(REC.play.endT&&G.t>=REC.play.endT&&!G.over){
+      G.paused=true;toast('Replay finished');}
+  }
   // Player orders land at one fixed point in the tick. Solo play has already
   // drained them at issue time; a lockstep match fills the queue here instead.
   drainCmds();
   G.t+=dt;
+  // Post-game timeline: one score sample per player every 10 game-seconds.
+  // Deterministic (pure function of sim state), never hashed, saved with v2.
+  if(G.tl){
+    G.tlT=(G.tlT===undefined?10:G.tlT)-dt;
+    if(G.tlT<=0){G.tlT+=10;
+      const cv=c=>(c.f||0)+(c.w||0)+(c.g||0);
+      const row=[];
+      for(let p=0;p<NP;p++){
+        let s=Math.floor(G.P[p].f+G.P[p].w+G.P[p].g);
+        for(const u of G.units)if(u.p===p&&u.hp>0)s+=cv(UNITS[u.type].cost);
+        for(const b of G.blds)if(b.p===p&&b.built)s+=cv(BLDS[b.type].cost);
+        row.push(s);}
+      G.tl.push(row);
+      if(G.tl.length>1080)G.tl.shift();   // cap at 3 hours of samples
+    }
+  }
   // keep the inspect panel / selection card HP live without full rebuilds
   if(G.inspect&&!G.sel.length){
     G.inspT=(G.inspT||0)+dt;
@@ -2604,8 +2884,9 @@ function step(dt){
         b.qt+=dt;
         const ut=b.queue[0];
         if(ut==='AGE'){
-          if(b.qt>=AGE_TIME[G.P[b.p].age+1]){b.queue.shift();b.qt=0;G.P[b.p].age++;G.P[b.p].aging=false;
-            if(b.p===localP){toast('You have advanced to the '+AGES[G.P[localP].age]+'!');
+          if(b.qt>=AGE_TIME[G.P[b.p].age+1]*(turboSel===2?.5:1)){b.queue.shift();b.qt=0;G.P[b.p].age++;G.P[b.p].aging=false;
+            if(G.ageAt)G.ageAt[b.p][G.P[b.p].age]=Math.round(G.t);
+            if(b.p===localP){toast('You have advanced to the '+AGES[G.P[localP].age]+'!');buzz(25);
               feed('You have advanced to the '+AGES[G.P[localP].age]);snd('age');updateTop();refreshPanel();
               G.ageFx=1.4; // golden bloom over the new age
               const ac=bldCenter(b);
@@ -2618,8 +2899,17 @@ function step(dt){
             ?nearFree(b.tx+1,b.ty+1,5,true)   // ships launch onto open water
             :nearFree(b.tx+Math.floor(b.size/2),b.ty+b.size,4))||{x:b.tx,y:b.ty+b.size};
           const u=addUnit(b.p,ut,spot.x,spot.y);
+          if(G.pstats)G.pstats[b.p].tr++;
           if(b.p===localP&&ut!=='villager')G.stats.trained++;
           if(b.p>0&&ut!=='villager')aiJoinDefense(u);
+          if(b.rally){ // walk to the flag — or straight to work if it sits on a resource/farm
+            const R=b.rally,rr=R.k?G.res[R.k]:null;
+            if(rr&&(ut==='villager'||(UNITS[ut].fisher&&rr.type==='fish')))cmdGather(u,R.k);
+            else if(R.fid&&ut==='villager'){
+              const fb=G.blds.find(x=>x.id===R.fid&&x.built&&x.type==='farm');
+              if(fb)cmdFarm(u,fb);else cmdMove(u,R.x,R.y);
+            }else cmdMove(u,R.x,R.y);
+          }
           if(b.p===localP){snd('train');refreshPanel();feed(unitName(ut,localP)+' Created');}
         }
       }
@@ -2761,6 +3051,7 @@ function step(dt){
   // dead cleanup
   for(let i=G.units.length-1;i>=0;i--)if(G.units[i].hp<=0){
     const u=G.units[i];G.sel=G.sel.filter(id=>id!==u.id);
+    if(!isAnimal(u)&&G.pstats)G.pstats[u.p].lost++;
     if(isAnimal(u))dropCarcass(u); // the kill becomes food on the ground
     if(u.relic){const r=G.relics.find(x=>x.id===u.relic);
       if(r){r.held=null;r.x=Math.max(1,Math.min(MAP-2,u.x|0));r.y=Math.max(1,Math.min(MAP-2,u.y|0));}}
@@ -2870,6 +3161,7 @@ function ejectGarrison(b){
 }
 function removeBld(i){
   const b=G.blds[i];
+  if(b.built&&G.pstats)G.pstats[b.p].blost++;
   ejectGarrison(b);
   for(const r of G.relics)if(r.mon===b.id)r.mon=null; // relics tumble out of a razed monastery
   if(b.built&&!BLDS[b.type].farm){ // collapse into rubble under a dust burst
@@ -3031,7 +3323,12 @@ function dealDamage(hit,amt,fromP,ranged){
     amt=Math.max(1,Math.round(amt*UNITS[hit.ent.type].arrowRes)); // Huskarl .5, Eagle .7
   if(!hit.bld&&UNITS[hit.ent.type])
     amt=Math.max(1,amt-bsArmorOf(hit.ent)); // blacksmith armor: flat reduction
+  const wasAlive=hit.ent.hp>0;
   hit.ent.hp-=amt;hit.ent.flash=.16;
+  if(wasAlive&&hit.ent.hp<=0&&fromP!==undefined&&fromP!==GAIA&&G.pstats&&hit.ent.p!==fromP){
+    if(hit.bld)G.pstats[fromP].razed++;
+    else if(!isAnimal(hit.ent))G.pstats[fromP].kills++;
+  }
   const hx=hit.bld?bldCenter(hit.ent).x:hit.ent.x,hy=hit.bld?bldCenter(hit.ent).y:hit.ent.y;
   if(fromP!==localP&&hit.ent.p===localP){ // minimap attack ping (separate from the toast throttle)
     const pgs=G.pings||(G.pings=[]);
@@ -3044,7 +3341,7 @@ function dealDamage(hit,amt,fromP,ranged){
     life:.28,max:.28,r:3,kind:'spark'});
   if(fromP!==localP&&hit.ent.p===localP&&G.t-G.lastRaidToast>18){G.lastRaidToast=G.t;
     if(fromP===GAIA)feed('A wild boar has turned on your hunters!',true);
-    else{feed('Warning! You are being attacked by the '+CIVS[G.P[fromP].civ].name+'!',true);snd('horn');}}
+    else{feed('Warning! You are being attacked by the '+CIVS[G.P[fromP].civ].name+'!',true);snd('horn');buzz([60,40,60]);}}
 }
 function updateUnit(u,dt){
   const d=unitDef(u);u.cd-=dt;
@@ -3145,9 +3442,15 @@ function updateUnit(u,dt){
           if(home&&far){u.state='tradeOut';u.tradeA=home.id;u.tradeB=far.id;
             const c=bldCenter(far);u.path=uPath(u,c.x,c.y)||[];}
         }
-      }else if(u.type!=='villager'&&!d.passive&&!d.fisher){
-        const e=nearestEnemy(u.p,u.x,u.y,5,false);
-        if(e)cmdAttack(u,e.ent,e.bld);
+      }else if(u.type!=='villager'&&!d.passive&&!d.fisher&&(u.stance|0)!==3){
+        // stances: stand-ground only acquires what it can hit from where it
+        // stands; defensive remembers its post so it can walk back afterwards.
+        const stc=u.stance|0;
+        const e=nearestEnemy(u.p,u.x,u.y,stc===2?Math.max(rangeOf(u),1.4):5,false);
+        if(e){
+          if(stc===1&&!u.post)u.post={x:u.x,y:u.y};
+          cmdAttack(u,e.ent,e.bld);u.autoTgt=1;
+        }
       }
       break;}
     case 'tradeOut':{
@@ -3236,15 +3539,38 @@ function updateUnit(u,dt){
         if(b.p===localP){toast('Relic enshrined — it generates gold');snd('done');}
       }else if(done){u.path=uPath(u,c.x,c.y,u.p)||[];if(!u.path.length)u.state='idle';}
       break;}
-    case 'move':if(followPath(u,dt))u.state='idle';break;
+    case 'move':if(followPath(u,dt)){
+      if(u.wq&&u.wq.length){ // next queued waypoint — path directly, keep the queue
+        const w=u.wq.shift();
+        u.path=uPath(u,w[0],w[1],u.p)||[];
+        if(!u.path.length){u.wq=null;u.state='idle';}
+      }else{u.wq=null;u.state='idle';}}
+      break;
     case 'amove':{
       u.scanT=(u.scanT||0)-dt;
       if(u.scanT<=0){u.scanT=.4;
         const e=nearestEnemy(u.p,u.x,u.y,4.5,false);
         if(e&&!(u.type==='ram'&&!e.bld)){
-          const am=u.am;cmdAttack(u,e.ent,e.bld);u.am=am;break;}
+          const am=u.am;cmdAttack(u,e.ent,e.bld);u.am=am;u.autoTgt=1;break;}
       }
       if(followPath(u,dt)){u.state='idle';u.am=null;}
+      break;}
+    case 'patrol':{
+      if(!u.pat){u.state='idle';break;}
+      if((u.stance|0)!==3&&!UNITS[u.type].monk){
+        u.scanT=(u.scanT||0)-dt;
+        if(u.scanT<=0){u.scanT=.4;
+          const e=nearestEnemy(u.p,u.x,u.y,4.5,false);
+          if(e&&!(u.type==='ram'&&!e.bld)){
+            cmdAttack(u,e.ent,e.bld);u.autoTgt=1;break;} // u.pat survives — attack resumes it
+        }
+      }
+      if(followPath(u,dt)){ // reached one end of the beat — turn around
+        u.pat.leg=u.pat.leg?0:1;
+        const px2=u.pat.leg?u.pat.bx:u.pat.ax,py2=u.pat.leg?u.pat.by:u.pat.ay;
+        u.path=uPath(u,px2,py2,u.p)||[];
+        if(!u.path.length){u.state='idle';u.pat=null;}
+      }
       break;}
     case 'toGar':{
       const b=G.blds.find(x=>x.id===u.garB);
@@ -3331,6 +3657,7 @@ function updateUnit(u,dt){
         if(Math.hypot(c.x-u.x,c.y-u.y)<b.size*.5+1.7){
           if(u.carryType){
             G.P[u.p][u.carryType[0]]+=u.carry;
+            if(G.pstats)G.pstats[u.p].gath+=u.carry;
             if(u.p===localP&&tileVis(u.x,u.y)) // floating tally over the drop-off
               G.fx.push({x:u.x,y:u.y-.6,vx:0,vy:-1.1,life:1,max:1,r:0,kind:'text',
                 txt:'+'+Math.round(u.carry),col:RES_COL[u.carryType]||'#f0e29a'});
@@ -3366,7 +3693,7 @@ function updateUnit(u,dt){
       b.prog+=bRate;b.hp=Math.min(b.maxhp,b.hp+b.maxhp*bRate/def.bt);
       if(b.prog>=def.bt){b.built=true;b.hp=b.maxhp;b.pendCost=null;
         if(!def.thin&&b.type!=='farm'&&b.type!=='dock')stampWorn(b);
-        if(b.p===localP&&!def.thin){feed('— '+def.name+' Built —');snd('done');refreshPanel();}
+        if(b.p===localP&&!def.thin){feed('— '+def.name+' Built —');snd('done');buzz(12);refreshPanel();}
         if(b.type==='wonder')wonderRaised(b);
         if(b.type==='farm')cmdFarm(u,b);
         else{
@@ -3390,9 +3717,18 @@ function updateUnit(u,dt){
     case 'attack':{
       const t=targetEnt(u.target);
       if(!t||t.hp<=0){
-        u.state='idle';u.target=null;
+        u.state='idle';u.target=null;u.autoTgt=0;
         if(u.am){u.state='amove';u.scanT=.4;
           u.path=uPath(u,u.am.x,u.am.y,u.p)||[];break;}
+        if(u.pat){ // resume the patrol beat where it was heading
+          u.state='patrol';u.scanT=.4;
+          const px2=u.pat.leg?u.pat.bx:u.pat.ax,py2=u.pat.leg?u.pat.by:u.pat.ay;
+          u.path=uPath(u,px2,py2,u.p)||[];
+          if(!u.path.length){u.state='idle';u.pat=null;}
+          break;}
+        if(u.post){ // defensive stance walks back to its post
+          const px2=u.post.x,py2=u.post.y;u.post=null;
+          cmdMove(u,px2,py2);break;}
         if(u.wave){const wt=G.blds.find(b=>b.id===u.wave);
           if(wt&&wt.hp>0)cmdAttack(u,wt,true);else u.wave=null;}
         break;}
@@ -3402,6 +3738,13 @@ function updateUnit(u,dt){
       const uRng=rangeOf(u);
       // engagement radius: ranged units keep their range; melee close right up
       const rng=u.target.bld?Math.max(uRng,1.25):Math.max(uRng,.62);
+      // stand-ground never chases; defensive breaks off at the end of its leash
+      if(dist>rng&&u.autoTgt&&(u.stance|0)===2){
+        u.state='idle';u.target=null;u.path=null;u.autoTgt=0;break;}
+      if(u.autoTgt&&(u.stance|0)===1&&u.post
+        &&Math.hypot(u.x-u.post.x,u.y-u.post.y)>9){
+        const px2=u.post.x,py2=u.post.y;u.post=null;u.target=null;u.autoTgt=0;
+        cmdMove(u,px2,py2);break;}
       if(dist<=rng){
         u.path=null;u.spd=0;u.vx=0;u.vy=0;
         slewHdg(u,c.x,c.y,dt); // face the victim so the windup aims right
@@ -3955,13 +4298,17 @@ function updateFog(){
 function tileVis(x,y){return G.vis[(y|0)*MAP+(x|0)]===2;}
 function tileKnown(x,y){return G.vis[(y|0)*MAP+(x|0)]>0;}
 /* ================= save / load ================= */
-function saveGame(){
+function saveGame(key){
   if(!G||G.over)return false;
   try{
     const strip=u=>{const o=Object.assign({},u);o.path=null;o._gar=null;o._garU=null;
       if(o.gar)o.gar=o.gar.map(g=>Object.assign({},g,{path:null,_gar:null,_garU:null}));
       return o;};
-    const data={v:1,t:G.t,mapSel,diffSel,turboSel,regicide:G.regicide||0,seed:gameSeed,uid,np:NP,mapN:MAP,starts:START,teams:G.teams,
+    // v2 adds ts (for autosave recency) + the post-game tallies. loadGame
+    // migrates v1 saves forward — bump this ONLY alongside a migration path.
+    const data={v:2,ts:Date.now(),
+      pstats:G.pstats||null,tl:G.tl||null,tlT:G.tlT,ageAt:G.ageAt||null,
+      t:G.t,mapSel,diffSel,turboSel,regicide:G.regicide||0,seed:gameSeed,uid,np:NP,mapN:MAP,starts:START,teams:G.teams,
       wonderT:G.wonderT||null,relicT:G.relicT||null,
       mission:mission?mission.id:null,
       P:G.P,ais:G.ais,relics:G.relics,groups:G.groups,stats:G.stats,cam:G.cam,
@@ -3969,14 +4316,14 @@ function saveGame(){
       blds:G.blds.map(b=>Object.assign({},b,{gar:(b.gar||[]).map(strip)})),
       res:G.res,map:G.map,water:G.water,ford:G.ford,
       elev:Array.from(G.elev),vis:Array.from(G.vis)};
-    localStorage.setItem('tq_save',JSON.stringify(data));
+    localStorage.setItem(key||'tq_save',JSON.stringify(data));
     return true;
   }catch(e){return false;}
 }
-function loadGame(){
+function loadGame(key){
   let data;
-  try{data=JSON.parse(localStorage.getItem('tq_save'));}catch(e){return false;}
-  if(!data||data.v!==1)return false;
+  try{data=JSON.parse(localStorage.getItem(key||'tq_save'));}catch(e){return false;}
+  if(!data||(data.v!==1&&data.v!==2))return false;
   mapSel=data.mapSel;diffSel=data.diffSel;turboSel=data.turboSel||0;uid=data.uid||1;
   const savedRegicide=data.regicide||0;   // applied to G after the literal below
   seedSim(data.seed||1);
@@ -3996,6 +4343,10 @@ function loadGame(){
      stats:data.stats,lastRaidToast:-99,
      map:data.map,water:data.water,ford:data.ford};
   G.regicide=savedRegicide;
+  // v1 → v2 migration: older saves lack the summary tallies — default them
+  G.pstats=data.pstats||Array.from({length:GAIA+1},()=>({tr:0,lost:0,kills:0,razed:0,blost:0,gath:0}));
+  G.tl=data.tl||[];G.tlT=data.tlT===undefined?10:data.tlT;
+  G.ageAt=data.ageAt||Array.from({length:GAIA+1},()=>[0,0,0,0]);
   G.elev=Uint8Array.from(data.elev);
   G.vis=Uint8Array.from(data.vis);G.visT=0;
   G.navBlock={};
@@ -4036,13 +4387,29 @@ function loadGame(){
 function updateContBtn(){
   const has=!!localStorage.getItem('tq_save');
   document.getElementById('contBtn').style.display=has?'block':'none';
+  // the autosave is offered separately when it is NEWER than the manual save
+  let auto=null,man=null;
+  try{auto=JSON.parse(localStorage.getItem('tq_autosave')||'null');}catch(e){}
+  try{man=JSON.parse(localStorage.getItem('tq_save')||'null');}catch(e){}
+  const rec=document.getElementById('recoverBtn');
+  if(rec)rec.style.display=(auto&&(!man||(auto.ts||0)>(man.ts||0)))?'block':'none';
 }
+/* Autosave the moment the app is backgrounded — phones kill hidden tabs, and
+   a 40-minute empire should not die with the tab. Multiplayer skips it: a
+   lockstep seat cannot be resumed from a local save (reconnect handles that). */
+function autoSave(){
+  if(G&&!G.over&&!netMode&&!REC.play)saveGame('tq_autosave');
+}
+document.addEventListener('visibilitychange',()=>{if(document.hidden)autoSave();});
+window.addEventListener('pagehide',autoSave);
 /* ================= end / toast ================= */
 function endGame(win){
   if(G.over)return;G.over=true;
+  const wasNet=netMode;
   // Every peer reaches this on the same turn, so nobody is cut off mid-battle.
   if(netMode){netMode=false;netClose();}
-  snd(win?'win':'lose');
+  recFinish();
+  snd(win?'win':'lose');buzz(win?[30,60,30]:60);
   const m=Math.floor(G.t/60),s=Math.floor(G.t%60);
   let sub=win?'The enemy Town Hall lies in ruins.':'Your Town Hall has fallen.';
   if(mission){
@@ -4053,13 +4420,84 @@ function endGame(win){
         (mission.id<MISSIONS.length-1?' — the next trial awaits!':' — the campaign is won!');
     }else sub='Mission failed: '+mission.name+'. Try again, my liege.';
   }
-  document.getElementById('endTitle').textContent=win?'Victory!':'Defeat';
+  if(REC.play)sub='Replay over — that is how the battle went.';
+  document.getElementById('endTitle').textContent=REC.play?'Replay finished':win?'Victory!':'Defeat';
   document.getElementById('endTitle').className=win?'win':'lose';
   document.getElementById('endSub').textContent=sub;
   document.getElementById('endStats').innerHTML=
     'Battle length: <b>'+m+'m '+s+'s</b> · Age reached: <b>'+AGES[G.P[localP].age]+'</b><br>'+
     'Soldiers trained: <b>'+G.stats.trained+'</b> · Enemy buildings razed: <b>'+G.stats.razed+'</b>';
+  drawEndSummary();
+  // rematch makes no sense after a lockstep match ends the socket; replays of replays neither
+  document.getElementById('rematchBtn').style.display=(wasNet||REC.play)?'none':'';
+  document.getElementById('saveRepBtn').style.display=(REC.last&&!REC.play)?'':'none';
+  document.getElementById('saveRepBtn').textContent='🎬  Save replay';
+  profileRecord(win,wasNet);
+  if(typeof tm==='function')tm('game_end',{win:win?1:0,dur:Math.round(G.t),age:G.P[localP].age});
   document.getElementById('endOverlay').style.display='flex';
+}
+/* Post-game summary: AoE2's beloved score graph plus the honest numbers.
+   Everything here reads the deterministic tallies kept in G.pstats/G.tl. */
+function drawEndSummary(){
+  const cv=document.getElementById('endGraph'),tb=document.getElementById('endTable');
+  if(!cv||!tb)return;
+  const g2=cv.getContext('2d');
+  g2.fillStyle='#1d1712';g2.fillRect(0,0,cv.width,cv.height);
+  const tl=G.tl||[];
+  if(tl.length>1){
+    let max=10;for(const row of tl)for(let p=0;p<NP;p++)max=Math.max(max,row[p]||0);
+    const W=cv.width-34,H=cv.height-24,X0=30,Y0=6;
+    g2.strokeStyle='rgba(200,180,140,.25)';g2.lineWidth=1;
+    g2.font='9px sans-serif';
+    for(let i=0;i<=3;i++){
+      const y=Y0+H-(H*i/3);
+      g2.beginPath();g2.moveTo(X0,y);g2.lineTo(X0+W,y);g2.stroke();
+      g2.fillStyle='#a08c60';g2.fillText(Math.round(max*i/3),2,y+3);
+    }
+    for(let p=0;p<NP;p++){
+      g2.strokeStyle=TEAMS[p].trim||TEAMS[p].main;g2.lineWidth=p===localP?2.2:1.3;
+      g2.beginPath();
+      for(let i=0;i<tl.length;i++){
+        const x=X0+W*i/(tl.length-1),y=Y0+H-(H*Math.min(1,(tl[i][p]||0)/max));
+        if(i)g2.lineTo(x,y);else g2.moveTo(x,y);
+      }
+      g2.stroke();
+    }
+    const mins=Math.round((tl.length-1)*10/60);
+    g2.fillStyle='#a08c60';g2.fillText('0m',X0,cv.height-3);
+    g2.fillText(mins+'m',X0+W-18,cv.height-3);
+    cv.style.display='';
+  }else cv.style.display='none';
+  const ps=G.pstats;
+  if(!ps){tb.innerHTML='';return;}
+  let html='<table><tr><th>Lord</th><th>Age</th><th>Kills</th><th>Lost</th><th>Razed</th><th>Gathered</th></tr>';
+  for(let p=0;p<NP;p++){
+    const who=netPlayers.find(pp=>pp.seat===p);
+    const nm=(who?who.name+' — ':'')+CIVS[G.P[p].civ].name+(p===localP?' (You)':'');
+    const at=G.ageAt?G.ageAt[p]:null;
+    const ageStr=AGES[G.P[p].age].replace(' Age','')
+      +(at&&G.P[p].age>0?' @'+Math.floor(at[G.P[p].age]/60)+'m':'');
+    html+='<tr style="color:'+(TEAMS[p].trim||TEAMS[p].main)+'"><td>'+nm+'</td><td>'+ageStr
+      +'</td><td>'+ps[p].kills+'</td><td>'+ps[p].lost+'</td><td>'+ps[p].razed
+      +'</td><td>'+Math.round(ps[p].gath)+'</td></tr>';
+  }
+  tb.innerHTML=html+'</table>';
+}
+/* Lifetime profile — games, wins, favourite civ. Local, no account, no server. */
+function profileRecord(win,wasNet){
+  if(REC.play)return;                       // watching is not playing
+  try{
+    const pr=JSON.parse(localStorage.getItem('tq_profile')||'{}');
+    pr.games=(pr.games||0)+1;
+    if(win)pr.wins=(pr.wins||0)+1;
+    pr.time=(pr.time||0)+Math.round(G.t);
+    pr.byCiv=pr.byCiv||{};
+    const cn=CIVS[G.P[localP].civ].name;
+    pr.byCiv[cn]=pr.byCiv[cn]||{g:0,w:0};
+    pr.byCiv[cn].g++;if(win)pr.byCiv[cn].w++;
+    if(wasNet)pr.mp=(pr.mp||0)+1;
+    localStorage.setItem('tq_profile',JSON.stringify(pr));
+  }catch(e){}
 }
 let toastTimer=null;
 function toast(msg){const t=document.getElementById('toast');
@@ -4085,6 +4523,9 @@ function updateOverlays(){ // throttled: writes at most once per game-second
   updateArmyCounts();
   updateScores();
   updateIdleBtn();
+  updateChatBtn();
+  TUT.tick();
+  COACH.tick();
 }
 function updateArmyCounts(){
   let cav=0,rng=0,inf=0,sg=0;
@@ -4128,7 +4569,9 @@ function initAudio(){
     comp.threshold.value=-18;comp.knee.value=18;comp.ratio.value=5;
     comp.attack.value=.004;comp.release.value=.18;
     comp.connect(AC.destination);
-    masterG=AC.createGain();masterG.gain.value=.55;masterG.connect(comp);
+    masterG=AC.createGain();
+    masterG.gain.value=.55*(OPT.vol===undefined?1:OPT.vol);
+    masterG.connect(comp);
     // sparse countryside ambience — the AoE2 map never feels silent
     birdTimer=setInterval(()=>{if(!sndMuted&&G&&!G.paused&&!G.over&&Math.random()<.55)sBird();},9000);
   }catch(e){}
@@ -4454,6 +4897,20 @@ const TEAMS=[ // high-chroma AoE2 player colors — the loudest signal on screen
   {main:'#8c8c8c',dark:'#565656',trim:'#c9c9c9'},  // gray
   {main:'#e8801f',dark:'#9c5212',trim:'#f5b87a'}]; // orange
 TEAMS[GAIA]={main:'#9a8f7c',dark:'#5d5548',trim:'#cfc4ac'}; // nature — hide, horn, bristle
+/* Colourblind-safe palette (Okabe–Ito derived). Applied at BOOT, before any
+   sprite cache exists, so every cache keying on team index paints the right
+   colour. The Settings toggle flips OPT.cbPal and reloads the page. */
+if(OPT.cbPal){
+  const CB=[['#3465c4','#1d3a78','#8fb0ec'],  // blue (you)
+            ['#d55e00','#8a3d00','#f0a56b'],  // vermillion
+            ['#009e73','#00644a','#66cbae'],  // teal-green
+            ['#f0e442','#9c9420','#f8f094'],  // yellow
+            ['#56b4e9','#33719c','#a3d7f4'],  // sky
+            ['#cc79a7','#85506d','#e2b3cc'],  // rose
+            ['#8c8c8c','#565656','#c9c9c9'],  // gray
+            ['#e69f00','#9c6c00','#f3c866']]; // amber
+  CB.forEach((c,i)=>{TEAMS[i].main=c[0];TEAMS[i].dark=c[1];TEAMS[i].trim=c[2];});
+}
 // no black outlines — forms read through value contrast; edges are a soft warm
 // shadow tone (late-90s pre-rendered look: warm key upper-left, cool ambient fill)
 const OUT='rgba(50,33,17,.72)',SKIN='#e0b78e'; // a notch darker/crisper, still warm — the reference sprites pop harder
@@ -6562,6 +7019,20 @@ function drawBld(b){
   if(G.sel.includes(b.id)||(G.inspect&&G.inspect.id===b.id)){
     ctx.strokeStyle=G.inspect&&G.inspect.id===b.id?'rgba(230,230,230,.7)':'rgba(255,255,255,.95)';ctx.lineWidth=1.8;
     ctx.beginPath();ctx.ellipse(pc.x,pc.y,b.size*IW*.82,b.size*IH*.82,0,0,7);ctx.stroke();
+    if(b.rally&&b.p===localP){ // the rally flag, with a dashed guide from the door
+      const rp=isoPt(b.rally.x+.5,b.rally.y+.5);rp.y-=elevTile(b.rally.x,b.rally.y)*10;
+      ctx.save();
+      ctx.setLineDash([4,4]);ctx.strokeStyle='rgba(240,216,120,.55)';ctx.lineWidth=1.4;
+      ctx.beginPath();ctx.moveTo(pc.x,pc.y);ctx.lineTo(rp.x,rp.y);ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.strokeStyle='#6b4e12';ctx.lineWidth=1.6;
+      ctx.beginPath();ctx.moveTo(rp.x,rp.y);ctx.lineTo(rp.x,rp.y-14);ctx.stroke();
+      ctx.fillStyle=TEAMS[localP].main;
+      ctx.beginPath();ctx.moveTo(rp.x,rp.y-14);ctx.lineTo(rp.x+9,rp.y-11);ctx.lineTo(rp.x,rp.y-8);
+      ctx.closePath();ctx.fill();
+      ctx.strokeStyle='rgba(0,0,0,.4)';ctx.lineWidth=.7;ctx.stroke();
+      ctx.restore();
+    }
   }
   const stage=b.built?0:Math.min(2,Math.floor(3*b.prog/BLDS[b.type].bt));
   const sp=getBldSpr(b.type,b.p,b.built,stage,hash2(b.tx,b.ty)%3,wxSnowLvl);
@@ -8158,6 +8629,127 @@ function drawGhosts(){
     ctx.globalAlpha=1;
   }
 }
+/* ---------- UNIT SPRITES ---------------------------------------------------
+   Pre-rendered 8-facing sheets built in Blender (see blender/README.md). Sheet
+   row k IS octant k straight out of octPhi(), so there is no remapping here.
+   Entirely cosmetic: the simulation never reads any of this, and if the sheets
+   are missing or blocked -- the ARTIFACT's CSP blocks every fetch -- each unit
+   silently keeps its procedural rig. That fallback is the whole safety story;
+   do not make any of this load-bearing.
+---------------------------------------------------------------------------- */
+const USPR={meta:null,base:null,tried:false,img:{},tint:{}};
+let spritesOn=true;
+const SPR_SCALE=0.40;   // sheet px -> world-iso px: a 55px man lands at ~22px, matching the rigs
+const SPR_GROUND=4.3;   // the rigs plant their feet this far below the unit's screen point
+// types with no sheet (elephant, tradecart, warwagon) are simply absent and fall back
+const SPR_ALIAS={villager:'villager',militia:'militia',spearman:'spearman',
+  archer:'archer',skirmisher:'skirmisher',scout:'scout',knight:'knight',ram:'ram',
+  petard:'petard',scorpion:'scorpion',mangonel:'mangonel',treb:'treb',
+  bombard:'bombard',handcannon:'handcannon',monk:'monk',missionary:'missionary',
+  longbow:'longbow',axeman:'axeman',berserker:'berserker',mangudai:'mangudai',
+  teuton:'teuton',woad:'woad',cataphract:'cataphract',mameluke:'mameluke',
+  huskarl:'huskarl',chukonu:'chukonu',janissary:'janissary',samurai:'samurai',
+  jaguar:'jaguar',eagle:'eagle',plumed:'plumed',king:'king',
+  fishing:'fishing',cog:'cog',transport:'transport',galley:'galley',
+  fireship:'fireship',demo:'demo',longboat:'longboat',turtle:'turtle',
+  cannongalleon:'cannongalleon',sheep:'sheep',deer:'deer',boar:'boar'};
+function sprInit(){
+  if(USPR.tried)return;USPR.tried=true;
+  // 'sprites/' when served as the PWA (app/), 'app/sprites/' from the repo root
+  const paths=['sprites/','app/sprites/'];
+  (function next(i){
+    if(i>=paths.length)return;
+    fetch(paths[i]+'sprites.json').then(r=>r.ok?r.json():Promise.reject(0))
+      .then(j=>{USPR.meta=j;USPR.base=paths[i];})
+      .catch(()=>next(i+1));
+  })(0);
+}
+function sprKey(u){
+  let k=SPR_ALIAS[u.type];if(!k)return null;
+  // line upgrades are a visual READ of player age, never the other way round
+  const P=G.P[u.p];
+  if(P&&P.age>=2){if(u.type==='spearman')k='pikeman';else if(u.type==='archer')k='crossbowman';}
+  return k;
+}
+function sprAnimOf(u,meta,moving){
+  const A=meta.anims;
+  if(u.state==='attack'&&A.attack)return'attack';
+  if(A.work&&(u.state==='gather'||u.state==='farming'||u.state==='building'))return'work';
+  if(u.state==='convert'&&A.attack)return'attack';
+  if(moving&&A.walk)return'walk';
+  return A.idle?'idle':Object.keys(A)[0];
+}
+function sprFrame(u,m,an){
+  if(an==='attack'){
+    // ride the real swing timing so the strike frame lands on the hit
+    const ap=atkPhase(u);
+    if(ap&&ap.k){
+      const f=ap.k===1?ap.f*.34:ap.k===2?.34+ap.f*.20:.54+ap.f*.46;
+      return Math.max(0,Math.min(m.frames-1,(f*m.frames)|0));
+    }
+  }
+  const k=(G.t*m.fps+(u.id||0)*2.7)|0;
+  return ((k%m.frames)+m.frames)%m.frames;
+}
+function sprTint(base,mask,team){
+  // every team palette entry shares one hue, so the blue channel alone carries
+  // the shading band: k = blue/0xd4 recovers it, k*target repaints the pixel
+  const c=document.createElement('canvas');c.width=base.width;c.height=base.height;
+  const g=c.getContext('2d');g.drawImage(base,0,0);
+  const mc=document.createElement('canvas');mc.width=base.width;mc.height=base.height;
+  const mg=mc.getContext('2d');mg.drawImage(mask,0,0);
+  const bd=g.getImageData(0,0,c.width,c.height),md=mg.getImageData(0,0,c.width,c.height);
+  const hx=(TEAMS[team]&&TEAMS[team].main)||'#2a56d4';
+  const tr=parseInt(hx.substr(1,2),16),tg=parseInt(hx.substr(3,2),16),tb=parseInt(hx.substr(5,2),16);
+  const B=bd.data,M=md.data;
+  for(let i=0;i<B.length;i+=4){
+    if(B[i+3]===0||M[i]<128)continue;
+    const k=B[i+2]/0xd4;
+    B[i]=Math.min(255,tr*k);B[i+1]=Math.min(255,tg*k);B[i+2]=Math.min(255,tb*k);
+  }
+  g.putImageData(bd,0,0);return c;
+}
+function sprImg(k,src){
+  let v=USPR.img[k];
+  if(v===undefined){
+    USPR.img[k]=null;
+    const im=new Image();
+    im.onload=()=>{USPR.img[k]=im;};im.onerror=()=>{USPR.img[k]=false;};
+    im.src=USPR.base+src;
+    return null;
+  }
+  return v||null;
+}
+function sprGet(key,an,p){
+  const m=USPR.meta[key].anims[an];
+  const team=(p===GAIA||p===undefined)?0:p;   // wildlife carries no player colour
+  const ck=key+'/'+an+'/'+team;
+  const hit=USPR.tint[ck];if(hit)return hit;
+  const base=sprImg(key+'/'+an,m.sheet);if(!base)return null;
+  // player 0 is the colour already baked into the sheet: no mask fetch at all
+  if(team===0||!m.mask){USPR.tint[ck]=base;return base;}
+  const msk=sprImg(key+'/'+an+'/m',m.mask);if(!msk)return null;
+  USPR.tint[ck]=sprTint(base,msk,team);return USPR.tint[ck];
+}
+function sprDraw(u,moving){
+  if(!spritesOn||!USPR.meta)return false;
+  const key=sprKey(u);if(!key)return false;
+  const meta=USPR.meta[key];if(!meta)return false;
+  const an=sprAnimOf(u,meta,moving),m=meta.anims[an];if(!m)return false;
+  const img=sprGet(key,an,u.p);if(!img)return false;
+  octPhi(u);                                   // same hysteresis the rigs use
+  const d=((u._oct%8)+8)%8,cw=meta.cell[0],ch=meta.cell[1],S=SPR_SCALE;
+  const f=sprFrame(u,m,an);
+  ctx.drawImage(img,f*cw,d*ch,cw,ch,
+    -meta.anchorX*S,SPR_GROUND-meta.anchorY*S,cw*S,ch*S);
+  return true;
+}
+function toggleSprites(){
+  spritesOn=!spritesOn;
+  const b=document.getElementById('sprBtn');if(b)b.classList.toggle('sel',spritesOn);
+  toast(spritesOn?(USPR.meta?'Rendered sprites':'Rendered sprites (no sheets found - procedural art)')
+                 :'Procedural art');
+}
 function drawUnit(u){
   const pp=isoE(u.x,u.y),px=pp.x,py=pp.y;
   if(px<cullX0||px>cullX1||py<cullY0||py>cullY1)return;
@@ -8175,10 +8767,12 @@ function drawUnit(u){
   ctx.fillStyle='rgba(24,27,36,.2)';
   ctx.beginPath();ctx.ellipse(px+(big?3:2),py+4.3,big?9.5:6.5,big?3.4:2.5,.14,0,7);ctx.fill();
   ctx.save();ctx.translate(px,py);
-  ctx.scale(1.24,1.24); // rigs orient, bob, and lunge themselves — AoE2 upright walk
-                        // (1.18 +5% per Daniel; corpse+ghost scales must match)
-  ctx.lineCap='round';
-  drawUnitBody(u,t,sw,TEAMS[u.p]);
+  if(!sprDraw(u,moving)){
+    ctx.scale(1.24,1.24); // rigs orient, bob, and lunge themselves — AoE2 upright walk
+                          // (1.18 +5% per Daniel; corpse+ghost scales must match)
+    ctx.lineCap='round';
+    drawUnitBody(u,t,sw,TEAMS[u.p]);
+  }
   ctx.restore();
   if(u.flash>0){
     ctx.globalAlpha=Math.min(.55,u.flash*3.4);
@@ -9098,7 +9692,7 @@ function draw(){
     }
   }
   // sway is skipped when zoomed out or when last frame drew a wall of trees (perf)
-  const swayOk=G.cam.z>=.9&&lastTreeCount<320;
+  const swayOk=G.cam.z>=.9&&lastTreeCount<320&&!OPT.reduceMotion;
   let treeDrawn=0;
   const ents=[];
   for(const k in G.res){const r=G.res[k];
@@ -9248,6 +9842,9 @@ function drawMini(){
   if(G.pings){
     while(G.pings.length&&G.t-G.pings[0].t>2.4)G.pings.shift();
     for(const pg of G.pings){
+      // command pings carry an owner and show only to that owner's team;
+      // legacy raid pings (no owner) keep showing to everyone locally
+      if(pg.p!==undefined&&!allied(pg.p,localP))continue;
       const el=G.t-pg.t,ag=(el%.8)/.8;
       const mx=100+(pg.x-pg.y)*a,my=10+(pg.x+pg.y)*b2,r=3+ag*13;
       mctx.strokeStyle=((el/.8)|0)%2
@@ -9273,6 +9870,10 @@ function drawMini(){
 /* ================= input ================= */
 const ptrs=new Map();
 let panState=null,pinchBase=null,selBox=null,boxArm=false;
+let formSel=0;      // formation for the next move/amove/patrol order (UI-side; travels in the command)
+let shiftDown=false; // live shift state for shift-click train queueing
+window.addEventListener('keydown',e=>{shiftDown=e.shiftKey;});
+window.addEventListener('keyup',e=>{shiftDown=e.shiftKey;});
 let lastTapT=0,lastTapId=0,mouseSeen=false;
 function setBoxArm(v){boxArm=v;
   document.getElementById('boxBtn').classList.toggle('armed',v);}
@@ -9300,6 +9901,7 @@ function onDown(e){
   const useBox=!G?.placing&&(boxArm||(e.pointerType==='mouse'&&e.button===0));
   ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY,moved:false,
     box:useBox&&ptrs.size===0,btn:e.button,mouse:e.pointerType==='mouse',
+    shift:!!e.shiftKey,              // shift-queue: captured at press time
     yaw0:R3.yaw,pitch0:R3.pitch});   // additive; never read when !use3D
   if(ptrs.size===2){
     for(const p of ptrs.values())p.box=false;
@@ -9376,7 +9978,7 @@ function endPtr(e){
   selBox=null;
   if(p.moved)return;
   if(boxArm)setBoxArm(false);
-  handleTap(p.sx,p.sy,p.mouse,p.btn===2);
+  handleTap(p.sx,p.sy,p.mouse,p.btn===2,p.shift);
 }
 function onCancel(e){ptrs.delete(e.pointerId);if(ptrs.size<2)pinchBase=null;selBox=null;}
 function onWheel(e){
@@ -9413,7 +10015,29 @@ function zoomAt(nz,cx,cy){
   G.cam.x=wx-(cx-rect.left)/nz;G.cam.y=wy-(cy-rect.top)/nz;clampCam();
 }
 document.getElementById('homeBtn').onclick=()=>{if(G&&!G.over)selTC();};
-document.getElementById('idleBtn').onclick=()=>{if(G&&!G.over){snd('click');cycleIdleVill();}};
+let idleTapT=0;
+document.getElementById('idleBtn').onclick=()=>{if(G&&!G.over){
+  const now=performance.now();
+  if(now-idleTapT<400){ // double-tap: grab EVERY idle villager at once
+    const ids=G.units.filter(u=>u.p===localP&&u.type==='villager'&&u.state==='idle'&&u.hp>0).map(u=>u.id);
+    if(ids.length){G.sel=ids;refreshPanel();toast(ids.length+' idle villager'+(ids.length>1?'s':'')+' selected');}
+    idleTapT=0;snd('sel');return;
+  }
+  idleTapT=now;snd('click');cycleIdleVill();}};
+// quick chat: taunt grid, multiplayer only (the button shows/hides with netMode)
+{const cw=document.getElementById('chatWheel'),cb=document.getElementById('chatBtn');
+ TAUNTS.forEach((t,i)=>{
+   const b=document.createElement('button');
+   b.textContent=t;b.setAttribute('role','menuitem');
+   b.onclick=()=>{issue('taunt',{n:i});cw.style.display='none';snd('click');};
+   cw.appendChild(b);});
+ cb.onclick=()=>{cw.style.display=cw.style.display==='none'?'grid':'none';snd('click');};
+}
+function updateChatBtn(){ // called once per second from updateOverlays
+  const cb=document.getElementById('chatBtn');
+  if(cb)cb.style.display=netMode?'':'none';
+  if(!netMode){const cw=document.getElementById('chatWheel');if(cw)cw.style.display='none';}
+}
 document.getElementById('panelBtn').onclick=()=>{
   const pn=document.getElementById('panel'),btn=document.getElementById('panelBtn');
   const hide=!pn.classList.contains('hidden');
@@ -9442,7 +10066,7 @@ function updateIdleBtn(){
 function clearSel(){
   if(!G)return;
   if(G.placing){G.placing=null;G.pend=null;G.wallA=null;G.pendLine=null;}
-  else{G.sel=[];G.inspect=null;G.amode=false;}
+  else{G.sel=[];G.inspect=null;G.amode=false;G.pmode=false;}
   setBoxArm(false);snd('click');refreshPanel();
 }
 document.getElementById('deselBtn').onclick=clearSel;
@@ -9471,8 +10095,8 @@ mini.addEventListener('pointerdown',e=>{
   const t=miniToTile(e);if(!t)return;
   const now=performance.now();
   if(now-miniLastTap<330){ // double tap — ping the spot for yourself and your allies
-    const pgs=G.pings||(G.pings=[]);
-    pgs.push({x:t.tx,y:t.ty,t:G.t});if(pgs.length>6)pgs.shift();
+    // through the command layer, so allies on OTHER machines see it too
+    issue('ping',{x:Math.floor(t.tx),y:Math.floor(t.ty)});
     snd('click');feed('Ping — attention marked');
     miniLastTap=0;return;
   }
@@ -9488,7 +10112,7 @@ const miniEnd=e=>{miniDrag=false;
   try{mini.releasePointerCapture(e.pointerId);}catch(err){}};
 mini.addEventListener('pointerup',miniEnd);
 mini.addEventListener('pointercancel',miniEnd);
-function handleTap(cx,cy,mouse,right){
+function handleTap(cx,cy,mouse,right,shift){
   const d3=use3D;                    // capture once — a mid-tap toggle must not split the branch
   const rect=(d3?view3:view).getBoundingClientRect();
   const sx=cx-rect.left,sy=cy-rect.top;
@@ -9676,16 +10300,33 @@ function handleTap(cx,cy,mouse,right){
     // just the UI — without it a tap past the board edge issues a move order to
     // a garbage tile.
     if(!hitU&&!hitB&&onMap){
+      if(G.pmode){
+        issue('patrol',{u:selIds,x:tx,y:ty,f:formSel});
+        G.pmode=false;toast('Patrolling — they will walk the beat and engage what they meet');
+        refreshPanel();return;
+      }
       if(G.amode){
-        issue('amove',{u:selIds,x:tx,y:ty});
+        issue('amove',{u:selIds,x:tx,y:ty,f:formSel});
         G.amode=false;toast('Attack-moving — they will fight through anything they meet');
         refreshPanel();return;
       }
-      issue('move',{u:selIds,x:tx,y:ty});
+      issue('move',{u:selIds,x:tx,y:ty,f:formSel,sh:shift?1:0});
       flashSel();return;}
   }
+  // Rally point: an own production building is selected and the tap names a
+  // spot, a resource, or a farm — plant the flag instead of deselecting.
+  if(!haveSel&&G.sel.length===1&&onMap&&(right||!mouse)){
+    const rb=G.blds.find(b=>b.id===G.sel[0]&&b.p===localP&&b.built);
+    if(rb&&trainsFor(rb,localP).length
+      &&!(hitB&&hitB.id===rb.id)
+      &&!(hitU&&!isAnimal(hitU))){
+      const fb=(hitB&&hitB.p===localP&&hitB.type==='farm'&&hitB.built)?hitB:null;
+      issue('rally',{id:rb.id,x:tx,y:ty,rk:res?resKey:null,fid:fb?fb.id:null});
+      return;
+    }
+  }
   if(right)return; // right-click never changes selection
-  G.amode=false;
+  G.amode=false;G.pmode=false;
   G.inspect=null;
   // selection (double-tap an own unit: select all of that type on screen)
   if(hitU&&hitU.p===localP){
@@ -9757,6 +10398,7 @@ function mkBtn(html,cls,fn,dis,icon){
   btnRow.appendChild(b);
   // hover writes the command onto the parchment, AoE2-style (mouse only)
   const tip=html.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+  b.setAttribute('aria-label',tip);   // screen readers get the same words
   b.onmouseenter=()=>{if(!mouseSeen)return;
     b._prev=scrollHint.innerHTML;
     scrollHint.innerHTML='<b style="color:#2a1f12">'+tip+'</b>'+(b.disabled?' <i style="color:#8a2f27">(unavailable)</i>':'');};
@@ -9851,7 +10493,11 @@ function refreshPanel(){
     if(!b.built){
       setCard(d.name,portraitFor('b',b.type,localP),b.hp,b.maxhp);
       hint('Under construction — '+(mouseSeen?'right-click':'tap')+' it with villagers selected to help build');
-      mkBtn('<b>Demolish</b>','warn',()=>{issue('del',{ids:[b.id]});});return;}
+      const db=mkBtn('<b>Demolish</b>','warn',()=>{
+        if(!db._arm){db._arm=1;db.innerHTML='<b>Demolish — sure?</b>';
+          setTimeout(()=>{if(db.isConnected){db._arm=0;db.innerHTML='<b>Demolish</b>';}},2500);return;}
+        issue('del',{ids:[b.id]});});
+      return;}
     setCard(d.name,portraitFor('b',b.type,localP),b.hp,b.maxhp,
       [...(d.atk?[['atk',d.atk]]:[]),...(d.garCap?[['gar',b.gar.length+'/'+d.garCap]]:[])]);
     hint(d.trains&&d.trains.length||b.type==='castle'?'Train from the buttons on the left':'');
@@ -9868,6 +10514,20 @@ function refreshPanel(){
       mkBtn('<i>🪵</i><b>Sell 100 Wood</b><span class="cost">→ '+sell+'G</span>',null,()=>trade('w','g'),G.P[localP].w<100);
       mkBtn('<i>🍖</i><b>Buy 100 Food</b><span class="cost">'+buy+'G →</span>',null,()=>trade('g','f'),G.P[localP].g<buy);
       mkBtn('<i>🪵</i><b>Buy 100 Wood</b><span class="cost">'+buy+'G →</span>',null,()=>trade('g','w'),G.P[localP].g<buy);
+      // Diplomacy: tribute 100 of a resource to a living ally (25% carrying fee)
+      const allies=[];
+      for(let p2=0;p2<NP;p2++)
+        if(p2!==localP&&allied(p2,localP)&&G.blds.some(bb=>bb.p===p2&&bb.type==='tc'))allies.push(p2);
+      for(const al of allies.slice(0,2)){
+        const nm=(netPlayers.find(pp=>pp.seat===al)||{}).name||CIVS[G.P[al].civ].name;
+        const RIC={f:'🍖',w:'🪵',g:'🪙'};
+        for(const rk of ['f','w','g']){
+          const sb=mkBtn('<i>'+RIC[rk]+'</i><b>100 → '+nm+'</b><span class="cost">costs 125</span>','txt',
+            ()=>{if(G.P[localP][rk]<125){toast('Sending 100 costs 125 — the caravan takes a fee');return;}
+              issue('tribute',{give:rk,to:al});},G.P[localP][rk]<125);
+          sb.style.height='30px';sb.style.fontSize='9.5px';sb.style.gridColumn='auto';
+        }
+      }
     }
     if(b.type==='monastery'){
       const dep=G.relics.filter(r=>r.mon===b.id).length;
@@ -9943,8 +10603,18 @@ function refreshPanel(){
       const uc=unitCostOf(localP,ut);
       const locked=u.age!==undefined&&G.P[localP].age<u.age;
       const afford=canAfford(localP,uc)&&popUsed(localP)<popCap(localP);
-      mkBtn('<b>'+unitName(ut,localP)+'</b><span class="cost">'+costStr(uc)+'</span>',null,
-        ()=>tryTrainKey(b,ut),locked||!afford,portraitFor('u',ut,localP));
+      // shift-click queues five at once; long-press does the same on a phone
+      const tb2=mkBtn('<b>'+unitName(ut,localP)+'</b><span class="cost">'+costStr(uc)+'</span>',null,
+        ()=>{const n5=shiftDown?5:1;for(let q5=0;q5<n5;q5++)tryTrainKey(b,ut);},
+        locked||!afford,portraitFor('u',ut,localP));
+      if(!tb2.disabled){
+        tb2.addEventListener('pointerdown',()=>{
+          tb2._lp=setTimeout(()=>{for(let q5=0;q5<4;q5++)tryTrainKey(b,ut);buzz(12);},480);});
+        const lpEnd=()=>clearTimeout(tb2._lp);
+        tb2.addEventListener('pointerup',lpEnd);
+        tb2.addEventListener('pointerleave',lpEnd);
+        tb2.addEventListener('pointercancel',lpEnd);
+      }
     }
     if(b.type==='castle'){
       const nu=nextUtFor(localP);
@@ -10026,15 +10696,33 @@ function refreshPanel(){
         ()=>startBuildKey(bt),locked||!canAfford(localP,bc),portraitFor('b',bt,localP));
     }
   }else{
-    if(ents.length===1)hint(G.amode?'Tap the map — they will fight their way there':mouseSeen
+    if(ents.length===1)hint(G.pmode?'Tap the far end of the patrol beat'
+      :G.amode?'Tap the map — they will fight their way there':mouseSeen
       ?'Right-click an enemy to attack · right-click ground to move'
       :'Tap an enemy to attack · tap ground to move');
     mkBtn('<i>'+ICO.atk+'</i><b>Attack-move</b>',G.amode?'go':'txt',()=>{
-      G.amode=!G.amode;refreshPanel();
+      G.amode=!G.amode;G.pmode=false;refreshPanel();
       if(G.amode)toast('Now tap the destination');});
+    mkBtn('<i>⇄</i><b>Patrol</b>',G.pmode?'go':'txt',()=>{
+      G.pmode=!G.pmode;G.amode=false;refreshPanel();
+      if(G.pmode)toast('Now tap the far end of the beat');});
+    const FRM=[['⬛','Box'],['—','Line'],['⋯','Loose'],['‖','Column']];
+    mkBtn('<i>'+FRM[formSel][0]+'</i><b>'+FRM[formSel][1]+'</b>','txt',()=>{
+      formSel=(formSel+1)%4;refreshPanel();
+      toast('Formation: '+FRM[formSel][1]+' — applies to the next move order');});
+    // stance row — four small buttons, the shared stance highlighted
+    const milIds=mil.map(u=>u.id);
+    const st0=mil.length?(mil[0].stance|0):0;
+    const sameSt=mil.every(u=>(u.stance|0)===st0);
+    const SN=[['⚔','Aggressive'],['🛡','Defensive'],['⚓','Stand ground'],['✋','No attack']];
+    SN.forEach(([ic,nm],i)=>{
+      const sb=mkBtn('<i>'+ic+'</i><b>'+nm+'</b>',(sameSt&&st0===i)?'go':'txt',
+        ()=>{issue('stance',{u:milIds,s:i});toast('Stance: '+nm);});
+      sb.style.gridColumn='auto';sb.style.height='30px';sb.style.fontSize='9.5px';
+    });
   }
   mkBtn('<b>Stop</b>',null,()=>{
-    issue('stop',{u:ents.filter(e=>e.x!==undefined).map(e=>e.id)});G.amode=false;});
+    issue('stop',{u:ents.filter(e=>e.x!==undefined).map(e=>e.id)});G.amode=false;G.pmode=false;});
   // (Deselect lives on the always-visible ✕ button beside the zoom controls)
 }
 function updateCard(){ // light HP patcher — no DOM rebuild mid-press
@@ -10196,6 +10884,12 @@ window.addEventListener('keydown',e=>{
     if(ent){const c=ent.tx!==undefined?bldCenter(ent):ent;centerOn(c.x,c.y);}
     return;}
   if(e.key==='Delete'){
+    // deletion is forever — ask twice (a stray Del has ended armies before)
+    if(G.sel.length&&(!G._delArm||performance.now()-G._delArm>2500)){
+      G._delArm=performance.now();
+      toast('Press Delete again to confirm — this destroys '+G.sel.length+' of your own');
+      return;}
+    G._delArm=0;
     issue('del',{ids:G.sel.slice()});
     G.sel=[];refreshPanel();return;}
   if(k==='h'){selTC();return;}
@@ -10278,24 +10972,27 @@ document.getElementById('startBtn').onclick=()=>{
   initAudio();
   if(AC&&AC.state==='suspended')AC.resume();
   resetNet();
-  mission=null;
+  mission=null;REC.play=null;
   document.getElementById('startOverlay').style.display='none';
   begin();
+  TUT.begin();     // first battle ever? walk them in
 };
-document.getElementById('contBtn').onclick=()=>{
+const loadFrom=key=>{
   initAudio();
   if(AC&&AC.state==='suspended')AC.resume();
   resetNet();
   resize();
-  if(loadGame()){
+  if(loadGame(key)){
     document.getElementById('startOverlay').style.display='none';
     last=performance.now();
     toast('Welcome back, my liege — the realm is as you left it');
   }else{
     toast('That save could not be read');
-    localStorage.removeItem('tq_save');updateContBtn();
+    localStorage.removeItem(key);updateContBtn();
   }
 };
+document.getElementById('contBtn').onclick=()=>loadFrom('tq_save');
+document.getElementById('recoverBtn').onclick=()=>loadFrom('tq_autosave');
 document.getElementById('saveBtn').onclick=()=>{
   const btn=document.getElementById('saveBtn');
   if(saveGame()){btn.textContent='✓ Saved';updateContBtn();}
@@ -10306,6 +11003,209 @@ document.getElementById('campBtn').onclick=()=>{showCampaign();};
 document.getElementById('campBack').onclick=()=>{
   document.getElementById('campOverlay').style.display='none';
 };
+/* ================= settings ================= */
+function applyBodyOpts(){
+  document.body.classList.toggle('lefty',!!OPT.lefty);
+  document.body.classList.toggle('bigui',!!OPT.bigui);
+}
+applyBodyOpts();
+function buildSettings(){
+  const el=document.getElementById('setList');
+  el.innerHTML='';
+  const row=(label,ctl)=>{
+    const r=document.createElement('div');r.className='setRow';
+    const s=document.createElement('span');s.textContent=label;
+    r.appendChild(s);r.appendChild(ctl);el.appendChild(r);return r;};
+  const toggle=(key,def,onchg)=>{
+    const b=document.createElement('button');b.className='bigbtn alt';
+    b.style.cssText='width:auto;padding:7px 16px;margin:0';
+    const cur=()=>OPT[key]===undefined?def:!!OPT[key];
+    const paint=()=>{b.textContent=cur()?'On':'Off';b.style.color=cur()?'#c9a227':'';};
+    paint();
+    b.onclick=()=>{OPT[key]=!cur();saveOpts();paint();snd('click');if(onchg)onchg();};
+    return b;};
+  // volume
+  const vr=document.createElement('input');vr.type='range';vr.min=0;vr.max=100;
+  vr.value=Math.round((OPT.vol===undefined?1:OPT.vol)*100);
+  vr.setAttribute('aria-label','Sound volume');
+  vr.oninput=()=>{OPT.vol=vr.value/100;saveOpts();
+    if(masterG)masterG.gain.value=.55*OPT.vol;};
+  vr.onchange=()=>{initAudio();snd('click');};
+  row('🔊 Sound volume',vr);
+  row('📳 Haptic feedback (phones)',toggle('haptics',true));
+  row('🧭 Battle coach tips',toggle('coach',true));
+  row('🌤 Reduce motion (no weather / sway)',toggle('reduceMotion',false));
+  row('🔋 Battery saver (30 fps)',toggle('fps30',false));
+  row('🫲 Left-handed layout',toggle('lefty',false,applyBodyOpts));
+  row('🔍 Larger buttons',toggle('bigui',false,applyBodyOpts));
+  row('🎨 Colourblind-safe team colours',toggle('cbPal',false,()=>{
+    if(G&&!G.over)toast('Applies when you leave the battle');
+    else{toast('Reloading with the new colours…');setTimeout(()=>location.reload(),600);}
+  }));
+  row('📈 Share anonymous play stats',toggle('telemetry',false));
+  row('🩹 Send crash reports',toggle('crashRep',true));
+  const note=document.createElement('p');note.className='sub';
+  note.style.cssText='margin:10px 0 0;text-align:center';
+  note.textContent='Crash reports carry the build number and the error only — never your games or your name.';
+  el.appendChild(note);
+}
+document.getElementById('setBtn').onclick=()=>{
+  buildSettings();
+  document.getElementById('startOverlay').style.display='none';
+  document.getElementById('setOverlay').style.display='flex';
+};
+document.getElementById('setBack').onclick=()=>{
+  document.getElementById('setOverlay').style.display='none';
+  if(!G||G.over)document.getElementById('startOverlay').style.display='flex';
+  else if(!netMode)G.paused=true,document.getElementById('menuOverlay').style.display='flex';
+};
+document.getElementById('replaysBtn').onclick=()=>{
+  renderReplayList();
+  document.getElementById('startOverlay').style.display='none';
+  document.getElementById('replayOverlay').style.display='flex';
+};
+/* my record */
+function renderRecord(){
+  const el=document.getElementById('recordBody');if(!el)return;
+  let pr={};try{pr=JSON.parse(localStorage.getItem('tq_profile')||'{}');}catch(e){}
+  if(!pr.games){el.innerHTML='<p>No battles fought yet.</p>';return;}
+  let fav='',favG=0;
+  for(const c in (pr.byCiv||{}))if(pr.byCiv[c].g>favG){favG=pr.byCiv[c].g;fav=c;}
+  const hrs=Math.floor((pr.time||0)/3600),mins=Math.round(((pr.time||0)%3600)/60);
+  el.innerHTML='<p><b>'+pr.games+'</b> battles · <b>'+(pr.wins||0)+'</b> victories ('
+    +Math.round(100*(pr.wins||0)/pr.games)+'%)<br>'
+    +'Time at war: <b>'+hrs+'h '+mins+'m</b>'
+    +(pr.mp?'<br>Multiplayer battles: <b>'+pr.mp+'</b>':'')
+    +(fav?'<br>Favourite civilization: <b>'+fav+'</b> ('+pr.byCiv[fav].w+'/'+pr.byCiv[fav].g+' won)':'')
+    +'</p>';
+}
+document.getElementById('record').addEventListener('toggle',e=>{if(e.target.open)renderRecord();});
+/* what's new */
+const CHANGELOG=[
+  ['big-qol','Rally points, shift-queue waypoints, unit stances (aggressive / defensive / stand ground / no attack), patrol, formations, a post-game summary with score graphs, replays, quick chat + team pings in multiplayer, tribute at the Market, Co-op vs AI, a 🔥 Blitz pace, a settings panel (volume, colourblind colours, battery saver, left-handed layout), autosave when your phone hides the game, a first-battle tutorial, and a battle coach.'],
+  ['tq-v61','Regicide in the multiplayer lobby.'],
+  ['tq-v60','Smarter AI: defensive palisade arcs, fish traps, market trade, king protection.'],
+  ['tq-v59','The 3D forest floor art finished — the cosmetics list fully paid.'],
+];
+function renderWhatsNew(){
+  const el=document.getElementById('whatsnewBody');if(!el)return;
+  el.innerHTML=CHANGELOG.map(c=>'<p><b>'+c[0]+'</b> — '+c[1]+'</p>').join('');
+  localStorage.setItem('tq_seenver',CHANGELOG[0][0]);
+  const d=document.getElementById('newDot');if(d)d.style.display='none';
+}
+document.getElementById('whatsnew').addEventListener('toggle',e=>{if(e.target.open)renderWhatsNew();});
+if(localStorage.getItem('tq_seenver')!==CHANGELOG[0][0]){
+  const d=document.getElementById('newDot');if(d)d.style.display='';
+}
+/* ================= crash reports + opt-in telemetry ================= */
+const tmUrl=()=>'https://tiny-conquerors-relay.onrender.com/report';
+function buildVer(){
+  try{const st=document.getElementById('startOverlay').lastElementChild;
+    const m=/build (tq-v\d+)/.exec(st&&st.textContent||'');return m?m[1]:'dev';}catch(e){return 'dev';}
+}
+let errSent=0;
+function sendReport(body){
+  if(location.protocol!=='https:'&&location.hostname!=='localhost')return;
+  if(location.hostname==='localhost')return;   // don't mail dev-loop noise home
+  try{fetch(tmUrl(),{method:'POST',body});}catch(e){}
+}
+window.addEventListener('error',e=>{
+  if(OPT.crashRep===false||errSent>=3)return;errSent++;
+  sendReport('ERR '+buildVer()+' | '+(e.message||'?')+' @'+(e.filename||'').split('/').pop()+':'+(e.lineno||0)
+    +' | '+String(e.error&&e.error.stack||'').slice(0,800));
+});
+window.addEventListener('unhandledrejection',e=>{
+  if(OPT.crashRep===false||errSent>=3)return;errSent++;
+  sendReport('ERR '+buildVer()+' | unhandled rejection: '+String(e.reason).slice(0,400));
+});
+function tm(ev,data){
+  if(!OPT.telemetry)return;
+  sendReport('TM '+buildVer()+' | '+ev+' '+JSON.stringify(data||{}));
+}
+/* ================= first-battle tutorial ================= */
+const TUT={
+  step:0,active:false,
+  steps:[
+    {txt:'Welcome, my liege! Tap one of your villagers to select them.',
+     done:()=>G.sel.some(id=>{const u=G.units.find(x=>x.id===id);return u&&u.type==='villager';})},
+    {txt:'Now tap a berry bush, sheep or tree — the villager will gather food or wood.',
+     done:()=>G.units.some(u=>u.p===localP&&u.type==='villager'&&['toRes','gather','return','toFarm','farming'].includes(u.state))},
+    {txt:'Put everyone to work. Tip: double-tap the 🧑‍🌾 button to grab every idle villager.',
+     done:()=>G.units.filter(u=>u.p===localP&&u.type==='villager'&&['toRes','gather','return','toFarm','farming','toBuild','building'].includes(u.state)).length>=3},
+    {txt:'Tap your Town Hall and train more villagers — your economy is your army\'s spine.',
+     done:()=>{const tc=G.blds.find(b=>b.p===localP&&b.type==='tc');
+       return (tc&&tc.queue.length>0)||G.units.filter(u=>u.p===localP&&u.type==='villager').length>4;}},
+    {txt:'Build a House (select a villager → Economy tab) so your population can grow.',
+     done:()=>G.blds.some(b=>b.p===localP&&b.type==='house')},
+    {txt:'Raise a Barracks from the Military tab — the realm needs soldiers.',
+     done:()=>G.blds.some(b=>b.p===localP&&b.type==='barracks'&&b.built)},
+    {txt:'Train Militia at the Barracks. Tap open ground with the Barracks selected to plant a rally flag.',
+     done:()=>G.units.some(u=>u.p===localP&&u.type==='militia')||G.blds.some(b=>b.p===localP&&b.rally)},
+    {txt:'When you have 500 food, advance to the Feudal Age at the Town Hall. Good luck, Conqueror!',
+     done:()=>G.P[localP].age>=1||G.P[localP].aging},
+  ],
+  begin(){
+    if(localStorage.getItem('tq_tut')==='done')return;
+    if(mission||netMode||REC.play)return;
+    this.step=0;this.active=true;this.show();
+  },
+  bar(){return document.getElementById('tutBar');},
+  show(){
+    let b=this.bar();
+    if(!b){
+      b=document.createElement('div');b.id='tutBar';
+      b.style.cssText='position:fixed;left:50%;transform:translateX(-50%);top:52px;z-index:8;max-width:min(92vw,470px);'
+        +'padding:9px 12px;background:rgba(36,26,16,.95);border:2px solid #c9a227;border-radius:10px;'
+        +'color:#f0e2bd;font-size:13px;display:flex;gap:10px;align-items:center;box-shadow:0 4px 14px rgba(0,0,0,.5)';
+      const tx=document.createElement('span');tx.id='tutTxt';tx.style.flex='1';
+      const sk=document.createElement('button');
+      sk.textContent='Skip';sk.setAttribute('aria-label','Skip tutorial');
+      sk.style.cssText='padding:5px 10px;border-radius:7px;border:1px solid #6a6355;background:rgba(30,26,20,.8);color:#cbb98a;font:inherit;font-size:11px';
+      sk.onclick=()=>{TUT.finish();};
+      b.appendChild(tx);b.appendChild(sk);
+      document.body.appendChild(b);
+    }
+    b.style.display='flex';
+    document.getElementById('tutTxt').textContent=(this.step+1)+'/'+this.steps.length+' — '+this.steps[this.step].txt;
+  },
+  finish(){
+    this.active=false;
+    localStorage.setItem('tq_tut','done');
+    const b=this.bar();if(b)b.style.display='none';
+    toast('Tutorial complete — the rest is conquest');buzz(20);
+  },
+  tick(){
+    if(!this.active||!G||G.over){const b=this.bar();if(b&&!this.active)b.style.display='none';return;}
+    try{
+      if(this.steps[this.step].done()){
+        this.step++;
+        if(this.step>=this.steps.length)this.finish();
+        else{this.show();snd('done');}
+      }
+    }catch(e){}
+  }
+};
+/* ================= battle coach =================
+   Reads the player's economy once a second and offers ONE gentle nudge at a
+   time. Advice, not automation — it never touches the sim. */
+const COACH={lastT:-999,tick(){
+  if(OPT.coach===false||!G||G.over||G.paused||REC.play)return;
+  if(TUT.active)return;                          // one teacher at a time
+  if(G.t<120||G.t-this.lastT<45)return;
+  const st=G.P[localP];
+  const vills=G.units.filter(u=>u.p===localP&&u.type==='villager'&&u.hp>0);
+  const idle=vills.filter(u=>u.state==='idle').length;
+  const tc=G.blds.find(b=>b.p===localP&&b.type==='tc'&&b.built);
+  let msg=null;
+  if(idle>=4)msg=idle+' villagers stand idle — the . key or 🧑‍🌾 button finds them';
+  else if(popUsed(localP)>=popCap(localP)&&!G.blds.some(b=>b.p===localP&&b.type==='house'&&!b.built))
+    msg='You are housed — build more Houses to keep growing';
+  else if(tc&&!tc.queue.length&&st.f>=100&&vills.length<26&&popUsed(localP)<popCap(localP))
+    msg='Your Town Hall is idle — more villagers win wars';
+  else if(st.f>900&&st.age<3&&!st.aging)msg='You are floating '+Math.floor(st.f)+' food — spend it: villagers, soldiers, or the next Age';
+  else if(st.w>900)msg='You are floating '+Math.floor(st.w)+' wood — farms, buildings, archers';
+  if(msg){this.lastT=G.t;toast('🧭 '+msg);}
+}};
 /* ================= multiplayer lobby ================= */
 let mpCfg={map:0,diff:1,turbo:0,ai:0,team:0,rg:0};
 let mpCiv=0;
@@ -10343,8 +11243,9 @@ function mpRenderLobby(){
     const c=netLobby.cfg;
     mpEl('mpWait').textContent='Waiting for the host to begin — '+MAPS[c.map|0].name
       +(c.ai?' · '+c.ai+' computer opponent'+(c.ai>1?'s':''):'')
-      +(c.turbo?' · Turbo':'')
-      +(c.rg?' · 👑 Regicide':'');
+      +((c.turbo|0)===2?' · 🔥 Blitz':c.turbo?' · Turbo':'')
+      +(c.rg?' · 👑 Regicide':'')
+      +((c.team|0)===2?' · 🤝 Co-op vs AI':'');
   }
 }
 (function(){
@@ -10396,6 +11297,7 @@ mpEl('mpStart').onclick=()=>{
   if(!netHost)return;
   const ps=netLobby.players||[];
   if(ps.length+ (mpCfg.ai|0) < 2){mpStatus('You need at least one opponent — a friend or a computer');return;}
+  if((mpCfg.team|0)===2&&!(mpCfg.ai|0)){mpStatus('Co-op vs AI needs at least one computer opponent');return;}
   netSend({t:'cfg',cfg:mpCfg});
   netSend({t:'start',seed:(Math.random()*4294967296)>>>0});
 };
@@ -10434,10 +11336,56 @@ document.getElementById('sndBtn').onclick=()=>{
   if(!sndMuted)snd('click');
 };
 document.getElementById('againBtn').onclick=()=>{
+  if(REC.play){exitReplay();return;}
   document.getElementById('endOverlay').style.display='none';
   document.getElementById('startOverlay').style.display='flex';
   updateContBtn();
 };
+// Rematch: the same settings, the same seats — one tap back into the fray.
+// (A fresh seed: the same map WOULD be the same battle, move for move.)
+document.getElementById('rematchBtn').onclick=()=>{
+  document.getElementById('endOverlay').style.display='none';
+  resetNet();
+  document.getElementById('startOverlay').style.display='none';
+  begin();
+  toast('Rematch — same rules, fresh battlefield');
+};
+document.getElementById('saveRepBtn').onclick=()=>{
+  const btn=document.getElementById('saveRepBtn');
+  if(replaySave(REC.last)){btn.textContent='✓ Replay saved';REC.last=null;}
+  else btn.textContent='Could not save (storage full?)';
+};
+// replay browser
+function renderReplayList(){
+  const el=document.getElementById('replayList');
+  const list=replayList();
+  el.innerHTML='';
+  if(!list.length){el.innerHTML='<p class="sub" style="text-align:center">No replays yet — finish a solo battle and press “Save replay”.</p>';return;}
+  list.forEach((r,i)=>{
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;gap:6px;align-items:center;margin:6px 0';
+    const nm=document.createElement('span');
+    nm.style.cssText='flex:1;font-size:12.5px';nm.textContent=r.name||('Replay '+(i+1));
+    const pb=document.createElement('button');pb.className='bigbtn';pb.style.cssText='width:auto;padding:8px 14px;margin:0';
+    pb.textContent='▶ Watch';pb.onclick=()=>playReplay(r);
+    const db=document.createElement('button');db.className='bigbtn alt';db.style.cssText='width:auto;padding:8px 10px;margin:0';
+    db.textContent='🗑';db.setAttribute('aria-label','Delete replay');
+    db.onclick=()=>{const l2=replayList();l2.splice(i,1);
+      try{localStorage.setItem('tq_replays',JSON.stringify(l2));}catch(e){}
+      renderReplayList();};
+    row.appendChild(nm);row.appendChild(pb);row.appendChild(db);
+    el.appendChild(row);
+  });
+}
+document.getElementById('replayBack').onclick=()=>{
+  document.getElementById('replayOverlay').style.display='none';
+  document.getElementById('startOverlay').style.display='flex';
+};
+document.querySelectorAll('#repBar .repSpd').forEach(b=>{
+  b.onclick=()=>{REC.speed=+b.dataset.s;
+    document.querySelectorAll('#repBar .repSpd').forEach(x=>x.classList.toggle('sel',x===b));};
+});
+document.getElementById('repExit').onclick=exitReplay;
 document.getElementById('menuBtn').onclick=()=>{
   if(!G||G.over)return;
   // In a match the clock belongs to everyone: pausing here would stall every
@@ -10451,6 +11399,11 @@ document.getElementById('menuBtn').onclick=()=>{
 document.getElementById('resumeBtn').onclick=()=>{
   G.paused=false;document.getElementById('menuOverlay').style.display='none';
 };
+document.getElementById('menuSetBtn').onclick=()=>{
+  buildSettings();
+  document.getElementById('menuOverlay').style.display='none';
+  document.getElementById('setOverlay').style.display='flex';
+};
 document.getElementById('restartBtn').onclick=()=>{
   document.getElementById('menuOverlay').style.display='none';
   document.getElementById('startOverlay').style.display='flex';
@@ -10458,10 +11411,13 @@ document.getElementById('restartBtn').onclick=()=>{
   G=null;updateContBtn();
 };
 /* ================= main loop ================= */
-let last=0,acc=0;
+let last=0,acc=0,fpsAlt=false;
 function begin(){
   resize();newGame();
   if(mission&&mission.setup)mission.setup();
+  recBegin();                     // solo matches record themselves for replay
+  if(typeof tm==='function')tm('game_start',{mode:netMode?'mp':mission?'camp':REC.play?'replay':'solo',
+    map:mapSel,np:NP,pace:turboSel,rg:regicideSel});
   feedEl.innerHTML='';ovT=-1;
   updateTop();refreshPanel();
   if(mission)toast('Mission: '+mission.name+' — '+mission.obj);
@@ -13344,6 +14300,59 @@ const R3={
     this.uArr=Array.from({length:this.ARCHN},()=>[]);
     return true;
   },
+  /* ---- sculpted unit models (exported from the Blender forge) ---------------
+     Same 11-float vertex layout the boxed archetypes already use (pos, nrm,
+     col, part, teamMix) so they feed the SAME shader and the SAME instancing
+     path -- only the geometry changes, and every feature built on top of it
+     (team colour, age variants, shadows, topple, garrison) keeps working.
+     Loaded async. Until it lands, or if it never does (the artifact's CSP
+     blocks the fetch), every archetype simply keeps its boxed mesh. */
+  M3:null, m3Raw:null, m3Tried:false,
+  loadModels(){
+    if(this.m3Tried)return;this.m3Tried=true;
+    const bases=['models','app/models'];
+    const go=i=>{
+      if(i>=bases.length){dlChip(null);return;}
+      fetch(bases[i]+'.json').then(r=>r.ok?r.json():Promise.reject(0))
+        .then(meta=>fetch(bases[i]+'.bin').then(r=>{
+          // stream the 6.6MB body so the download chip can show real progress
+          const total=+r.headers.get('content-length')||0;
+          if(!r.body||!total)return r.arrayBuffer();
+          const rd=r.body.getReader(),chunks=[];let got=0;
+          const pump=()=>rd.read().then(({done,value})=>{
+            if(done){const out=new Uint8Array(got);let o=0;
+              for(const ch of chunks){out.set(ch,o);o+=ch.length;}
+              return out.buffer;}
+            chunks.push(value);got+=value.length;
+            dlChip('Downloading 3D models… '+Math.round(100*got/total)+'%');
+            return pump();});
+          return pump();
+        }).then(buf=>{this.m3Raw={meta,buf};dlChip(null);}))
+        .catch(()=>go(i+1));
+    };
+    go(0);
+  },
+  m3Build(){
+    const gl=this.gl,R=this.m3Raw;this.m3Raw=null;
+    if(!R)return;
+    const verts=new Float32Array(R.buf,0,R.meta.vBytes/4);
+    const idx=new Uint32Array(R.buf,R.meta.vBytes);
+    this.m3vbo=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,this.m3vbo);
+    gl.bufferData(gl.ARRAY_BUFFER,verts,gl.STATIC_DRAW);
+    this.m3ibo=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.m3ibo);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,idx,gl.STATIC_DRAW);
+    /* Map archetype index -> model through UARCH AND every AGEV variant: miss
+       the variants and a unit reverts to a boxed mesh the moment its owner
+       ages up, which looks like a bug rather than a tier. */
+    const arch={};
+    for(const k in R.meta.units){
+      const m=R.meta.units[k];
+      const a=this.UARCH[k];if(a!==undefined)arch[a]=m;
+      const av=this.AGEV[k];if(av)for(const x of av)arch[x]=m;
+      if(k==='villager'){arch[22]=m;arch[23]=m;}   // pick / hammer variants
+    }
+    this.M3={arch};
+  },
   drawUnits(mvp){
     if(this.noUnits)return;
     if(!this.uProg&&!this.initUnits())return;
@@ -13448,15 +14457,24 @@ const R3={
     gl.useProgram(this.uProg);
     gl.uniformMatrix4fv(this.uLoc.uMVP,false,mvp);
     gl.uniform3f(this.uLoc.uLight,-0.46,0.80,-0.38);
-    gl.bindBuffer(gl.ARRAY_BUFFER,this.uvbo);
+    /* Sculpted models need 32-bit indices; on a device without them the boxed
+       meshes carry on exactly as before. */
+    if(this.m3Raw&&this.uIdx32)this.m3Build();
     const st=44;
-    for(const [i,sz,o] of [[0,3,0],[1,3,12],[2,3,24],[3,2,36]]){
-      gl.enableVertexAttribArray(i);gl.vertexAttribPointer(i,sz,gl.FLOAT,false,st,o);
-      ex.vertexAttribDivisorANGLE(i,0);
-    }
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.uibo);
+    const bindGeom=(vbo,ibo)=>{
+      gl.bindBuffer(gl.ARRAY_BUFFER,vbo);
+      for(const [i,sz,o] of [[0,3,0],[1,3,12],[2,3,24],[3,2,36]]){
+        gl.enableVertexAttribArray(i);gl.vertexAttribPointer(i,sz,gl.FLOAT,false,st,o);
+        ex.vertexAttribDivisorANGLE(i,0);
+      }
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ibo);
+    };
+    let curGeom=null;
     for(let a=0;a<this.ARCHN;a++){
       const arr=A[a];if(!arr.length)continue;
+      const M=(this.M3&&this.M3.arch[a])||null;
+      const want=M?'m':'u';
+      if(want!==curGeom){curGeom=want;bindGeom(M?this.m3vbo:this.uvbo,M?this.m3ibo:this.uibo);}
       gl.bindBuffer(gl.ARRAY_BUFFER,this.uIvbo[a]);
       gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(arr),gl.DYNAMIC_DRAW);
       gl.enableVertexAttribArray(4);gl.vertexAttribPointer(4,4,gl.FLOAT,false,48,0);
@@ -13467,10 +14485,12 @@ const R3={
       ex.vertexAttribDivisorANGLE(6,1);
       gl.enableVertexAttribArray(7);gl.vertexAttribPointer(7,1,gl.FLOAT,false,48,44);
       ex.vertexAttribDivisorANGLE(7,1);
-      gl.uniform2f(this.uLoc.uPiv,this.uPiv[a][0],this.uPiv[a][1]);
-      ex.drawElementsInstancedANGLE(gl.TRIANGLES,this.uCnt[a],
-        this.uIdx32?gl.UNSIGNED_INT:gl.UNSIGNED_SHORT,
-        this.uOff[a]*(this.uIdx32?4:2),arr.length/12);
+      const M2=(this.M3&&this.M3.arch[a])||null;
+      gl.uniform2f(this.uLoc.uPiv,M2?M2.piv[0]:this.uPiv[a][0],
+                                  M2?M2.piv[1]:this.uPiv[a][1]);
+      ex.drawElementsInstancedANGLE(gl.TRIANGLES,M2?M2.iCount:this.uCnt[a],
+        (M2||this.uIdx32)?gl.UNSIGNED_INT:gl.UNSIGNED_SHORT,
+        M2?M2.iOff*4:this.uOff[a]*(this.uIdx32?4:2),arr.length/12);
     }
     for(let i=4;i<=7;i++){ex.vertexAttribDivisorANGLE(i,0);gl.disableVertexAttribArray(i);}
     gl.disableVertexAttribArray(3);
@@ -13913,6 +14933,10 @@ function toggle3D(){
              :'2D renderer');
 }
 document.getElementById('d3Btn').addEventListener('click',toggle3D);
+const _sprBtn=document.getElementById('sprBtn');
+if(_sprBtn)_sprBtn.addEventListener('click',toggleSprites);
+sprInit();
+R3.loadModels();   // sculpted 3D unit meshes for the WebGL renderer
 /* The standalone rotate handler that used to live here is GONE. It bound a
    SECOND independent pointerdown to #view3 and would now fight the shared
    onDown/onMove that give 3D its tap, command, box-select and pan. Its
@@ -13966,7 +14990,12 @@ function frame(now){
             'Your connection, or theirs, has gone quiet.');
       }else{netStall=0;netStallSeat=-1;netStallSaid=false;}
     }else{
-      while(acc>=.05&&guard++<6){step(.05);acc-=.05;}
+      // replay playback runs the same fixed steps, just more of them per frame
+      const spd=REC.play?REC.speed:1;
+      if(spd>1)acc+=dt*(spd-1);
+      const gmax=Math.min(48,6*spd);
+      while(acc>=.05&&guard++<gmax){step(.05);acc-=.05;}
+      if(REC.play)acc=Math.min(acc,.2);   // never bank an unpayable debt at 16x
     }
     if((now|0)%500<20)updateTop();
   }
@@ -13976,6 +15005,10 @@ function frame(now){
   // drawMini lives at the tail of the 2D draw(), which never runs in 3D — the
   // minimap froze the moment you toggled. It only touches mctx, so call it
   // directly; it is how you navigate, frozen is not an option.
+  // battery saver: render every other frame (the sim above still ran at full
+  // rate, so lockstep and game speed are untouched — only the paint thins out)
+  fpsAlt=!fpsAlt;
+  if(OPT.fps30&&fpsAlt)return;
   if(use3D){R3.draw();drawMini();}else draw();
   drawWeather();          // on the glass, over whichever renderer just drew
 }
@@ -14076,6 +15109,10 @@ function snowCover(){
   return Math.min(1,acc);
 }
 function drawWeather(){
+  if(OPT.reduceMotion){ // settings: a calm sky for motion-sensitive players
+    if(!wxWasClear){wxCtx.clearRect(0,0,wxC.width,wxC.height);wxWasClear=true;}
+    return;
+  }
   const wx=weatherNow();
   updateWeatherAudio(wx);
   const cov=snowCover();

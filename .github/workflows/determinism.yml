@@ -1,0 +1,20 @@
+# The project's most important invariant, enforced on every push:
+# the simulation must stay deterministic, and the four canonical baselines
+# must hash exactly. Multiplayer is lockstep — a one-tick divergence ends a
+# real match — so a moved baseline is either a deliberate sim change (update
+# the constant in test/determinism.mjs in the same commit) or a real bug.
+name: determinism
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  determinism:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --no-audit --no-fund
+      - run: npm test

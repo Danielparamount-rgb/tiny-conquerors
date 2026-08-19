@@ -1,0 +1,282 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tiny Conquerors — unit forge viewer</title>
+<style>
+  :root{ --bg:#171310; --pan:#221c17; --ink:#e8ddc8; --dim:#a2937c; --line:#3a3027; --hot:#d9a72c; }
+  *{ box-sizing:border-box }
+  body{ margin:0; background:var(--bg); color:var(--ink);
+        font:14px/1.5 "Trebuchet MS",Verdana,sans-serif }
+  header{ padding:14px 18px; border-bottom:1px solid var(--line); background:var(--pan) }
+  h1{ margin:0; font-size:17px; letter-spacing:.06em; text-transform:uppercase }
+  h1 span{ color:var(--dim); text-transform:none; letter-spacing:0; font-size:13px }
+  main{ display:flex; flex-wrap:wrap; gap:18px; padding:18px; align-items:flex-start }
+  .panel{ background:var(--pan); border:1px solid var(--line); padding:14px; border-radius:4px }
+  .ctl{ display:flex; flex-direction:column; gap:11px; min-width:230px }
+  label{ font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--dim);
+         display:block; margin-bottom:3px }
+  select,input[type=range]{ width:100% }
+  select{ background:#171310; color:var(--ink); border:1px solid var(--line);
+          padding:5px; border-radius:3px }
+  .row{ display:flex; gap:8px; flex-wrap:wrap }
+  button{ background:#332a21; color:var(--ink); border:1px solid var(--line);
+          padding:6px 11px; border-radius:3px; cursor:pointer; font-size:13px }
+  button:hover{ border-color:var(--hot) }
+  button.on{ background:var(--hot); color:#241a08; border-color:var(--hot) }
+  .swatch{ width:26px; height:26px; border-radius:3px; border:2px solid transparent; cursor:pointer }
+  .swatch.on{ border-color:var(--ink) }
+  canvas{ image-rendering:pixelated; display:block }
+  #stageWrap{ border:1px solid var(--line); border-radius:4px; overflow:hidden }
+  .grid8{ display:grid; grid-template-columns:repeat(4,auto); gap:6px }
+  .cellbox{ text-align:center; font-size:10px; color:var(--dim) }
+  .meta{ font-size:12px; color:var(--dim); margin-top:10px; line-height:1.7 }
+  .meta b{ color:var(--ink); font-weight:normal }
+  #err{ color:#e07a5f; padding:18px; display:none }
+</style>
+
+<header>
+  <h1>Unit forge <span>— sprite sheets rendered from the Blender rigs</span></h1>
+</header>
+
+<div id="err"></div>
+
+<main>
+  <div class="panel ctl">
+    <div>
+      <label for="unit">Unit</label>
+      <select id="unit"></select>
+    </div>
+    <div>
+      <label for="anim">Animation</label>
+      <select id="anim"></select>
+    </div>
+    <div>
+      <label>Facing <b id="dirLbl">2</b> <span style="color:var(--dim)">(octant)</span></label>
+      <input type="range" id="dir" min="0" max="7" value="2" step="1">
+    </div>
+    <div>
+      <label>Speed <b id="spdLbl">1.0&times;</b></label>
+      <input type="range" id="spd" min="10" max="200" value="100" step="5">
+    </div>
+    <div>
+      <label>Zoom <b id="zoomLbl">4&times;</b></label>
+      <input type="range" id="zoom" min="1" max="8" value="4" step="1">
+    </div>
+    <div>
+      <label>Player colour</label>
+      <div class="row" id="teams"></div>
+    </div>
+    <div class="row">
+      <button id="play" class="on">Pause</button>
+      <button id="allDirs">All 8 facings</button>
+    </div>
+    <div class="row">
+      <button id="bgBtn">Background: grass</button>
+      <button id="anchorBtn">Anchor: off</button>
+    </div>
+    <div class="meta" id="meta"></div>
+  </div>
+
+  <div class="panel">
+    <div id="stageWrap"><canvas id="stage" width="512" height="512"></canvas></div>
+  </div>
+
+  <div class="panel" id="gridPanel" style="display:none">
+    <div class="grid8" id="grid8"></div>
+  </div>
+</main>
+
+<script>
+/* ------------------------------------------------------------------ *
+ * Team recolour.  The sheets are rendered with player 1 blue baked in and
+ * a companion mask marking which pixels are team surfaces.  Every team
+ * palette entry shares one hue, so the blue channel alone carries the
+ * shading band -- k = blue/0xd4 recovers it, and k * target repaints the
+ * pixel in any player colour without a second render.
+ * ------------------------------------------------------------------ */
+const SRC_B = 0xd4;
+const TEAMS = [
+  ['#2a56d4','blue'], ['#d42a1e','red'],  ['#2f9e28','green'],  ['#e8c31f','yellow'],
+  ['#1fb5c8','cyan'], ['#9b3fd4','purple'],['#8c8c8c','grey'],  ['#e8801f','orange']
+];
+
+const $ = id => document.getElementById(id);
+const stage = $('stage'), sctx = stage.getContext('2d');
+let atlas = null, unitKey = null, animKey = null;
+let sheets = {};                    // cacheKey -> canvas (already tinted)
+let frame = 0, playing = true, last = 0, acc = 0;
+let team = 0, showGrid = false, bgMode = 1, showAnchor = false;
+
+const BGS = [
+  {name:'none',  paint:(c,x,y,w,h)=>{ c.clearRect(x,y,w,h); }},
+  {name:'grass', paint:(c,x,y,w,h)=>{ c.fillStyle='#4e6b31'; c.fillRect(x,y,w,h);
+        c.fillStyle='rgba(0,0,0,.10)';
+        for(let j=0;j<h;j+=8) for(let i=(j/8%2)*8;i<w;i+=16) c.fillRect(x+i,y+j,8,8); }},
+  {name:'dirt',  paint:(c,x,y,w,h)=>{ c.fillStyle='#7a5f3c'; c.fillRect(x,y,w,h); }},
+  {name:'dark',  paint:(c,x,y,w,h)=>{ c.fillStyle='#141110'; c.fillRect(x,y,w,h); }},
+  {name:'check', paint:(c,x,y,w,h)=>{ for(let j=0;j<h;j+=10) for(let i=0;i<w;i+=10){
+        c.fillStyle=((i/10+j/10)&1)?'#2a2521':'#37312b'; c.fillRect(x+i,y+j,10,10);} }}
+];
+
+function loadImg(src){
+  return new Promise((res,rej)=>{ const im=new Image();
+    im.onload=()=>res(im); im.onerror=()=>rej(new Error('missing '+src)); im.src=src; });
+}
+
+/* Build (and cache) a tinted copy of one animation sheet. */
+async function getSheet(unit, anim, teamIdx){
+  const key = unit+'/'+anim+'/'+teamIdx;
+  if(sheets[key]) return sheets[key];
+  const a = atlas[unit].anims[anim];
+  const base = await loadImg('sheets/'+a.sheet);
+  const cv = document.createElement('canvas');
+  cv.width = base.width; cv.height = base.height;
+  const cx = cv.getContext('2d');
+  cx.drawImage(base,0,0);
+  if(a.mask && teamIdx !== 0){
+    const mk = await loadImg('sheets/'+a.mask);
+    const mc = document.createElement('canvas');
+    mc.width = mk.width; mc.height = mk.height;
+    mc.getContext('2d').drawImage(mk,0,0);
+    const bd = cx.getImageData(0,0,cv.width,cv.height);
+    const md = mc.getContext('2d').getImageData(0,0,cv.width,cv.height);
+    const hex = TEAMS[teamIdx][0];
+    const tr = parseInt(hex.substr(1,2),16), tg = parseInt(hex.substr(3,2),16),
+          tb = parseInt(hex.substr(5,2),16);
+    const B = bd.data, M = md.data;
+    for(let i=0;i<B.length;i+=4){
+      if(B[i+3] === 0 || M[i] < 128) continue;      // not a team surface
+      const k = B[i+2] / SRC_B;                     // shading band, recovered
+      B[i]   = Math.min(255, tr*k);
+      B[i+1] = Math.min(255, tg*k);
+      B[i+2] = Math.min(255, tb*k);
+    }
+    cx.putImageData(bd,0,0);
+  }
+  sheets[key] = cv;
+  return cv;
+}
+
+function meta(){
+  const u = atlas[unitKey], a = u.anims[animKey];
+  $('meta').innerHTML =
+    `cell <b>${u.cell}px</b> &middot; ${u.ppm} px/m<br>` +
+    `anchor <b>${u.anchorX}, ${u.anchorY}</b> (feet in cell)<br>` +
+    `<b>${a.frames}</b> frames @ <b>${a.fps}fps</b> &middot; ${a.loop?'loops':'one-shot'}<br>` +
+    `row = octant, matches <b>u._oct</b><br>` +
+    `<span style="opacity:.7">${a.sheet}</span>`;
+}
+
+async function draw(){
+  const u = atlas[unitKey], a = u.anims[animKey], cell = u.cell;
+  const z = +$('zoom').value;
+  const sheet = await getSheet(unitKey, animKey, team);
+  const dir = +$('dir').value;
+
+  if(showGrid){
+    $('gridPanel').style.display = '';
+    const box = $('grid8');
+    if(box.childElementCount !== 8){
+      box.innerHTML = '';
+      for(let d=0;d<8;d++){
+        const w = document.createElement('div'); w.className='cellbox';
+        const c = document.createElement('canvas'); c.id='g'+d;
+        w.appendChild(c); w.appendChild(document.createTextNode('oct '+d));
+        box.appendChild(w);
+      }
+    }
+    for(let d=0;d<8;d++){
+      const c = $('g'+d), gz = Math.max(1, z-1);
+      c.width = cell*gz; c.height = cell*gz;
+      const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
+      BGS[bgMode].paint(g,0,0,c.width,c.height);
+      g.drawImage(sheet, frame*cell, d*cell, cell, cell, 0,0, c.width, c.height);
+    }
+  } else {
+    $('gridPanel').style.display = 'none';
+  }
+
+  stage.width = cell*z; stage.height = cell*z;
+  sctx.imageSmoothingEnabled = false;
+  BGS[bgMode].paint(sctx,0,0,stage.width,stage.height);
+  sctx.drawImage(sheet, frame*cell, dir*cell, cell, cell, 0,0, stage.width, stage.height);
+  if(showAnchor){
+    sctx.strokeStyle='rgba(217,167,44,.9)'; sctx.lineWidth=1;
+    const ax=u.anchorX*z, ay=u.anchorY*z;
+    sctx.beginPath(); sctx.moveTo(ax-9,ay); sctx.lineTo(ax+9,ay);
+    sctx.moveTo(ax,ay-9); sctx.lineTo(ax,ay+9); sctx.stroke();
+  }
+}
+
+function tick(ts){
+  const a = atlas && atlas[unitKey] && atlas[unitKey].anims[animKey];
+  if(a){
+    const dt = Math.min(0.1, (ts-last)/1000 || 0); last = ts;
+    if(playing){
+      acc += dt * a.fps * (+$('spd').value/100);
+      while(acc >= 1){
+        acc -= 1;
+        frame = a.loop ? (frame+1) % a.frames : Math.min(frame+1, a.frames-1);
+        if(!a.loop && frame === a.frames-1 && acc > a.frames) frame = 0;
+      }
+      if(!a.loop && frame === a.frames-1 && acc > 0.001 && dt) {
+        // hold the corpse a beat, then replay so death stays watchable
+        if((tick.hold = (tick.hold||0) + dt) > 1.2){ tick.hold = 0; frame = 0; }
+      }
+      draw();
+    }
+  }
+  requestAnimationFrame(tick);
+}
+
+function fillAnims(){
+  const sel = $('anim'); sel.innerHTML = '';
+  for(const k of Object.keys(atlas[unitKey].anims)){
+    const o = document.createElement('option'); o.value = k; o.textContent = k;
+    sel.appendChild(o);
+  }
+  animKey = sel.value; frame = 0; meta();
+}
+
+async function boot(){
+  try{
+    atlas = await (await fetch('sheets/atlas.json')).json();
+  }catch(e){
+    $('err').style.display='block';
+    $('err').textContent =
+      'Could not read sheets/atlas.json — run tc_forge.py in "sheets" mode first, '+
+      'and open this page over HTTP (serve2.ps1), not as a file:// URL.';
+    return;
+  }
+  const us = $('unit');
+  for(const k of Object.keys(atlas)){
+    const o = document.createElement('option'); o.value=k; o.textContent=k; us.appendChild(o);
+  }
+  unitKey = us.value; fillAnims();
+
+  const tb = $('teams');
+  TEAMS.forEach((t,i)=>{
+    const b = document.createElement('div');
+    b.className = 'swatch'+(i===0?' on':''); b.style.background = t[0]; b.title = t[1];
+    b.onclick = ()=>{ team=i; [...tb.children].forEach((c,j)=>c.classList.toggle('on',j===i)); draw(); };
+    tb.appendChild(b);
+  });
+
+  us.onchange   = ()=>{ unitKey=us.value; fillAnims(); draw(); };
+  $('anim').onchange = ()=>{ animKey=$('anim').value; frame=0; meta(); draw(); };
+  $('dir').oninput   = ()=>{ $('dirLbl').textContent=$('dir').value; draw(); };
+  $('spd').oninput   = ()=>{ $('spdLbl').textContent=(+$('spd').value/100).toFixed(1)+'×'; };
+  $('zoom').oninput  = ()=>{ $('zoomLbl').textContent=$('zoom').value+'×'; draw(); };
+  $('play').onclick  = e=>{ playing=!playing; e.target.textContent=playing?'Pause':'Play';
+                            e.target.classList.toggle('on',playing); };
+  $('allDirs').onclick = e=>{ showGrid=!showGrid; e.target.classList.toggle('on',showGrid); draw(); };
+  $('bgBtn').onclick = e=>{ bgMode=(bgMode+1)%BGS.length;
+                            e.target.textContent='Background: '+BGS[bgMode].name; draw(); };
+  $('anchorBtn').onclick = e=>{ showAnchor=!showAnchor;
+                            e.target.textContent='Anchor: '+(showAnchor?'on':'off');
+                            e.target.classList.toggle('on',showAnchor); draw(); };
+  draw();
+  requestAnimationFrame(tick);
+}
+boot();
+</script>
