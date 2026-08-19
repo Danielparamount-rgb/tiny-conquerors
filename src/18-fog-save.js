@@ -1,5 +1,44 @@
 /* ================= fog of war ================= */
-let fogDirty=true,lastTreeCount=0,grainPat=null,dirtPatches=[];
+let fogDirty=true,lastTreeCount=0,grainPat=null,groundPat=null,dirtPatches=[];
+/* G2: one seamless grass texture, synthesized at load. Elements near an edge
+   are stamped at all nine wrap offsets so the tile repeats without a seam. */
+function mkGroundTex(){
+  const S=208,c=document.createElement('canvas');c.width=S;c.height=S;
+  const g=c.getContext('2d');
+  const rnd=mulberry(24601);
+  g.fillStyle='#6d9a4a';g.fillRect(0,0,S,S);
+  const wrap=f=>{for(const ox of[-S,0,S])for(const oy of[-S,0,S])f(ox,oy);};
+  // low-frequency fields: broad soft patches of shade and sun
+  for(let i=0;i<24;i++){
+    const x=rnd()*S,y=rnd()*S,r=30+rnd()*52;
+    const col=i%2?'rgba(44,78,28,.16)':'rgba(146,182,92,.13)';
+    wrap((ox,oy)=>{
+      const gg=g.createRadialGradient(x+ox,y+oy,0,x+ox,y+oy,r);
+      gg.addColorStop(0,col);gg.addColorStop(1,'rgba(0,0,0,0)');
+      g.fillStyle=gg;g.fillRect(x+ox-r,y+oy-r,2*r,2*r);
+    });
+  }
+  // mid-frequency clumps: ragged darker tussocks
+  for(let i=0;i<170;i++){
+    const x=rnd()*S,y=rnd()*S,r=2.5+rnd()*5;
+    g.fillStyle=rnd()<.6?'rgba(36,64,24,.14)':'rgba(170,198,110,.12)';
+    wrap((ox,oy)=>{g.beginPath();g.ellipse(x+ox,y+oy,r,r*.6,rnd()*3,0,7);g.fill();});
+  }
+  // short directional blade strokes — the thing square speckles never gave us
+  g.lineWidth=1;
+  for(let i=0;i<2300;i++){
+    const x=rnd()*S,y=rnd()*S,a=-1.2+(rnd()-.5)*.9,L=2+rnd()*3.2;
+    g.strokeStyle=rnd()<.52
+      ?'rgba(30,54,20,'+(.09+rnd()*.13).toFixed(2)+')'
+      :'rgba(200,222,142,'+(.07+rnd()*.11).toFixed(2)+')';
+    const dx=Math.cos(a)*L,dy=Math.sin(a)*L;
+    wrap((ox,oy)=>{
+      if((ox||oy)&&(x>8&&x<S-8&&y>8&&y<S-8))return; // interior strokes need no wrap
+      g.beginPath();g.moveTo(x+ox,y+oy);g.lineTo(x+ox+dx,y+oy+dy);g.stroke();
+    });
+  }
+  return c;
+}
 let cullX0=-1e9,cullX1=1e9,cullY0=-1e9,cullY1=1e9; // unit screen-cull bounds, set each draw()
 let RIG_LOD=false; // true below z .7 — rigs drop micro-detail (faces, mail rings, fletching)
 function updateFog(){

@@ -322,21 +322,23 @@ function refreshTerrain(){
   // brighter and yellower than the old dry olive, still tightly spaced
   // concept-art pass: off the dry yellow-olive and into a saturated meadow green.
   // Still tightly spaced (no tile checkerboard) and GRH stays within ~6% of GR.
-  const GR=['#6d9a4a','#6e9b48','#6c984b','#709e4c','#6d9a49','#6b9749','#719f4d','#6f9c4b','#73a24c','#699546'];
-  const GRH=['#73a34e','#74a44c','#72a14f','#77a751','#73a34d','#71a04d','#78a951','#75a54f','#7aac51','#6f9e4a'];
+  /* GRAPHICS CAMPAIGN G2: the ground is now a real TEXTURE, not a flat fill.
+     One seamless 208px grass tile is synthesized once per load — low-frequency
+     mottled fields, mid-frequency clumps, and short directional blade strokes —
+     and pattern-filled under everything. Runtime-generated on purpose: it works
+     in the artifact (no fetch), ships zero bytes, and the 3D renderer inherits
+     it automatically because it samples this same canvas. Contrast is kept
+     moderate so units still read on top (the game's standing terrain rule). */
+  if(!groundPat)groundPat=tctx.createPattern(mkGroundTex(),'repeat');
+  tctx.fillStyle=groundPat;
+  tctx.fillRect(0,0,MAP*TILE,MAP*TILE);
+  // hills keep their slightly sunnier read (high ground is +25% damage — it must show)
   for(let y=0;y<MAP;y++)for(let x=0;x<MAP;x++){
+    if(!(G.elev&&G.elev[y*MAP+x]))continue;
     const k=x+','+y;
     if(G.water[k]||G.ford[k])continue;
-    const hill=G.elev&&G.elev[y*MAP+x];
-    tctx.fillStyle=(hill?GRH:GR)[hash2(x,y)%10];
+    tctx.fillStyle='rgba(236,240,180,.10)';
     tctx.fillRect(x*TILE,y*TILE,TILE,TILE);
-    // grain speckle texture
-    const hsp=hash2(x*31+3,y*17+11);
-    for(let i=0;i<8;i++){
-      const sx=x*TILE+1+((hsp>>>(i*2))%24),sy=y*TILE+1+((hsp>>>(i*2+9))%24);
-      tctx.fillStyle=i%2?'rgba(34,56,22,.18)':'rgba(196,214,150,.15)';
-      tctx.fillRect(sx,sy,2,1.8);
-    }
   }
   // dense fine grain tiled across the whole ground — this, not tile contrast,
   // is what makes AoE2 terrain read as real earth

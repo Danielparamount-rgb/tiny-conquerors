@@ -94,9 +94,33 @@ function snowCover(){
   }
   return Math.min(1,acc);
 }
+/* GRAPHICS CAMPAIGN G3: one grade over the final frame, on this same glass —
+   both renderers pass under it, so 2D and 3D share a light. Warm key from the
+   sheet-sun's corner, a cool shadow floor, and a gentle vignette. Static, so
+   in quiet weather it is painted ONCE and costs nothing per frame. */
+let gradeKey='';
+function drawGrade(){
+  const g=wxCtx,w=wxC.width,h=wxC.height;
+  if(!w||!h)return;
+  const kk=w+':'+h;
+  // gradients are cheap to build but this runs per-frame in a storm — cache them
+  if(gradeKey!==kk){
+    gradeKey=kk;
+    const gw=g.createLinearGradient(0,0,w*.7,h);
+    gw.addColorStop(0,'rgba(255,228,164,.075)');gw.addColorStop(.55,'rgba(255,228,164,0)');
+    const gc=g.createLinearGradient(0,h*.45,0,h);
+    gc.addColorStop(0,'rgba(30,48,92,0)');gc.addColorStop(1,'rgba(30,48,92,.085)');
+    const gv=g.createRadialGradient(w/2,h/2,Math.min(w,h)*.42,w/2,h/2,Math.max(w,h)*.72);
+    gv.addColorStop(0,'rgba(18,14,6,0)');gv.addColorStop(1,'rgba(18,14,6,.17)');
+    wxGrads=[gw,gc,gv];
+  }
+  for(const gr of wxGrads){g.fillStyle=gr;g.fillRect(0,0,w,h);}
+}
+let wxGrads=[];
 function drawWeather(){
+  if(wxC.width!==vw||wxC.height!==vh){wxC.width=vw;wxC.height=vh;gradeKey='';wxWasClear=false;}
   if(OPT.reduceMotion){ // settings: a calm sky for motion-sensitive players
-    if(!wxWasClear){wxCtx.clearRect(0,0,wxC.width,wxC.height);wxWasClear=true;}
+    if(!wxWasClear){wxCtx.clearRect(0,0,wxC.width,wxC.height);drawGrade();wxWasClear=true;}
     return;
   }
   const wx=weatherNow();
@@ -104,11 +128,10 @@ function drawWeather(){
   const cov=snowCover();
   wxSnowLvl=cov>.6?2:cov>.22?1:0;
   if(wx.inten<=0.01&&cov<=0.02){
-    if(!wxWasClear){wxCtx.clearRect(0,0,wxC.width,wxC.height);wxWasClear=true;}
+    if(!wxWasClear){wxCtx.clearRect(0,0,wxC.width,wxC.height);drawGrade();wxWasClear=true;}
     return;
   }
   wxWasClear=false;
-  if(wxC.width!==vw||wxC.height!==vh){wxC.width=vw;wxC.height=vh;}
   const g=wxCtx,t=performance.now()*.001,inten=wx.inten;
   g.clearRect(0,0,vw,vh);
   if(cov>0.02){ // winter light — the world pales as the snow lies
@@ -168,6 +191,7 @@ function drawWeather(){
       g.beginPath();g.arc(x,y,r,0,7);g.fill();
     }
   }
+  drawGrade();   // the grade rides over the storm too
 }
 /* The box-select rubber band is painted by the 2D draw(), which is hidden in
    3D — the drag worked but showed nothing. A fixed-position div tracks selBox
