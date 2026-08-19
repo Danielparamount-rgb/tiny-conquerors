@@ -3561,6 +3561,13 @@ function frame(now){
       // replay playback runs the same fixed steps, just more of them per frame
       const spd=REC.play?REC.speed:1;
       if(spd>1)acc+=dt*(spd-1);
+      // Command-time slow (solo only — a lockstep clock belongs to everyone):
+      // while placing a building / drawing a wall / aiming an attack-move, time
+      // eases to ~40% so a finger can be precise without being punished. The
+      // genre-universal touch mitigation (Bad North 1/5x, CoH's command wheel,
+      // Rome's default-on Command Slowdown). Replays are untouched: commands
+      // are tick-stamped, so how fast the wall-clock ran never matters.
+      if(OPT.cmdSlow!==false&&!REC.play&&(G.placing||G.pend||G.amode))acc=Math.max(0,acc-dt*.6);
       const gmax=Math.min(48,6*spd);
       while(acc>=.05&&guard++<gmax){step(.05);acc-=.05;}
       if(REC.play)acc=Math.min(acc,.2);   // never bank an unpayable debt at 16x

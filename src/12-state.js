@@ -15,6 +15,10 @@ let localP=0;
 let humanSlots=[0];   // slots with a person behind them; the rest get an AI
 let netCivs=null;     // per-slot civ choices from a lobby, or null for "roll for the AI"
 let netTeams=null;    // per-slot team ids from a lobby, or null to use teamSel
+/* Per-slot handicap multipliers from a lobby (1 = none). The AoE2:DE "even the
+   odds between friends" tool: visible, consensual, self-declared in the lobby.
+   Boosts starting resources, gathering, farming and construction. */
+let netHcaps=null;
 /* ---------- deterministic simulation RNG (multiplayer foundation) ----------
    Every random draw that changes GAME STATE must come from SR()/SRi(), seeded
    once per match. Two machines given the same seed and the same command stream
@@ -389,7 +393,8 @@ function stateHash(){
   const B=G.blds.map(b=>[b.id,b.p,b.type,b.tx,b.ty,r(b.hp),b.built?1:0,b.queue.join('+')].join(',')).join('|');
   const R=Object.keys(G.res).sort().map(k=>k+':'+r(G.res[k].amt)).join('|');
   const P=G.P.map(s=>[r(s.f),r(s.w),r(s.g),s.age,s.civ,(s.uts||[]).join('+'),
-    JSON.stringify(s.eco||{}),JSON.stringify(s.uni||{}),s.pt?1:0].join(',')).join('|');
+    JSON.stringify(s.eco||{}),JSON.stringify(s.uni||{}),s.pt?1:0].join(',')
+    +(s.hcap&&s.hcap!==1?',hc'+s.hcap:'')).join('|');   // absent at 1x — old baselines unmoved
   const A=G.ais.map(a=>a?[a.wave,r(a.nextAtk),a.tgtId||0].join(','):'-').join('|');
   const str=U+'#'+B+'#'+R+'#'+P+'#'+A+'#'+r(G.t)+'#'+uid;
   let h=2166136261;
@@ -446,6 +451,12 @@ function newGame(){
     else{do{c=SRi(CIVS.length);}while(used.includes(c));}
     used.push(c);
     P.push(mkP(c));
+    // Lobby handicap: hcap stays ABSENT at 1x so the field adds nothing to
+    // stateHash and every pre-handicap baseline/save hashes unchanged.
+    if(netHcaps&&netHcaps[p]&&netHcaps[p]!==1){
+      const hc=P[p].hcap=netHcaps[p];
+      P[p].f*=hc;P[p].w*=hc;P[p].g*=hc;   // the boost starts at the start
+    }
     ais.push(humanSlots.includes(p)?null
       :{wave:0,nextAtk:DIFF[diffSel].firstWave+(p-1)*40,tick:.3*(p-1),attacking:false});
   }

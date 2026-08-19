@@ -177,10 +177,10 @@ function netBegin(m){
   playersSel=NP;
   mapSel=cfg.map|0;diffSel=cfg.diff==null?1:cfg.diff|0;turboSel=cfg.turbo|0;
   teamSel=cfg.team|0;regicideSel=cfg.rg|0;   // the lobby decides the mode — BOTH appliers must read it
-  // Civs and teams come from the lobby, not from this machine's start screen,
-  // so every peer builds the same players.
-  netCivs=[];netTeams=null;
-  for(const p of players)netCivs[p.seat]=p.civ;
+  // Civs, teams and handicaps come from the lobby, not from this machine's
+  // start screen, so every peer builds the same players.
+  netCivs=[];netTeams=null;netHcaps=[];
+  for(const p of players){netCivs[p.seat]=p.civ;netHcaps[p.seat]=(p.hc||100)/100;}
   civSel=netCivs[localP]!=null?netCivs[localP]:0;
   if((cfg.team|0)===1){
     netTeams=[];
@@ -223,7 +223,8 @@ function netRejoin(m){
   NP=players.length+ai;playersSel=NP;
   mapSel=cfg.map|0;diffSel=cfg.diff==null?1:cfg.diff|0;
   turboSel=cfg.turbo|0;teamSel=cfg.team|0;regicideSel=cfg.rg|0;
-  netCivs=[];for(const p of players)netCivs[p.seat]=p.civ;
+  netCivs=[];netHcaps=[];
+  for(const p of players){netCivs[p.seat]=p.civ;netHcaps[p.seat]=(p.hc||100)/100;}
   localP=m.seat;
   civSel=netCivs[localP]!=null?netCivs[localP]:0;
   humanSlots=players.map(p=>p.seat);   // as the match STARTED; the journal edits it from there

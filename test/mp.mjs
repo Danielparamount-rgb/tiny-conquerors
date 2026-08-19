@@ -78,6 +78,10 @@ const joined = await B.evaluate((code) => new Promise((res, rej) => {
 }), code);
 check('matched build joins', joined === true);
 
+// --- B declares a +50% handicap (the evener) — it must reach BOTH sims ---
+await B.evaluate(() => netSend({t: 'seat', hc: 150}));
+await new Promise(r => setTimeout(r, 300));
+
 // --- start the match from A ---
 await A.evaluate(() => {
   netSend({t: 'cfg', cfg: {map: 0, diff: 1, turbo: 0, ai: 0, team: 0, rg: 0}});
@@ -126,11 +130,15 @@ for (let round = 0; round < 400; round++) {
 
 const [ra, rb] = await Promise.all([A, B].map(p => p.evaluate(() => ({
   t: netTurn, h: stateHash(), ih: (netInHash >>> 0).toString(16),
+  hc0: G.P[0].hcap || 1, hc1: G.P[1].hcap || 1,
   halted: document.getElementById('netHalt').style.display === 'flex',
 }))));
 check('both peers reached the target turn', ra.t >= TARGET && rb.t >= TARGET, `A ${ra.t} B ${rb.t}`);
 check('state hashes identical', ra.h === rb.h, `A ${ra.h} B ${rb.h}`);
 check('input-stream hashes identical', ra.ih === rb.ih, `A ${ra.ih} B ${rb.ih}`);
+check('handicap applied identically on both peers',
+  ra.hc0 === 1 && ra.hc1 === 1.5 && rb.hc0 === 1 && rb.hc1 === 1.5,
+  `A ${ra.hc0}/${ra.hc1} B ${rb.hc0}/${rb.hc1}`);
 check('commands actually crossed the wire', ordered.A && ordered.B && ra.ih !== '80000000');
 check('no desync halt fired', !ra.halted && !rb.halted);
 

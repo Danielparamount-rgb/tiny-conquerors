@@ -17,7 +17,7 @@
  *   client -> server
  *     {t:'host', name, v}              create a room, become seat 0 (v = build version)
  *     {t:'join', code, name, v}        take the next free seat — v must match the host's
- *     {t:'seat', civ, team}            set your civ / team in the lobby
+ *     {t:'seat', civ, team, hc}        set your civ / team / handicap % in the lobby
  *     {t:'cfg', cfg}                   host only: map, difficulty, pace, AI count
  *     {t:'start', seed}                host only: lock the lobby and begin
  *     {t:'cmds', turn, cmds}           your command list for a future turn
@@ -96,7 +96,7 @@ function lobbyView(room) {
     cfg: room.cfg,
     started: room.started,
     players: room.seats
-      .map((s, i) => (s ? { seat: i, name: s.name, civ: s.civ, team: s.team } : null))
+      .map((s, i) => (s ? { seat: i, name: s.name, civ: s.civ, team: s.team, hc: s.hc || 100 } : null))
       .filter(Boolean),
   };
 }
@@ -327,6 +327,8 @@ wss.on('connection', (ws) => {
         if (!s) return;
         if (Number.isInteger(m.civ)) s.civ = Math.max(0, Math.min(63, m.civ));
         if (Number.isInteger(m.team)) s.team = Math.max(0, Math.min(7, m.team));
+        if (Number.isInteger(m.hc)) s.hc = Math.max(100, Math.min(300, m.hc)); // handicap %, self-declared
+
         broadcast(room, lobbyView(room));
         send(ws, lobbyView(room));
         touch(room);

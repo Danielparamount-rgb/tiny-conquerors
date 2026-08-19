@@ -10,6 +10,8 @@ function mpShow(){
   mpEl('mpRoom').style.display='none';
   mpEl('mpName').value=localStorage.getItem('tq_name')||'';
   mpEl('mpCode').value='';
+  mpHc=100;mpEl('mpHcName').textContent='None';   // a boost is per-room, never sticky
+  document.querySelectorAll('#mpHcPick button[data-hc]').forEach(x=>x.classList.toggle('sel',x.getAttribute('data-hc')==='100'));
   mpStatus(netAvailable()?'':'Multiplayer needs the web app at tiny-conquerors.onrender.com — the preview sandbox blocks connections.');
   if(MATH_DRIFT)mpStatus('⚠ This device computes numbers differently from the tested build — a match may fall out of step. Playable, but expect possible desyncs.');
   mpEl('mpOverlay').style.display='flex';
@@ -28,7 +30,9 @@ function mpRenderLobby(){
     return '<div style="padding:3px 0;color:'+TEAMS[p.seat].dark+'">'
       +'<b>'+(p.seat+1)+'.</b> '+p.name+(me?' <i>(you)</i>':'')
       +(p.seat===netLobby.host?' 👑':'')
-      +' — '+CIVS[p.civ]?.name+'</div>';
+      +' — '+CIVS[p.civ]?.name
+      +(p.hc>100?' <b>⬆+'+(p.hc-100)+'%</b>':'')   // the evener is public by design
+      +'</div>';
   }).join('')||'<div>Waiting for players…</div>';
   mpEl('mpHostCtl').style.display=netHost?'':'none';
   mpEl('mpWait').style.display=netHost?'none':'';
@@ -59,6 +63,19 @@ function mpRenderLobby(){
     grid.appendChild(b);
   });
 })();
+/* The evener: a self-declared, publicly visible economy boost (AoE2:DE's
+   handicap idea) so friends of different skill can still fight each other. */
+let mpHc=100;
+document.querySelectorAll('#mpHcPick button[data-hc]').forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll('#mpHcPick button[data-hc]').forEach(x=>x.classList.remove('sel'));
+    b.classList.add('sel');
+    mpHc=+b.getAttribute('data-hc');
+    mpEl('mpHcName').textContent=mpHc>100?'+'+(mpHc-100)+'%':'None';
+    mpEl('mpHcPick').open=false;
+    netSend({t:'seat',hc:mpHc});
+  };
+});
 function mpHostBtnRow(sel,key,after){
   document.querySelectorAll('#mpHostCtl button['+sel+']').forEach(b=>{
     b.onclick=()=>{

@@ -58,6 +58,21 @@ document.getElementById('startBtn').onclick=()=>{
   begin();
   TUT.begin();     // first battle ever? walk them in
 };
+/* Quick Battle: the research-backed session fit — a standard match is several
+   times the 5-minute median phone session, so give the phone break its own
+   button. One foe, open River map, Blitz pace; the player's civ and difficulty
+   choices still apply. */
+document.getElementById('quickBtn').onclick=()=>{
+  initAudio();
+  if(AC&&AC.state==='suspended')AC.resume();
+  resetNet();
+  mission=null;REC.play=null;dailyRun=null;
+  playersSel=2;mapSel=0;teamSel=0;turboSel=2;regicideSel=0;
+  document.getElementById('startOverlay').style.display='none';
+  begin();
+  TUT.begin();
+  toast('⚡ Quick Battle — one foe, Blitz pace. Raze their Town Hall!');
+};
 /* ---- daily challenge: one seed per calendar day, the SAME for everyone.
    Fixed rules (4 lords, free-for-all, Knight, standard pace, the date picks
    your civ and the battlefield) so times are comparable — determinism means
@@ -156,6 +171,7 @@ function buildSettings(){
   row('🎵 Adaptive music',toggle('music',true));
   row('📳 Haptic feedback (phones)',toggle('haptics',true));
   row('🧭 Battle coach tips',toggle('coach',true));
+  row('🎯 Slow time while placing / aiming (solo)',toggle('cmdSlow',true));
   row('🎥 Camera follows your battles',toggle('followFight',false));
   row('🌤 Reduce motion (no weather / sway)',toggle('reduceMotion',false));
   row('🔋 Battery saver (30 fps)',toggle('fps30',false));

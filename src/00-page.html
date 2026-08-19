@@ -424,6 +424,7 @@
     <p class="sub" id="dailyBlurb" style="margin:4px 0 0;text-align:center;display:none"></p>
     </div>
     <button class="bigbtn" id="startBtn">⚔ &nbsp;Begin the Conquest</button>
+    <button class="bigbtn alt" id="quickBtn">⚡ &nbsp;Quick Battle<small style="display:block;font-weight:400;font-size:11px;letter-spacing:0">one foe · Blitz pace · fits a phone break</small></button>
     <button class="bigbtn alt" id="campBtn">📜 &nbsp;Campaign</button>
     <button class="bigbtn alt" id="mpBtn">🤝 &nbsp;Play with Friends</button>
     <button class="bigbtn alt" id="contBtn" style="display:none">▶ &nbsp;Continue saved game</button>
@@ -539,6 +540,15 @@
       <div class="rule"></div>
       <details id="mpCivPick"><summary>Your civilization: <b id="mpCivName">Britons</b></summary>
         <div class="diff civgrid" id="mpCivGrid"></div>
+      </details>
+      <details id="mpHcPick"><summary>Evener — your boost: <b id="mpHcName">None</b></summary>
+        <p class="sub" style="margin:4px 0 5px">Newer to the game than your friend? Boost your economy so the battle stays fun — everyone can see it.</p>
+        <div class="diff">
+          <button data-hc="100" class="sel">None</button>
+          <button data-hc="125">+25%</button>
+          <button data-hc="150">+50%</button>
+          <button data-hc="200">+100%</button>
+        </div>
       </details>
       <div id="mpHostCtl" style="display:none">
         <p style="text-align:center;margin:9px 0 0"><b>Battlefield</b></p>

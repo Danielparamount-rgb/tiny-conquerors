@@ -434,6 +434,7 @@
     <p class="sub" id="dailyBlurb" style="margin:4px 0 0;text-align:center;display:none"></p>
     </div>
     <button class="bigbtn" id="startBtn">⚔ &nbsp;Begin the Conquest</button>
+    <button class="bigbtn alt" id="quickBtn">⚡ &nbsp;Quick Battle<small style="display:block;font-weight:400;font-size:11px;letter-spacing:0">one foe · Blitz pace · fits a phone break</small></button>
     <button class="bigbtn alt" id="campBtn">📜 &nbsp;Campaign</button>
     <button class="bigbtn alt" id="mpBtn">🤝 &nbsp;Play with Friends</button>
     <button class="bigbtn alt" id="contBtn" style="display:none">▶ &nbsp;Continue saved game</button>
@@ -549,6 +550,15 @@
       <div class="rule"></div>
       <details id="mpCivPick"><summary>Your civilization: <b id="mpCivName">Britons</b></summary>
         <div class="diff civgrid" id="mpCivGrid"></div>
+      </details>
+      <details id="mpHcPick"><summary>Evener — your boost: <b id="mpHcName">None</b></summary>
+        <p class="sub" style="margin:4px 0 5px">Newer to the game than your friend? Boost your economy so the battle stays fun — everyone can see it.</p>
+        <div class="diff">
+          <button data-hc="100" class="sel">None</button>
+          <button data-hc="125">+25%</button>
+          <button data-hc="150">+50%</button>
+          <button data-hc="200">+100%</button>
+        </div>
       </details>
       <div id="mpHostCtl" style="display:none">
         <p style="text-align:center;margin:9px 0 0"><b>Battlefield</b></p>
@@ -1089,6 +1099,10 @@ let localP=0;
 let humanSlots=[0];   // slots with a person behind them; the rest get an AI
 let netCivs=null;     // per-slot civ choices from a lobby, or null for "roll for the AI"
 let netTeams=null;    // per-slot team ids from a lobby, or null to use teamSel
+/* Per-slot handicap multipliers from a lobby (1 = none). The AoE2:DE "even the
+   odds between friends" tool: visible, consensual, self-declared in the lobby.
+   Boosts starting resources, gathering, farming and construction. */
+let netHcaps=null;
 /* ---------- deterministic simulation RNG (multiplayer foundation) ----------
    Every random draw that changes GAME STATE must come from SR()/SRi(), seeded
    once per match. Two machines given the same seed and the same command stream
@@ -1463,7 +1477,8 @@ function stateHash(){
   const B=G.blds.map(b=>[b.id,b.p,b.type,b.tx,b.ty,r(b.hp),b.built?1:0,b.queue.join('+')].join(',')).join('|');
   const R=Object.keys(G.res).sort().map(k=>k+':'+r(G.res[k].amt)).join('|');
   const P=G.P.map(s=>[r(s.f),r(s.w),r(s.g),s.age,s.civ,(s.uts||[]).join('+'),
-    JSON.stringify(s.eco||{}),JSON.stringify(s.uni||{}),s.pt?1:0].join(',')).join('|');
+    JSON.stringify(s.eco||{}),JSON.stringify(s.uni||{}),s.pt?1:0].join(',')
+    +(s.hcap&&s.hcap!==1?',hc'+s.hcap:'')).join('|');   // absent at 1x — old baselines unmoved
   const A=G.ais.map(a=>a?[a.wave,r(a.nextAtk),a.tgtId||0].join(','):'-').join('|');
   const str=U+'#'+B+'#'+R+'#'+P+'#'+A+'#'+r(G.t)+'#'+uid;
   let h=2166136261;
@@ -1520,6 +1535,12 @@ function newGame(){
     else{do{c=SRi(CIVS.length);}while(used.includes(c));}
     used.push(c);
     P.push(mkP(c));
+    // Lobby handicap: hcap stays ABSENT at 1x so the field adds nothing to
+    // stateHash and every pre-handicap baseline/save hashes unchanged.
+    if(netHcaps&&netHcaps[p]&&netHcaps[p]!==1){
+      const hc=P[p].hcap=netHcaps[p];
+      P[p].f*=hc;P[p].w*=hc;P[p].g*=hc;   // the boost starts at the start
+    }
     ais.push(humanSlots.includes(p)?null
       :{wave:0,nextAtk:DIFF[diffSel].firstWave+(p-1)*40,tick:.3*(p-1),attacking:false});
   }
@@ -2293,7 +2314,7 @@ let cmdQ=[];         // commands issued this turn, not yet applied
 // this, so a match that ended (or failed) can never leave the next skirmish
 // believing it is player 3 of a room that no longer exists.
 function resetNet(){
-  netMode=false;localP=0;humanSlots=[0];netCivs=null;netTeams=null;cmdQ=[];
+  netMode=false;localP=0;humanSlots=[0];netCivs=null;netTeams=null;netHcaps=null;cmdQ=[];
   netSendFrom=0;netReplay=null;netReplaying=false;
   try{dailyRun=null;}catch(e){}  // a fresh start is not the daily unless the daily button says so
 }
@@ -2820,10 +2841,10 @@ function netBegin(m){
   playersSel=NP;
   mapSel=cfg.map|0;diffSel=cfg.diff==null?1:cfg.diff|0;turboSel=cfg.turbo|0;
   teamSel=cfg.team|0;regicideSel=cfg.rg|0;   // the lobby decides the mode — BOTH appliers must read it
-  // Civs and teams come from the lobby, not from this machine's start screen,
-  // so every peer builds the same players.
-  netCivs=[];netTeams=null;
-  for(const p of players)netCivs[p.seat]=p.civ;
+  // Civs, teams and handicaps come from the lobby, not from this machine's
+  // start screen, so every peer builds the same players.
+  netCivs=[];netTeams=null;netHcaps=[];
+  for(const p of players){netCivs[p.seat]=p.civ;netHcaps[p.seat]=(p.hc||100)/100;}
   civSel=netCivs[localP]!=null?netCivs[localP]:0;
   if((cfg.team|0)===1){
     netTeams=[];
@@ -2866,7 +2887,8 @@ function netRejoin(m){
   NP=players.length+ai;playersSel=NP;
   mapSel=cfg.map|0;diffSel=cfg.diff==null?1:cfg.diff|0;
   turboSel=cfg.turbo|0;teamSel=cfg.team|0;regicideSel=cfg.rg|0;
-  netCivs=[];for(const p of players)netCivs[p.seat]=p.civ;
+  netCivs=[];netHcaps=[];
+  for(const p of players){netCivs[p.seat]=p.civ;netHcaps[p.seat]=(p.hc||100)/100;}
   localP=m.seat;
   civSel=netCivs[localP]!=null?netCivs[localP]:0;
   humanSlots=players.map(p=>p.seat);   // as the match STARTED; the journal edits it from there
@@ -4024,7 +4046,8 @@ function updateUnit(u,dt){
           *(r.type==='wood'&&cv.woodMult?cv.woodMult:1)*(r.type==='gold'&&cv.goldMult?cv.goldMult:1)
           *(meat&&cv.huntFast?cv.huntFast:1)                    // Mongols butcher fast
           *(r.type==='wood'?WOOD_RATE[ecoTier(u.p,'wood')]:1)   // axe/saw line
-          *(r.type==='gold'?GOLD_RATE[ecoTier(u.p,'gold')]:1);  // mining line
+          *(r.type==='gold'?GOLD_RATE[ecoTier(u.p,'gold')]:1)   // mining line
+          *(G.P[u.p].hcap||1);                                  // lobby handicap (evener)
         const take=Math.min(rate,r.amt);
         r.amt-=take/(cv.resLast||1);u.carry+=take;u.carryType=r.type; // Mayans: resources last longer
         if(tileVis(r.x,r.y))snd(r.type==='gold'?'mine':'chop');
@@ -4052,7 +4075,7 @@ function updateUnit(u,dt){
       if(!b){u.state='idle';break;}
       {const fc=bldCenter(b);slewHdg(u,fc.x,fc.y,dt);creepToward(u,fc.x,fc.y,.62,dt);}
       u.gatherT+=dt;
-      if(u.gatherT>=1.25/((civOf(u.p).farmFast||1)*TB())){u.gatherT=0;u.carry+=1;u.carryType='food';
+      if(u.gatherT>=1.25/((civOf(u.p).farmFast||1)*TB()*(G.P[u.p].hcap||1))){u.gatherT=0;u.carry+=1;u.carryType='food';
         // farms exhaust (manual); replant automatically while wood allows
         if(b.food===undefined)b.food=farmFoodOf(u.p);
         b.food-=1;
@@ -4105,7 +4128,7 @@ function updateUnit(u,dt){
       const def=BLDS[b.type];
       // Turbo speeds construction except castles, towers and wonders (WHATSNEW)
       const tbB=(turboSel&&b.type!=='castle'&&b.type!=='tower'&&b.type!=='wonder')?2.5:1;
-      const bRate=dt*(civOf(u.p).buildFast||1)*(hasUni(u.p,'tread')?1.2:1)*tbB; // Spanish / Treadmill Crane
+      const bRate=dt*(civOf(u.p).buildFast||1)*(hasUni(u.p,'tread')?1.2:1)*tbB*(G.P[u.p].hcap||1); // Spanish / Treadmill Crane / lobby handicap
       b.prog+=bRate;b.hp=Math.min(b.maxhp,b.hp+b.maxhp*bRate/def.bt);
       if(b.prog>=def.bt){b.built=true;b.hp=b.maxhp;b.pendCost=null;
         if(!def.thin&&b.type!=='farm'&&b.type!=='dock')stampWorn(b);
@@ -11727,6 +11750,21 @@ document.getElementById('startBtn').onclick=()=>{
   begin();
   TUT.begin();     // first battle ever? walk them in
 };
+/* Quick Battle: the research-backed session fit — a standard match is several
+   times the 5-minute median phone session, so give the phone break its own
+   button. One foe, open River map, Blitz pace; the player's civ and difficulty
+   choices still apply. */
+document.getElementById('quickBtn').onclick=()=>{
+  initAudio();
+  if(AC&&AC.state==='suspended')AC.resume();
+  resetNet();
+  mission=null;REC.play=null;dailyRun=null;
+  playersSel=2;mapSel=0;teamSel=0;turboSel=2;regicideSel=0;
+  document.getElementById('startOverlay').style.display='none';
+  begin();
+  TUT.begin();
+  toast('⚡ Quick Battle — one foe, Blitz pace. Raze their Town Hall!');
+};
 /* ---- daily challenge: one seed per calendar day, the SAME for everyone.
    Fixed rules (4 lords, free-for-all, Knight, standard pace, the date picks
    your civ and the battlefield) so times are comparable — determinism means
@@ -11825,6 +11863,7 @@ function buildSettings(){
   row('🎵 Adaptive music',toggle('music',true));
   row('📳 Haptic feedback (phones)',toggle('haptics',true));
   row('🧭 Battle coach tips',toggle('coach',true));
+  row('🎯 Slow time while placing / aiming (solo)',toggle('cmdSlow',true));
   row('🎥 Camera follows your battles',toggle('followFight',false));
   row('🌤 Reduce motion (no weather / sway)',toggle('reduceMotion',false));
   row('🔋 Battery saver (30 fps)',toggle('fps30',false));
@@ -12014,6 +12053,8 @@ function mpShow(){
   mpEl('mpRoom').style.display='none';
   mpEl('mpName').value=localStorage.getItem('tq_name')||'';
   mpEl('mpCode').value='';
+  mpHc=100;mpEl('mpHcName').textContent='None';   // a boost is per-room, never sticky
+  document.querySelectorAll('#mpHcPick button[data-hc]').forEach(x=>x.classList.toggle('sel',x.getAttribute('data-hc')==='100'));
   mpStatus(netAvailable()?'':'Multiplayer needs the web app at tiny-conquerors.onrender.com — the preview sandbox blocks connections.');
   if(MATH_DRIFT)mpStatus('⚠ This device computes numbers differently from the tested build — a match may fall out of step. Playable, but expect possible desyncs.');
   mpEl('mpOverlay').style.display='flex';
@@ -12032,7 +12073,9 @@ function mpRenderLobby(){
     return '<div style="padding:3px 0;color:'+TEAMS[p.seat].dark+'">'
       +'<b>'+(p.seat+1)+'.</b> '+p.name+(me?' <i>(you)</i>':'')
       +(p.seat===netLobby.host?' 👑':'')
-      +' — '+CIVS[p.civ]?.name+'</div>';
+      +' — '+CIVS[p.civ]?.name
+      +(p.hc>100?' <b>⬆+'+(p.hc-100)+'%</b>':'')   // the evener is public by design
+      +'</div>';
   }).join('')||'<div>Waiting for players…</div>';
   mpEl('mpHostCtl').style.display=netHost?'':'none';
   mpEl('mpWait').style.display=netHost?'none':'';
@@ -12063,6 +12106,19 @@ function mpRenderLobby(){
     grid.appendChild(b);
   });
 })();
+/* The evener: a self-declared, publicly visible economy boost (AoE2:DE's
+   handicap idea) so friends of different skill can still fight each other. */
+let mpHc=100;
+document.querySelectorAll('#mpHcPick button[data-hc]').forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll('#mpHcPick button[data-hc]').forEach(x=>x.classList.remove('sel'));
+    b.classList.add('sel');
+    mpHc=+b.getAttribute('data-hc');
+    mpEl('mpHcName').textContent=mpHc>100?'+'+(mpHc-100)+'%':'None';
+    mpEl('mpHcPick').open=false;
+    netSend({t:'seat',hc:mpHc});
+  };
+});
 function mpHostBtnRow(sel,key,after){
   document.querySelectorAll('#mpHostCtl button['+sel+']').forEach(b=>{
     b.onclick=()=>{
@@ -15910,6 +15966,13 @@ function frame(now){
       // replay playback runs the same fixed steps, just more of them per frame
       const spd=REC.play?REC.speed:1;
       if(spd>1)acc+=dt*(spd-1);
+      // Command-time slow (solo only — a lockstep clock belongs to everyone):
+      // while placing a building / drawing a wall / aiming an attack-move, time
+      // eases to ~40% so a finger can be precise without being punished. The
+      // genre-universal touch mitigation (Bad North 1/5x, CoH's command wheel,
+      // Rome's default-on Command Slowdown). Replays are untouched: commands
+      // are tick-stamped, so how fast the wall-clock ran never matters.
+      if(OPT.cmdSlow!==false&&!REC.play&&(G.placing||G.pend||G.amode))acc=Math.max(0,acc-dt*.6);
       const gmax=Math.min(48,6*spd);
       while(acc>=.05&&guard++<gmax){step(.05);acc-=.05;}
       if(REC.play)acc=Math.min(acc,.2);   // never bank an unpayable debt at 16x
@@ -16316,7 +16379,7 @@ requestAnimationFrame(frame);
 
 <script>
 (function(){
-  var BUILD = 'tq-v73';
+  var BUILD = 'tq-v74';
   // The game reads this for the multiplayer version gate (gameVer() falls back
   // to 'dev' when the wrapper is absent, i.e. local test.html / the artifact).
   window.GAMEVER = BUILD;

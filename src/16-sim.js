@@ -863,7 +863,8 @@ function updateUnit(u,dt){
           *(r.type==='wood'&&cv.woodMult?cv.woodMult:1)*(r.type==='gold'&&cv.goldMult?cv.goldMult:1)
           *(meat&&cv.huntFast?cv.huntFast:1)                    // Mongols butcher fast
           *(r.type==='wood'?WOOD_RATE[ecoTier(u.p,'wood')]:1)   // axe/saw line
-          *(r.type==='gold'?GOLD_RATE[ecoTier(u.p,'gold')]:1);  // mining line
+          *(r.type==='gold'?GOLD_RATE[ecoTier(u.p,'gold')]:1)   // mining line
+          *(G.P[u.p].hcap||1);                                  // lobby handicap (evener)
         const take=Math.min(rate,r.amt);
         r.amt-=take/(cv.resLast||1);u.carry+=take;u.carryType=r.type; // Mayans: resources last longer
         if(tileVis(r.x,r.y))snd(r.type==='gold'?'mine':'chop');
@@ -891,7 +892,7 @@ function updateUnit(u,dt){
       if(!b){u.state='idle';break;}
       {const fc=bldCenter(b);slewHdg(u,fc.x,fc.y,dt);creepToward(u,fc.x,fc.y,.62,dt);}
       u.gatherT+=dt;
-      if(u.gatherT>=1.25/((civOf(u.p).farmFast||1)*TB())){u.gatherT=0;u.carry+=1;u.carryType='food';
+      if(u.gatherT>=1.25/((civOf(u.p).farmFast||1)*TB()*(G.P[u.p].hcap||1))){u.gatherT=0;u.carry+=1;u.carryType='food';
         // farms exhaust (manual); replant automatically while wood allows
         if(b.food===undefined)b.food=farmFoodOf(u.p);
         b.food-=1;
@@ -944,7 +945,7 @@ function updateUnit(u,dt){
       const def=BLDS[b.type];
       // Turbo speeds construction except castles, towers and wonders (WHATSNEW)
       const tbB=(turboSel&&b.type!=='castle'&&b.type!=='tower'&&b.type!=='wonder')?2.5:1;
-      const bRate=dt*(civOf(u.p).buildFast||1)*(hasUni(u.p,'tread')?1.2:1)*tbB; // Spanish / Treadmill Crane
+      const bRate=dt*(civOf(u.p).buildFast||1)*(hasUni(u.p,'tread')?1.2:1)*tbB*(G.P[u.p].hcap||1); // Spanish / Treadmill Crane / lobby handicap
       b.prog+=bRate;b.hp=Math.min(b.maxhp,b.hp+b.maxhp*bRate/def.bt);
       if(b.prog>=def.bt){b.built=true;b.hp=b.maxhp;b.pendCost=null;
         if(!def.thin&&b.type!=='farm'&&b.type!=='dock')stampWorn(b);

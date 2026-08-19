@@ -128,7 +128,7 @@ let cmdQ=[];         // commands issued this turn, not yet applied
 // this, so a match that ended (or failed) can never leave the next skirmish
 // believing it is player 3 of a room that no longer exists.
 function resetNet(){
-  netMode=false;localP=0;humanSlots=[0];netCivs=null;netTeams=null;cmdQ=[];
+  netMode=false;localP=0;humanSlots=[0];netCivs=null;netTeams=null;netHcaps=null;cmdQ=[];
   netSendFrom=0;netReplay=null;netReplaying=false;
   try{dailyRun=null;}catch(e){}  // a fresh start is not the daily unless the daily button says so
 }
