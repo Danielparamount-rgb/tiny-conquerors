@@ -3847,7 +3847,7 @@ function drawGhosts(){
    silently keeps its procedural rig. That fallback is the whole safety story;
    do not make any of this load-bearing.
 ---------------------------------------------------------------------------- */
-const USPR={meta:null,base:null,tried:false,img:{},tint:{}};
+const USPR={meta:null,base:null,tried:false,img:{},tint:{},res:1};
 let spritesOn=true;
 const SPR_SCALE=0.40;   // sheet px -> world-iso px: a 55px man lands at ~22px, matching the rigs
 const SPR_GROUND=4.3;   // the rigs plant their feet this far below the unit's screen point
@@ -3865,12 +3865,19 @@ const SPR_ALIAS={villager:'villager',militia:'militia',spearman:'spearman',
   cannongalleon:'cannongalleon',sheep:'sheep',deer:'deer',boar:'boar'};
 function sprInit(){
   if(USPR.tried)return;USPR.tried=true;
+  // G4: high-dpr screens try the 2x sheets first (rendered at cell 256/ppm 72 —
+  // a 110px man instead of 55). USPR.res carries the multiplier so sprDraw
+  // divides it back out; SD remains the fallback and the low-dpr default.
+  // OPT.hdSprites===false opts out (Settings) — it is a big download.
+  const wantHD=(window.devicePixelRatio||1)>=2&&OPT.hdSprites!==false;
+  const paths=[];
+  if(wantHD)paths.push(['sprites-hd/',2],['app/sprites-hd/',2]);
   // 'sprites/' when served as the PWA (app/), 'app/sprites/' from the repo root
-  const paths=['sprites/','app/sprites/'];
+  paths.push(['sprites/',1],['app/sprites/',1]);
   (function next(i){
     if(i>=paths.length)return;
-    fetch(paths[i]+'sprites.json').then(r=>r.ok?r.json():Promise.reject(0))
-      .then(j=>{USPR.meta=j;USPR.base=paths[i];})
+    fetch(paths[i][0]+'sprites.json').then(r=>r.ok?r.json():Promise.reject(0))
+      .then(j=>{USPR.meta=j;USPR.base=paths[i][0];USPR.res=paths[i][1];})
       .catch(()=>next(i+1));
   })(0);
 }
@@ -3948,7 +3955,7 @@ function sprDraw(u,moving){
   const an=sprAnimOf(u,meta,moving),m=meta.anims[an];if(!m)return false;
   const img=sprGet(key,an,u.p);if(!img)return false;
   octPhi(u);                                   // same hysteresis the rigs use
-  const d=((u._oct%8)+8)%8,cw=meta.cell[0],ch=meta.cell[1],S=SPR_SCALE;
+  const d=((u._oct%8)+8)%8,cw=meta.cell[0],ch=meta.cell[1],S=SPR_SCALE/(USPR.res||1);
   const f=sprFrame(u,m,an);
   ctx.drawImage(img,f*cw,d*ch,cw,ch,
     -meta.anchorX*S,SPR_GROUND-meta.anchorY*S,cw*S,ch*S);

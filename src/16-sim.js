@@ -396,6 +396,8 @@ function removeBld(i){
   ejectGarrison(b);
   for(const r of G.relics)if(r.mon===b.id)r.mon=null; // relics tumble out of a razed monastery
   if(b.built&&!BLDS[b.type].farm){ // collapse into rubble under a dust burst
+    // G5: a falling building rocks the ground (render-side, distance-attenuated)
+    if(tileVis(b.tx,b.ty))shakeAt(b.tx+b.size/2,b.ty+b.size/2,b.size*3);
     // remember the structure so it can be seen collapsing before the pile shows
     G.rubble.push({tx:b.tx,ty:b.ty,size:b.size,p:b.p,t:45,max:45,v:(b.tx*7+b.ty*13)%2,
       type:b.type,tilt:Math.random()<.5?-1:1});
@@ -567,7 +569,12 @@ function dealDamage(hit,amt,fromP,ranged){
     if(!lp||G.t-lp.t>2||Math.hypot(hx-lp.x,hy-lp.y)>10){
       pgs.push({x:hx,y:hy,t:G.t});if(pgs.length>6)pgs.shift();}
   }
-  if(tileVis(hx,hy))snd(ranged==='siege'?'crash':ranged?'hit':'sword',hx,hy);
+  if(tileVis(hx,hy)){
+    snd(ranged==='siege'?'crash':ranged?'hit':'sword',hx,hy);
+    // G5: heavy ordnance thumps the camera (render-side, distance-attenuated)
+    if(ranged==='siege')shakeAt(hx,hy,amt>=20?4.5:2.5);
+  }
+  musCombat(fromP,hit.ent.p);   // the score hears the fight (audio-side only)
   G.fx.push({x:hx+(Math.random()-.5)*.5,y:hy+(Math.random()-.5)*.5,vx:0,vy:-.6,
     life:.28,max:.28,r:3,kind:'spark'});
   if(fromP!==localP&&hit.ent.p===localP&&G.t-G.lastRaidToast>18){G.lastRaidToast=G.t;
@@ -1033,6 +1040,14 @@ function updateUnit(u,dt){
             const push=Math.min(.16,.012*dmg);
             const nx2=t.x+kx/kd*push,ny2=t.y+ky/kd*push;
             if(walkTile(nx2,ny2,t.p)){t.x=nx2;t.y=ny2;}
+            // G5: debris thrown ALONG the strike vector — impact you can read
+            if(tileVis(t.x,t.y))for(let ci=0;ci<3;ci++){
+              const sp2=1.4+Math.random()*1.8;
+              G.fx.push({x:t.x,y:t.y-.3,
+                vx:kx/kd*sp2+(Math.random()-.5)*.8,vy:-.8-Math.random()*.9,
+                life:.34,max:.34,r:1.2,kind:'chip',
+                col:ci===0?'#d8dde2':TEAMS[t.p].main});
+            }
           }
           if(d.petard){ // hoisted by its own petard — the charge consumes the unit
             u.hp=0;

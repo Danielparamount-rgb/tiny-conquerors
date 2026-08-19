@@ -18,3 +18,6 @@ spr-*.png
 node_modules/
 blender/btmp/
 blender/bsheets/
+blender/sheets-hd/
+blender/hd-render.log
+blender/hd-render.err

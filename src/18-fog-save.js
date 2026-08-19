@@ -1,5 +1,19 @@
 /* ================= fog of war ================= */
 let fogDirty=true,lastTreeCount=0,grainPat=null,groundPat=null,dirtPatches=[];
+/* GRAPHICS CAMPAIGN G5: screen shake. Render-side only — the camera is nudged
+   for the duration of ONE draw call and restored, so nothing in G ever moves.
+   Impacts attenuate with screen distance exactly the way positional sound does:
+   a trebuchet stone across the map is a murmur, one at your feet is a thump. */
+let shakeAmp=0;
+function shakeAt(wx,wy,pow){
+  if(OPT.reduceMotion||!G)return;
+  const p=isoE(wx,wy);
+  const sx=(p.x-G.cam.x)*G.cam.z,sy=(p.y-G.cam.y)*G.cam.z;
+  const d=Math.hypot(sx-vw/2,sy-vh/2);
+  const fall=Math.max(0,1-d/(Math.max(vw,vh)*.85));
+  if(fall<=0)return;
+  shakeAmp=Math.min(8,shakeAmp+pow*fall);
+}
 /* G2: one seamless grass texture, synthesized at load. Elements near an edge
    are stamped at all nine wrap offsets so the tile repeats without a seam. */
 function mkGroundTex(){

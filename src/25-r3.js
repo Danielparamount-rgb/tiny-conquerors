@@ -3577,6 +3577,18 @@ function frame(now){
   // rate, so lockstep and game speed are untouched — only the paint thins out)
   fpsAlt=!fpsAlt;
   if(OPT.fps30&&fpsAlt)return;
+  // G5 screen shake: nudge the camera for exactly one draw, then put it back.
+  // Applied to G.cam so BOTH renderers shake identically; decays fast so the
+  // world settles inside a third of a second.
+  let shX=0,shY=0;
+  if(shakeAmp>.05&&G&&!G.paused){
+    const a=shakeAmp/G.cam.z;
+    shX=(Math.random()-.5)*2*a;shY=(Math.random()-.5)*1.4*a;
+    G.cam.x+=shX;G.cam.y+=shY;
+    shakeAmp*=Math.pow(.0005,dt);           // ~gone in .35s
+  }else shakeAmp=0;
   if(use3D){R3.draw();drawMini();}else draw();
+  if(shX||shY){G.cam.x-=shX;G.cam.y-=shY;}
   drawWeather();          // on the glass, over whichever renderer just drew
+  musTick();              // the adaptive score reads the battle, never touches it
 }

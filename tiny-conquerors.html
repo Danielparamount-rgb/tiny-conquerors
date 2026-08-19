@@ -3165,6 +3165,8 @@ function removeBld(i){
   ejectGarrison(b);
   for(const r of G.relics)if(r.mon===b.id)r.mon=null; // relics tumble out of a razed monastery
   if(b.built&&!BLDS[b.type].farm){ // collapse into rubble under a dust burst
+    // G5: a falling building rocks the ground (render-side, distance-attenuated)
+    if(tileVis(b.tx,b.ty))shakeAt(b.tx+b.size/2,b.ty+b.size/2,b.size*3);
     // remember the structure so it can be seen collapsing before the pile shows
     G.rubble.push({tx:b.tx,ty:b.ty,size:b.size,p:b.p,t:45,max:45,v:(b.tx*7+b.ty*13)%2,
       type:b.type,tilt:Math.random()<.5?-1:1});
@@ -3336,7 +3338,12 @@ function dealDamage(hit,amt,fromP,ranged){
     if(!lp||G.t-lp.t>2||Math.hypot(hx-lp.x,hy-lp.y)>10){
       pgs.push({x:hx,y:hy,t:G.t});if(pgs.length>6)pgs.shift();}
   }
-  if(tileVis(hx,hy))snd(ranged==='siege'?'crash':ranged?'hit':'sword',hx,hy);
+  if(tileVis(hx,hy)){
+    snd(ranged==='siege'?'crash':ranged?'hit':'sword',hx,hy);
+    // G5: heavy ordnance thumps the camera (render-side, distance-attenuated)
+    if(ranged==='siege')shakeAt(hx,hy,amt>=20?4.5:2.5);
+  }
+  musCombat(fromP,hit.ent.p);   // the score hears the fight (audio-side only)
   G.fx.push({x:hx+(Math.random()-.5)*.5,y:hy+(Math.random()-.5)*.5,vx:0,vy:-.6,
     life:.28,max:.28,r:3,kind:'spark'});
   if(fromP!==localP&&hit.ent.p===localP&&G.t-G.lastRaidToast>18){G.lastRaidToast=G.t;
@@ -3802,6 +3809,14 @@ function updateUnit(u,dt){
             const push=Math.min(.16,.012*dmg);
             const nx2=t.x+kx/kd*push,ny2=t.y+ky/kd*push;
             if(walkTile(nx2,ny2,t.p)){t.x=nx2;t.y=ny2;}
+            // G5: debris thrown ALONG the strike vector — impact you can read
+            if(tileVis(t.x,t.y))for(let ci=0;ci<3;ci++){
+              const sp2=1.4+Math.random()*1.8;
+              G.fx.push({x:t.x,y:t.y-.3,
+                vx:kx/kd*sp2+(Math.random()-.5)*.8,vy:-.8-Math.random()*.9,
+                life:.34,max:.34,r:1.2,kind:'chip',
+                col:ci===0?'#d8dde2':TEAMS[t.p].main});
+            }
           }
           if(d.petard){ // hoisted by its own petard — the charge consumes the unit
             u.hp=0;
@@ -4264,6 +4279,20 @@ function canPlaceType(type,tx,ty){
 }
 /* ================= fog of war ================= */
 let fogDirty=true,lastTreeCount=0,grainPat=null,groundPat=null,dirtPatches=[];
+/* GRAPHICS CAMPAIGN G5: screen shake. Render-side only — the camera is nudged
+   for the duration of ONE draw call and restored, so nothing in G ever moves.
+   Impacts attenuate with screen distance exactly the way positional sound does:
+   a trebuchet stone across the map is a murmur, one at your feet is a thump. */
+let shakeAmp=0;
+function shakeAt(wx,wy,pow){
+  if(OPT.reduceMotion||!G)return;
+  const p=isoE(wx,wy);
+  const sx=(p.x-G.cam.x)*G.cam.z,sy=(p.y-G.cam.y)*G.cam.z;
+  const d=Math.hypot(sx-vw/2,sy-vh/2);
+  const fall=Math.max(0,1-d/(Math.max(vw,vh)*.85));
+  if(fall<=0)return;
+  shakeAmp=Math.min(8,shakeAmp+pow*fall);
+}
 /* G2: one seamless grass texture, synthesized at load. Elements near an edge
    are stamped at all nine wrap offsets so the tile repeats without a seam. */
 function mkGroundTex(){
@@ -4835,6 +4864,111 @@ function snd(kind,wx,wy){
   sVolMul=1;sPan=0;
 }
 
+/* ================= adaptive score (graphics campaign follow-on) =============
+   The one thing this game's ancestors were most loved for and this game never
+   had: MUSIC. Fully generative — synthesized like every other sound here, so
+   it ships zero bytes and needs no license. Three layers on one clock:
+
+     peace    a slow dorian lute line over a soft pad, while you build
+     tension  a low pulse + darker drone when enemies press your town
+     battle   drums and horn stabs while YOUR people are actually fighting
+
+   The layers crossfade with setTargetAtTime (nothing pops), the melody is a
+   seeded-nowhere random walk (each machine hears its own variation — audio is
+   cosmetic, peers may differ), and everything routes through its own gain so
+   the Settings slider and the mute button rule it like any other sound.
+   State detection is READ-ONLY: musCombat() is pinged from dealDamage, the
+   rest is a once-a-second glance at visible enemies. The sim never knows. */
+let MUS={on:null,gains:{},t0:0,beat:0,next:0,lastCombat:-99,mode:'peace',horn:0};
+function musCombat(p1,p2){ // called from dealDamage — local player involved?
+  if(p1===localP||p2===localP)MUS.lastCombat=performance.now();
+}
+function musNode(){
+  if(MUS.on!==null||!AC||!masterG)return;
+  MUS.on=true;
+  for(const k of ['peace','tension','battle']){
+    const g=AC.createGain();g.gain.value=0;g.connect(masterG);
+    MUS.gains[k]=g;
+  }
+}
+function mTone(dst,f,dur,vol,type,cut){
+  const t=AC.currentTime;
+  const osc=AC.createOscillator();osc.type=type||'triangle';osc.frequency.value=f;
+  const o2=AC.createOscillator();o2.type='sine';o2.frequency.value=f*1.006;
+  const fl=AC.createBiquadFilter();fl.type='lowpass';fl.frequency.value=cut||1800;
+  const g=AC.createGain();
+  g.gain.setValueAtTime(.0001,t);
+  g.gain.exponentialRampToValueAtTime(vol,t+.02);
+  g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  osc.connect(fl);o2.connect(fl);fl.connect(g);g.connect(dst);
+  osc.start(t);o2.start(t);osc.stop(t+dur+.05);o2.stop(t+dur+.05);
+}
+function mThump(dst,f,dur,vol){
+  const t=AC.currentTime;
+  const o=AC.createOscillator();o.type='sine';
+  o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(Math.max(30,f*.5),t+dur);
+  const g=AC.createGain();
+  g.gain.setValueAtTime(.0001,t);
+  g.gain.exponentialRampToValueAtTime(vol,t+.008);
+  g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  o.connect(g);g.connect(dst);o.start(t);o.stop(t+dur+.05);
+}
+/* D dorian, two octaves — the mode of every campfire ballad */
+const MUS_SCALE=[146.83,164.81,174.61,196,220,246.94,261.63,293.66,329.63,349.23,392,440];
+let musStep=7; // melody random-walk position
+function musTick(){
+  if(!AC||!masterG||!G||G.paused||G.over||sndMuted||OPT.music===false){return;}
+  musNode();
+  if(!MUS.on)return;
+  const now=performance.now();
+  // ---- state (the enemy scan runs at most once a second — this is a per-frame call)
+  const fighting=now-MUS.lastCombat<6000;
+  let pressed=MUS.pressed||false;
+  if(now-(MUS.scanT||0)>1000){MUS.scanT=now;pressed=false;
+  if(!fighting&&G.t>60){ // enemies visible near home? once a second is plenty
+    for(const u of G.units){
+      if(allied(u.p,localP)||u.p===GAIA||u.hp<=0)continue;
+      const d2=UNITS[u.type];if(u.type==='villager'||d2.fisher||d2.passive)continue;
+      if(!tileVis(u.x,u.y))continue;
+      for(const b of G.blds){if(b.p!==localP)continue;
+        if(Math.hypot(u.x-b.tx,u.y-b.ty)<13){pressed=true;break;}}
+      if(pressed)break;
+    }
+  }
+  MUS.pressed=pressed;}
+  MUS.mode=fighting?'battle':pressed?'tension':'peace';
+  const want={peace:MUS.mode==='peace'?.05:.012,
+              tension:MUS.mode==='tension'?.055:MUS.mode==='battle'?.03:0,
+              battle:MUS.mode==='battle'?.065:0};
+  for(const k in want)MUS.gains[k].gain.setTargetAtTime(want[k],AC.currentTime,2.2);
+  // ---- one musical beat (~76bpm half-notes for peace, quarters for war)
+  if(now<MUS.next)return;
+  MUS.beat++;
+  MUS.next=now+789;                       // 76bpm quarter note
+  const B=MUS.beat;
+  // peace: a lute note every other beat, wandering the mode; a pad every 8
+  if(B%2===0){
+    musStep=Math.max(0,Math.min(MUS_SCALE.length-1,
+      musStep+(Math.random()<.5?-1:1)*(Math.random()<.25?2:1)));
+    if(Math.random()<.8)mTone(MUS.gains.peace,MUS_SCALE[musStep],1.7,.5,'triangle',1500);
+  }
+  if(B%8===0){
+    const root=MUS_SCALE[(B/8)%2?0:3];
+    mTone(MUS.gains.peace,root/2,4.5,.30,'sine',700);
+    mTone(MUS.gains.peace,root*1.5/2,4.5,.20,'sine',700);
+  }
+  // tension: a heartbeat pulse + a low drone
+  if(B%2===0)mThump(MUS.gains.tension,72,.32,.8);
+  if(B%16===0)mTone(MUS.gains.tension,73.4,8,.35,'sawtooth',300);
+  // battle: driving drums, horn stabs every few bars
+  mThump(MUS.gains.battle,64,.24,B%4===0?1:.55);
+  if(B%4===2)mThump(MUS.gains.battle,180,.12,.4);
+  if(MUS.mode==='battle'&&B%8===4&&Math.random()<.7){
+    const hf=MUS_SCALE[[0,2,4][MUS.horn++%3]]*2;
+    mTone(MUS.gains.battle,hf,.9,.5,'sawtooth',900);
+    mTone(MUS.gains.battle,hf*1.5,.9,.3,'sawtooth',900);
+  }
+}
 /* ================= rendering ================= */
 const view=document.getElementById('view');
 const view3=document.getElementById('view3');
@@ -8684,7 +8818,7 @@ function drawGhosts(){
    silently keeps its procedural rig. That fallback is the whole safety story;
    do not make any of this load-bearing.
 ---------------------------------------------------------------------------- */
-const USPR={meta:null,base:null,tried:false,img:{},tint:{}};
+const USPR={meta:null,base:null,tried:false,img:{},tint:{},res:1};
 let spritesOn=true;
 const SPR_SCALE=0.40;   // sheet px -> world-iso px: a 55px man lands at ~22px, matching the rigs
 const SPR_GROUND=4.3;   // the rigs plant their feet this far below the unit's screen point
@@ -8702,12 +8836,19 @@ const SPR_ALIAS={villager:'villager',militia:'militia',spearman:'spearman',
   cannongalleon:'cannongalleon',sheep:'sheep',deer:'deer',boar:'boar'};
 function sprInit(){
   if(USPR.tried)return;USPR.tried=true;
+  // G4: high-dpr screens try the 2x sheets first (rendered at cell 256/ppm 72 —
+  // a 110px man instead of 55). USPR.res carries the multiplier so sprDraw
+  // divides it back out; SD remains the fallback and the low-dpr default.
+  // OPT.hdSprites===false opts out (Settings) — it is a big download.
+  const wantHD=(window.devicePixelRatio||1)>=2&&OPT.hdSprites!==false;
+  const paths=[];
+  if(wantHD)paths.push(['sprites-hd/',2],['app/sprites-hd/',2]);
   // 'sprites/' when served as the PWA (app/), 'app/sprites/' from the repo root
-  const paths=['sprites/','app/sprites/'];
+  paths.push(['sprites/',1],['app/sprites/',1]);
   (function next(i){
     if(i>=paths.length)return;
-    fetch(paths[i]+'sprites.json').then(r=>r.ok?r.json():Promise.reject(0))
-      .then(j=>{USPR.meta=j;USPR.base=paths[i];})
+    fetch(paths[i][0]+'sprites.json').then(r=>r.ok?r.json():Promise.reject(0))
+      .then(j=>{USPR.meta=j;USPR.base=paths[i][0];USPR.res=paths[i][1];})
       .catch(()=>next(i+1));
   })(0);
 }
@@ -8785,7 +8926,7 @@ function sprDraw(u,moving){
   const an=sprAnimOf(u,meta,moving),m=meta.anims[an];if(!m)return false;
   const img=sprGet(key,an,u.p);if(!img)return false;
   octPhi(u);                                   // same hysteresis the rigs use
-  const d=((u._oct%8)+8)%8,cw=meta.cell[0],ch=meta.cell[1],S=SPR_SCALE;
+  const d=((u._oct%8)+8)%8,cw=meta.cell[0],ch=meta.cell[1],S=SPR_SCALE/(USPR.res||1);
   const f=sprFrame(u,m,an);
   ctx.drawImage(img,f*cw,d*ch,cw,ch,
     -meta.anchorX*S,SPR_GROUND-meta.anchorY*S,cw*S,ch*S);
@@ -11157,12 +11298,17 @@ function buildSettings(){
     if(masterG)masterG.gain.value=.55*OPT.vol;};
   vr.onchange=()=>{initAudio();snd('click');};
   row('🔊 Sound volume',vr);
+  row('🎵 Adaptive music',toggle('music',true));
   row('📳 Haptic feedback (phones)',toggle('haptics',true));
   row('🧭 Battle coach tips',toggle('coach',true));
   row('🌤 Reduce motion (no weather / sway)',toggle('reduceMotion',false));
   row('🔋 Battery saver (30 fps)',toggle('fps30',false));
   row('🫲 Left-handed layout',toggle('lefty',false,applyBodyOpts));
   row('🔍 Larger buttons',toggle('bigui',false,applyBodyOpts));
+  row('✨ HD unit sprites (large download)',toggle('hdSprites',true,()=>{
+    if(G&&!G.over)toast('Applies when you leave the battle');
+    else{toast('Reloading with the new art…');setTimeout(()=>location.reload(),600);}
+  }));
   row('🎨 Colourblind-safe team colours',toggle('cbPal',false,()=>{
     if(G&&!G.over)toast('Applies when you leave the battle');
     else{toast('Reloading with the new colours…');setTimeout(()=>location.reload(),600);}
@@ -15135,8 +15281,20 @@ function frame(now){
   // rate, so lockstep and game speed are untouched — only the paint thins out)
   fpsAlt=!fpsAlt;
   if(OPT.fps30&&fpsAlt)return;
+  // G5 screen shake: nudge the camera for exactly one draw, then put it back.
+  // Applied to G.cam so BOTH renderers shake identically; decays fast so the
+  // world settles inside a third of a second.
+  let shX=0,shY=0;
+  if(shakeAmp>.05&&G&&!G.paused){
+    const a=shakeAmp/G.cam.z;
+    shX=(Math.random()-.5)*2*a;shY=(Math.random()-.5)*1.4*a;
+    G.cam.x+=shX;G.cam.y+=shY;
+    shakeAmp*=Math.pow(.0005,dt);           // ~gone in .35s
+  }else shakeAmp=0;
   if(use3D){R3.draw();drawMini();}else draw();
+  if(shX||shY){G.cam.x-=shX;G.cam.y-=shY;}
   drawWeather();          // on the glass, over whichever renderer just drew
+  musTick();              // the adaptive score reads the battle, never touches it
 }
 /* ================= weather ==================================================
    Rain and snow on the glass. The SCHEDULE is deterministic from the match

@@ -236,3 +236,108 @@ function snd(kind,wx,wy){
   sVolMul=1;sPan=0;
 }
 
+/* ================= adaptive score (graphics campaign follow-on) =============
+   The one thing this game's ancestors were most loved for and this game never
+   had: MUSIC. Fully generative — synthesized like every other sound here, so
+   it ships zero bytes and needs no license. Three layers on one clock:
+
+     peace    a slow dorian lute line over a soft pad, while you build
+     tension  a low pulse + darker drone when enemies press your town
+     battle   drums and horn stabs while YOUR people are actually fighting
+
+   The layers crossfade with setTargetAtTime (nothing pops), the melody is a
+   seeded-nowhere random walk (each machine hears its own variation — audio is
+   cosmetic, peers may differ), and everything routes through its own gain so
+   the Settings slider and the mute button rule it like any other sound.
+   State detection is READ-ONLY: musCombat() is pinged from dealDamage, the
+   rest is a once-a-second glance at visible enemies. The sim never knows. */
+let MUS={on:null,gains:{},t0:0,beat:0,next:0,lastCombat:-99,mode:'peace',horn:0};
+function musCombat(p1,p2){ // called from dealDamage — local player involved?
+  if(p1===localP||p2===localP)MUS.lastCombat=performance.now();
+}
+function musNode(){
+  if(MUS.on!==null||!AC||!masterG)return;
+  MUS.on=true;
+  for(const k of ['peace','tension','battle']){
+    const g=AC.createGain();g.gain.value=0;g.connect(masterG);
+    MUS.gains[k]=g;
+  }
+}
+function mTone(dst,f,dur,vol,type,cut){
+  const t=AC.currentTime;
+  const osc=AC.createOscillator();osc.type=type||'triangle';osc.frequency.value=f;
+  const o2=AC.createOscillator();o2.type='sine';o2.frequency.value=f*1.006;
+  const fl=AC.createBiquadFilter();fl.type='lowpass';fl.frequency.value=cut||1800;
+  const g=AC.createGain();
+  g.gain.setValueAtTime(.0001,t);
+  g.gain.exponentialRampToValueAtTime(vol,t+.02);
+  g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  osc.connect(fl);o2.connect(fl);fl.connect(g);g.connect(dst);
+  osc.start(t);o2.start(t);osc.stop(t+dur+.05);o2.stop(t+dur+.05);
+}
+function mThump(dst,f,dur,vol){
+  const t=AC.currentTime;
+  const o=AC.createOscillator();o.type='sine';
+  o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(Math.max(30,f*.5),t+dur);
+  const g=AC.createGain();
+  g.gain.setValueAtTime(.0001,t);
+  g.gain.exponentialRampToValueAtTime(vol,t+.008);
+  g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  o.connect(g);g.connect(dst);o.start(t);o.stop(t+dur+.05);
+}
+/* D dorian, two octaves — the mode of every campfire ballad */
+const MUS_SCALE=[146.83,164.81,174.61,196,220,246.94,261.63,293.66,329.63,349.23,392,440];
+let musStep=7; // melody random-walk position
+function musTick(){
+  if(!AC||!masterG||!G||G.paused||G.over||sndMuted||OPT.music===false){return;}
+  musNode();
+  if(!MUS.on)return;
+  const now=performance.now();
+  // ---- state (the enemy scan runs at most once a second — this is a per-frame call)
+  const fighting=now-MUS.lastCombat<6000;
+  let pressed=MUS.pressed||false;
+  if(now-(MUS.scanT||0)>1000){MUS.scanT=now;pressed=false;
+  if(!fighting&&G.t>60){ // enemies visible near home? once a second is plenty
+    for(const u of G.units){
+      if(allied(u.p,localP)||u.p===GAIA||u.hp<=0)continue;
+      const d2=UNITS[u.type];if(u.type==='villager'||d2.fisher||d2.passive)continue;
+      if(!tileVis(u.x,u.y))continue;
+      for(const b of G.blds){if(b.p!==localP)continue;
+        if(Math.hypot(u.x-b.tx,u.y-b.ty)<13){pressed=true;break;}}
+      if(pressed)break;
+    }
+  }
+  MUS.pressed=pressed;}
+  MUS.mode=fighting?'battle':pressed?'tension':'peace';
+  const want={peace:MUS.mode==='peace'?.05:.012,
+              tension:MUS.mode==='tension'?.055:MUS.mode==='battle'?.03:0,
+              battle:MUS.mode==='battle'?.065:0};
+  for(const k in want)MUS.gains[k].gain.setTargetAtTime(want[k],AC.currentTime,2.2);
+  // ---- one musical beat (~76bpm half-notes for peace, quarters for war)
+  if(now<MUS.next)return;
+  MUS.beat++;
+  MUS.next=now+789;                       // 76bpm quarter note
+  const B=MUS.beat;
+  // peace: a lute note every other beat, wandering the mode; a pad every 8
+  if(B%2===0){
+    musStep=Math.max(0,Math.min(MUS_SCALE.length-1,
+      musStep+(Math.random()<.5?-1:1)*(Math.random()<.25?2:1)));
+    if(Math.random()<.8)mTone(MUS.gains.peace,MUS_SCALE[musStep],1.7,.5,'triangle',1500);
+  }
+  if(B%8===0){
+    const root=MUS_SCALE[(B/8)%2?0:3];
+    mTone(MUS.gains.peace,root/2,4.5,.30,'sine',700);
+    mTone(MUS.gains.peace,root*1.5/2,4.5,.20,'sine',700);
+  }
+  // tension: a heartbeat pulse + a low drone
+  if(B%2===0)mThump(MUS.gains.tension,72,.32,.8);
+  if(B%16===0)mTone(MUS.gains.tension,73.4,8,.35,'sawtooth',300);
+  // battle: driving drums, horn stabs every few bars
+  mThump(MUS.gains.battle,64,.24,B%4===0?1:.55);
+  if(B%4===2)mThump(MUS.gains.battle,180,.12,.4);
+  if(MUS.mode==='battle'&&B%8===4&&Math.random()<.7){
+    const hf=MUS_SCALE[[0,2,4][MUS.horn++%3]]*2;
+    mTone(MUS.gains.battle,hf,.9,.5,'sawtooth',900);
+    mTone(MUS.gains.battle,hf*1.5,.9,.3,'sawtooth',900);
+  }
+}

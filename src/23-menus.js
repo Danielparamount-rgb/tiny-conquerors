@@ -104,12 +104,17 @@ function buildSettings(){
     if(masterG)masterG.gain.value=.55*OPT.vol;};
   vr.onchange=()=>{initAudio();snd('click');};
   row('🔊 Sound volume',vr);
+  row('🎵 Adaptive music',toggle('music',true));
   row('📳 Haptic feedback (phones)',toggle('haptics',true));
   row('🧭 Battle coach tips',toggle('coach',true));
   row('🌤 Reduce motion (no weather / sway)',toggle('reduceMotion',false));
   row('🔋 Battery saver (30 fps)',toggle('fps30',false));
   row('🫲 Left-handed layout',toggle('lefty',false,applyBodyOpts));
   row('🔍 Larger buttons',toggle('bigui',false,applyBodyOpts));
+  row('✨ HD unit sprites (large download)',toggle('hdSprites',true,()=>{
+    if(G&&!G.over)toast('Applies when you leave the battle');
+    else{toast('Reloading with the new art…');setTimeout(()=>location.reload(),600);}
+  }));
   row('🎨 Colourblind-safe team colours',toggle('cbPal',false,()=>{
     if(G&&!G.over)toast('Applies when you leave the battle');
     else{toast('Reloading with the new colours…');setTimeout(()=>location.reload(),600);}
