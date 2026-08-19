@@ -577,7 +577,7 @@ function dealDamage(hit,amt,fromP,ranged){
     // G5: heavy ordnance thumps the camera (render-side, distance-attenuated)
     if(ranged==='siege')shakeAt(hx,hy,amt>=20?4.5:2.5);
   }
-  musCombat(fromP,hit.ent.p);   // the score hears the fight (audio-side only)
+  musCombat(fromP,hit.ent.p,hx,hy);   // the score (and follow-camera) hear the fight
   G.fx.push({x:hx+(Math.random()-.5)*.5,y:hy+(Math.random()-.5)*.5,vx:0,vy:-.6,
     life:.28,max:.28,r:3,kind:'spark'});
   if(fromP!==localP&&hit.ent.p===localP&&G.t-G.lastRaidToast>18){G.lastRaidToast=G.t;

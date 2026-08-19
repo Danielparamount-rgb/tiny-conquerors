@@ -3467,7 +3467,7 @@ function dealDamage(hit,amt,fromP,ranged){
     // G5: heavy ordnance thumps the camera (render-side, distance-attenuated)
     if(ranged==='siege')shakeAt(hx,hy,amt>=20?4.5:2.5);
   }
-  musCombat(fromP,hit.ent.p);   // the score hears the fight (audio-side only)
+  musCombat(fromP,hit.ent.p,hx,hy);   // the score (and follow-camera) hear the fight
   G.fx.push({x:hx+(Math.random()-.5)*.5,y:hy+(Math.random()-.5)*.5,vx:0,vy:-.6,
     life:.28,max:.28,r:3,kind:'spark'});
   if(fromP!==localP&&hit.ent.p===localP&&G.t-G.lastRaidToast>18){G.lastRaidToast=G.t;
@@ -5047,8 +5047,11 @@ function snd(kind,wx,wy){
    State detection is READ-ONLY: musCombat() is pinged from dealDamage, the
    rest is a once-a-second glance at visible enemies. The sim never knows. */
 let MUS={on:null,gains:{},t0:0,beat:0,next:0,lastCombat:-99,mode:'peace',horn:0};
-function musCombat(p1,p2){ // called from dealDamage — local player involved?
-  if(p1===localP||p2===localP)MUS.lastCombat=performance.now();
+function musCombat(p1,p2,wx,wy){ // called from dealDamage — local player involved?
+  if(p1===localP||p2===localP){
+    MUS.lastCombat=performance.now();
+    if(wx!==undefined){MUS.fx=wx;MUS.fy=wy;}   // the follow-fight camera reads this
+  }
 }
 function musNode(){
   if(MUS.on!==null||!AC||!masterG)return;
@@ -10318,7 +10321,9 @@ document.getElementById('boxBtn').onclick=()=>{
    gesture has to move the orbit target, and how far a pixel moves the world
    depends on the current yaw/pitch. Verified to reduce to the 2D arithmetic
    exactly at the home orientation. */
+let lastCamTouch=0;
 function panScreen(dx,dy){
+  lastCamTouch=performance.now();
   if(use3D){
     const t=R3.target(),d=R3.sd2t(dx,dy);
     camTo(t.x-d.x,t.y-d.y);clampCam();return;
@@ -10434,6 +10439,7 @@ function bindView(el){
 }
 bindView(view);bindView(view3);
 function zoomAt(nz,cx,cy){
+  lastCamTouch=performance.now();
   if(use3D){
     // keep the world point under the cursor fixed while zooming. sd2t scales
     // as 1/z, so d MUST be computed before G.cam.z changes.
@@ -11080,9 +11086,12 @@ function refreshPanel(){
   const mil=ents.filter(u=>u.type!=='villager'&&!isAnimal(u));
   const u0=ents[0],ud=UNITS[u0.type];
   if(ents.length===1){
-    setCard(unitName(u0.type,localP),portraitFor('u',u0.type,localP),u0.hp,u0.maxhp,
-      [['atk',atkOf(u0)],...(ud.range>1?[['rng',rangeOf(u0)]]:[]),['spd',speedOf(u0).toFixed(1)],
+    // high ground must READ: +25% damage is the terrain's whole meaning
+    const onHill=G.elev&&G.elev[(u0.y|0)*MAP+(u0.x|0)];
+    setCard(unitName(u0.type,localP)+(onHill?' ⛰':''),portraitFor('u',u0.type,localP),u0.hp,u0.maxhp,
+      [['atk',onHill?atkOf(u0)+'↑':atkOf(u0)],...(ud.range>1?[['rng',rangeOf(u0)]]:[]),['spd',speedOf(u0).toFixed(1)],
        ...(ud.garCap?[['gar',(u0.gar?u0.gar.length:0)+'/'+ud.garCap]]:[])]);
+    if(onHill)hint('⛰ Holding the high ground — +25% damage dealt, less taken');
     if(ud.garCap&&u0.gar&&u0.gar.length)
       mkBtn('<b>⇱ '+(ud.ship?'Unload':'Ungarrison')+' '+u0.gar.length+'</b>',null,()=>{
         // transports set their passengers down on the nearest dry land
@@ -11129,7 +11138,9 @@ function refreshPanel(){
         ()=>startBuildKey(bt),locked||!canAfford(localP,bc),portraitFor('b',bt,localP));
     }
   }else{
-    if(ents.length===1)hint(G.pmode?'Tap the far end of the patrol beat'
+    // the high-ground notice set above must survive this default hint
+    if(ents.length===1&&!(G.elev&&G.elev[(u0.y|0)*MAP+(u0.x|0)]))
+      hint(G.pmode?'Tap the far end of the patrol beat'
       :G.amode?'Tap the map — they will fight their way there':mouseSeen
       ?'Right-click an enemy to attack · right-click ground to move'
       :'Tap an enemy to attack · tap ground to move');
@@ -11517,6 +11528,7 @@ function buildSettings(){
   row('🎵 Adaptive music',toggle('music',true));
   row('📳 Haptic feedback (phones)',toggle('haptics',true));
   row('🧭 Battle coach tips',toggle('coach',true));
+  row('🎥 Camera follows your battles',toggle('followFight',false));
   row('🌤 Reduce motion (no weather / sway)',toggle('reduceMotion',false));
   row('🔋 Battery saver (30 fps)',toggle('fps30',false));
   row('🫲 Left-handed layout',toggle('lefty',false,applyBodyOpts));
@@ -15497,6 +15509,19 @@ function frame(now){
   // rate, so lockstep and game speed are untouched — only the paint thins out)
   fpsAlt=!fpsAlt;
   if(OPT.fps30&&fpsAlt)return;
+  // Assistive follow-the-fight camera (Settings, default off): when a fight
+  // involving the player is live, the camera is idle 4s, and the fight is
+  // off-centre, glide gently toward it. The player's own touch always wins.
+  if(OPT.followFight&&G&&!G.paused&&!G.over&&!G.placing
+     &&performance.now()-MUS.lastCombat<5000
+     &&performance.now()-lastCamTouch>4000&&MUS.fx!==undefined){
+    const fp=isoPt(MUS.fx,MUS.fy);
+    const cx=G.cam.x+vw/G.cam.z/2,cy=G.cam.y+vh/G.cam.z/2;
+    const ox=fp.x-cx,oy=fp.y-cy;
+    if(Math.hypot(ox,oy)>120/G.cam.z){
+      G.cam.x+=ox*Math.min(1,1.6*dt);G.cam.y+=oy*Math.min(1,1.6*dt);clampCam();
+    }
+  }
   // G5 screen shake: nudge the camera for exactly one draw, then put it back.
   // Applied to G.cam so BOTH renderers shake identically; decays fast so the
   // world settles inside a third of a second.

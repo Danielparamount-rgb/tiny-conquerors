@@ -156,6 +156,7 @@ function buildSettings(){
   row('🎵 Adaptive music',toggle('music',true));
   row('📳 Haptic feedback (phones)',toggle('haptics',true));
   row('🧭 Battle coach tips',toggle('coach',true));
+  row('🎥 Camera follows your battles',toggle('followFight',false));
   row('🌤 Reduce motion (no weather / sway)',toggle('reduceMotion',false));
   row('🔋 Battery saver (30 fps)',toggle('fps30',false));
   row('🫲 Left-handed layout',toggle('lefty',false,applyBodyOpts));

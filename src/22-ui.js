@@ -278,9 +278,12 @@ function refreshPanel(){
   const mil=ents.filter(u=>u.type!=='villager'&&!isAnimal(u));
   const u0=ents[0],ud=UNITS[u0.type];
   if(ents.length===1){
-    setCard(unitName(u0.type,localP),portraitFor('u',u0.type,localP),u0.hp,u0.maxhp,
-      [['atk',atkOf(u0)],...(ud.range>1?[['rng',rangeOf(u0)]]:[]),['spd',speedOf(u0).toFixed(1)],
+    // high ground must READ: +25% damage is the terrain's whole meaning
+    const onHill=G.elev&&G.elev[(u0.y|0)*MAP+(u0.x|0)];
+    setCard(unitName(u0.type,localP)+(onHill?' ⛰':''),portraitFor('u',u0.type,localP),u0.hp,u0.maxhp,
+      [['atk',onHill?atkOf(u0)+'↑':atkOf(u0)],...(ud.range>1?[['rng',rangeOf(u0)]]:[]),['spd',speedOf(u0).toFixed(1)],
        ...(ud.garCap?[['gar',(u0.gar?u0.gar.length:0)+'/'+ud.garCap]]:[])]);
+    if(onHill)hint('⛰ Holding the high ground — +25% damage dealt, less taken');
     if(ud.garCap&&u0.gar&&u0.gar.length)
       mkBtn('<b>⇱ '+(ud.ship?'Unload':'Ungarrison')+' '+u0.gar.length+'</b>',null,()=>{
         // transports set their passengers down on the nearest dry land
@@ -327,7 +330,9 @@ function refreshPanel(){
         ()=>startBuildKey(bt),locked||!canAfford(localP,bc),portraitFor('b',bt,localP));
     }
   }else{
-    if(ents.length===1)hint(G.pmode?'Tap the far end of the patrol beat'
+    // the high-ground notice set above must survive this default hint
+    if(ents.length===1&&!(G.elev&&G.elev[(u0.y|0)*MAP+(u0.x|0)]))
+      hint(G.pmode?'Tap the far end of the patrol beat'
       :G.amode?'Tap the map — they will fight their way there':mouseSeen
       ?'Right-click an enemy to attack · right-click ground to move'
       :'Tap an enemy to attack · tap ground to move');

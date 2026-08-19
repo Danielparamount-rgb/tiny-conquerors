@@ -341,6 +341,9 @@ The Blender sheets now draw in the game. **Purely cosmetic — all four determin
 - Toggle: the **✦ button** beside `3D`, or `toggleSprites()`.
 
 ## Recent fixes (last published state)
+- Label "terrain-read-camera" (2026-08-19, sw **tq-v71**). The last two #9 items. Baselines exact.
+  - **High ground reads**: a selected unit on elevation shows ⛰ in its card name, atk with an ↑, and the hint "Holding the high ground — +25% damage" (the default military hint yields to it — first draft got overwritten by the later hint() call in the same refreshPanel pass).
+  - **Follow-the-fight camera** (Settings, default OFF): when a fight involving the player is live (`MUS.lastCombat/fx/fy` — dealDamage now passes the impact position to musCombat), the camera has been untouched for 4s, and the fight is off-centre, frame() glides `G.cam` gently toward it. `lastCamTouch` stamped in panScreen AND zoomAt — the player's own touch always wins instantly.
 - Label "movement-feel" (2026-08-19, sw **tq-v70**). Roadmap #9 — the mobile-fairness pass. All four baselines exact.
   - **Group cohesion**: CMDS.move/amove stamp every member with `u.formSpd` = the group's slowest `speedOf` — the formation marches TOGETHER (knight+militia 14-tile march: max spread 2.0 tiles, was ~7). Cleared on arrival (`followPath` final snap) and implicitly by any new order (fresh commands re-stamp or leave it null). AI is untouched (it orders via cmdMove directly). Human-only → baselines safe by construction.
   - **Melee surround**: in the attack case, melee attackers on a NON-ANIMAL unit target creep to an id-keyed ring slot (`(u.id*2654435761^t.id)%8` — deterministic, no RNG) instead of all pulling at the centre; 6 militia now occupy 3+ of 6 sectors around a target at once instead of queueing. **Animals excluded on purpose** — hunting has its own tuned behaviour AND it is the only combat inside the baseline window.

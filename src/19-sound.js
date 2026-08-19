@@ -252,8 +252,11 @@ function snd(kind,wx,wy){
    State detection is READ-ONLY: musCombat() is pinged from dealDamage, the
    rest is a once-a-second glance at visible enemies. The sim never knows. */
 let MUS={on:null,gains:{},t0:0,beat:0,next:0,lastCombat:-99,mode:'peace',horn:0};
-function musCombat(p1,p2){ // called from dealDamage — local player involved?
-  if(p1===localP||p2===localP)MUS.lastCombat=performance.now();
+function musCombat(p1,p2,wx,wy){ // called from dealDamage — local player involved?
+  if(p1===localP||p2===localP){
+    MUS.lastCombat=performance.now();
+    if(wx!==undefined){MUS.fx=wx;MUS.fy=wy;}   // the follow-fight camera reads this
+  }
 }
 function musNode(){
   if(MUS.on!==null||!AC||!masterG)return;

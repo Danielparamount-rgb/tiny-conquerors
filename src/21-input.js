@@ -16,7 +16,9 @@ document.getElementById('boxBtn').onclick=()=>{
    gesture has to move the orbit target, and how far a pixel moves the world
    depends on the current yaw/pitch. Verified to reduce to the 2D arithmetic
    exactly at the home orientation. */
+let lastCamTouch=0;
 function panScreen(dx,dy){
+  lastCamTouch=performance.now();
   if(use3D){
     const t=R3.target(),d=R3.sd2t(dx,dy);
     camTo(t.x-d.x,t.y-d.y);clampCam();return;
@@ -132,6 +134,7 @@ function bindView(el){
 }
 bindView(view);bindView(view3);
 function zoomAt(nz,cx,cy){
+  lastCamTouch=performance.now();
   if(use3D){
     // keep the world point under the cursor fixed while zooming. sd2t scales
     // as 1/z, so d MUST be computed before G.cam.z changes.

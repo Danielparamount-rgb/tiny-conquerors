@@ -3577,6 +3577,19 @@ function frame(now){
   // rate, so lockstep and game speed are untouched — only the paint thins out)
   fpsAlt=!fpsAlt;
   if(OPT.fps30&&fpsAlt)return;
+  // Assistive follow-the-fight camera (Settings, default off): when a fight
+  // involving the player is live, the camera is idle 4s, and the fight is
+  // off-centre, glide gently toward it. The player's own touch always wins.
+  if(OPT.followFight&&G&&!G.paused&&!G.over&&!G.placing
+     &&performance.now()-MUS.lastCombat<5000
+     &&performance.now()-lastCamTouch>4000&&MUS.fx!==undefined){
+    const fp=isoPt(MUS.fx,MUS.fy);
+    const cx=G.cam.x+vw/G.cam.z/2,cy=G.cam.y+vh/G.cam.z/2;
+    const ox=fp.x-cx,oy=fp.y-cy;
+    if(Math.hypot(ox,oy)>120/G.cam.z){
+      G.cam.x+=ox*Math.min(1,1.6*dt);G.cam.y+=oy*Math.min(1,1.6*dt);clampCam();
+    }
+  }
   // G5 screen shake: nudge the camera for exactly one draw, then put it back.
   // Applied to G.cam so BOTH renderers shake identically; decays fast so the
   // world settles inside a third of a second.
