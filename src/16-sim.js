@@ -460,7 +460,7 @@ function followPath(u,dt){
   // zero final-position error, so gather 1.8 / farm 1.85 / deposit size*.5+1.7 /
   // melee radius checks behave exactly as before the rework
   if(last&&dist<=Math.max(u.spd*dt,.13)){
-    u.x=wp.x;u.y=wp.y;u.path.shift();u.spd=0;u.vx=0;u.vy=0;return true;
+    u.x=wp.x;u.y=wp.y;u.path.shift();u.spd=0;u.vx=0;u.vy=0;u.formSpd=null;return true;
   }
   const m=motParams(u);
   const want=Math.atan2(dy,dx);
@@ -476,6 +476,9 @@ function followPath(u,dt){
   // alignment-scaled speed: cavalry carves arcs instead of pivoting on the spot
   const align=Math.pow(Math.max(0,Math.cos(wrapA(want-u.hdg))),m.k);
   let vt=speedOf(u)*align;
+  // movement-feel: a formation marches TOGETHER — commanded groups carry the
+  // group's slowest speed (set by CMDS.move/amove, cleared on arrival/new orders)
+  if(u.formSpd&&u.formSpd<vt)vt=u.formSpd*align;
   if(last)vt=Math.min(vt,Math.sqrt(2*m.dec*Math.max(0,dist-.02)),3.5*dist+.05);
   u.spd+=Math.max(-m.dec*dt,Math.min(m.acc*dt,vt-u.spd));
   if(u.spd<0)u.spd=0;
@@ -988,7 +991,12 @@ function updateUnit(u,dt){
         slewHdg(u,c.x,c.y,dt); // face the victim so the windup aims right
         if(uRng<=1){ // melee: press in to sword's length instead of hovering
           const want=u.target.bld?rad+.5:.44;
-          creepToward(u,c.x,c.y,want,dt);
+          if(!u.target.bld&&!isAnimal(t)){
+            // fan to an id-keyed slot on the victim's ring so a mob surrounds
+            // instead of queueing — deterministic (id + target id, no RNG)
+            const a=((u.id*2654435761^t.id)>>>0)%8/8*6.2832;
+            creepToward(u,c.x+Math.cos(a)*want*.9,c.y+Math.sin(a)*want*.9,want*.35,dt);
+          }else creepToward(u,c.x,c.y,want,dt);
         }
         if(d.treb&&!u.setup){ // a trebuchet unpacks before its first shot
           u.setup=true;u.cd=Math.max(u.cd,hasUt(u.p,'kataparuto')?1.5:3);}

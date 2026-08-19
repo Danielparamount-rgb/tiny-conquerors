@@ -235,14 +235,20 @@ function cmdBld(c,id){
 }
 const CMDS={
   move(c){const us=cmdUnits(c),n=us.length;
+    // cohesion: the whole formation marches at its slowest member's pace
+    let gs=null;
+    if(n>1){gs=1e9;for(const u of us)gs=Math.min(gs,speedOf(u));}
     for(let i=0;i<n;i++){const u=us[i],d=groupDest(n,i,c.x,c.y,c.f);
       // shift-queue: append a waypoint to a unit already walking a route
       if(c.sh&&(u.state==='move'||(u.wq&&u.wq.length))){
         if(!u.wq)u.wq=[];
         if(u.wq.length<12)u.wq.push([d[0],d[1]]);
-      }else cmdMove(u,d[0],d[1]);}},
+      }else{cmdMove(u,d[0],d[1]);u.formSpd=gs;}}},
   amove(c){const us=cmdUnits(c),n=us.length;
-    for(let i=0;i<n;i++){const d=groupDest(n,i,c.x,c.y,c.f);cmdAmove(us[i],d[0],d[1]);}},
+    let gs=null;
+    if(n>1){gs=1e9;for(const u of us)gs=Math.min(gs,speedOf(u));}
+    for(let i=0;i<n;i++){const d=groupDest(n,i,c.x,c.y,c.f);
+      cmdAmove(us[i],d[0],d[1]);us[i].formSpd=gs;}},
   stop(c){for(const u of cmdUnits(c)){u.state='idle';u.path=null;u.target=null;
     u.resKey=null;u.farm=null;u.am=null;u.wq=null;u.pat=null;u.spd=0;u.vx=0;u.vy=0;}},
   attack(c){
