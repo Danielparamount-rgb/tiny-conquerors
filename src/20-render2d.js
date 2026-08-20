@@ -190,62 +190,83 @@ const R99={};
     }
     g.putImageData(im,x0,y0);};
   /* Phase B: the sprite post-chain (GFX99-PLAN points 4-5). One pass runs the
-     whole period recipe on a canvas ALREADY at its on-screen 1x size:
-     posterize the shading into hard bands (Phong-then-palettize — the era's
-     light was banded, never cel), index + Bayer dither through PAL99, 1-bit
-     alpha, then the baked 1px warm near-black outline (never pure black).
-     opts.mask = the team mask's pixel data at the same size: masked pixels
-     become a TEAM RAMP REMAP (shade picked by luma, dithered) — the SC/AoE2
-     mechanism. Runs for team 0 too, so the colourblind palette flows through
-     the sheets exactly like it does through the terrain. */
+     whole period recipe on a canvas ALREADY at its on-screen blit size:
+     the ENSEMBLE CLEANUP (an unsharp mask computed on luma — their postmortem:
+     raw 3D renders never read at 20-100px without sharpen/edge-darken), then a
+     HUE-LOCKED quantize (nearest index from the true color; the sharpened luma
+     walks the SHADE within that index's ramp and the Bayer dithers the
+     residual — era indexed art dithered along a ramp, never across hues; a
+     per-channel posterize destroyed warm hues, the tq-v81 roof bug), 1-bit
+     alpha, then the baked outline. Thin features (<=2px limbs, spears) keep
+     their colour stepped darker instead of the full outline — a hard outline
+     EATS a 2px limb into a black stick, which killed definition.
+     opts.mask = team mask pixels at the same size: masked pixels become a
+     TEAM RAMP REMAP by sharpened luma (the SC/AoE2 mechanism; runs for team 0
+     too so the colourblind palette flows through). opts.amp = shade-dither
+     strength (12 full). opts.sharp = unsharp gain (default .8). */
   R99.post=(c,opts)=>{
     const o=opts||{};
     const g=c.getContext('2d'),w=c.width,h=c.height;
     const im=g.getImageData(0,0,w,h),d=im.data,LU=R99.lut();
     const M=o.mask||null,TR=(o.team|0)*8;
-    const A=o.amp===undefined?12:o.amp;
+    const A=o.amp===undefined?12:o.amp,S9=A/12;
+    const K=o.sharp===undefined?.8:o.sharp;
     const RL=[];for(let i=0;i<8;i++){const pc=P[TR+i];RL.push(pc[0]*3+pc[1]*6+pc[2]);}
+    const n=w*h;
+    const Lb=new Float32Array(n);                 // luma field; -1 = transparent
+    for(let i=0;i<n;i++){const q=i*4;Lb[i]=d[q+3]<128?-1:d[q]*3+d[q+1]*6+d[q+2];}
+    const idx=new Int16Array(n);                  // palette index; -1 = transparent
     for(let y=0;y<h;y++)for(let x=0;x<w;x++){
-      const i=(y*w+x)*4;
-      if(d[i+3]<128){d[i+3]=0;continue;}
-      const bb=(BAYER[(y&3)*4+(x&3)]/15-.5)*A;
-      let pc;
-      if(M&&M[i]>=128){
-        const lum=d[i]*3+d[i+1]*6+d[i+2]+bb*25;
-        let bi=0,bd=1e9;
-        for(let s=0;s<8;s++){const dd=Math.abs(RL[s]-lum);if(dd<bd){bd=dd;bi=s;}}
-        pc=P[TR+bi];
-      }else{
-        /* HUE-LOCKED quantize (the tq-v81 roof bug, both halves): the ramp is
-           picked from the TRUE pixel color — the earlier per-channel posterize
-           collapsed warm low-saturation ratios (thatch 115,93,48 became
-           102,102,51) and sent whole roofs into the olive ramp, and an
-           RGB-space Bayer offset flipped midtones across hues as speckle. In
-           an indexed pipeline the palette's own shade steps ARE the posterize
-           (the Blender 5-band materials supply the banding); the Bayer only
-           dithers the SHADE within the chosen ramp — era indexed art dithered
-           along a ramp, never across hues. amp = dither strength (12 = full). */
-        const L0=d[i]*3+d[i+1]*6+d[i+2];
-        let bi=LU[(d[i]>>3)<<10|(d[i+1]>>3)<<5|(d[i+2]>>3)];
-        const t=(BAYER[(y&3)*4+(x&3)]+.5)/16,S9=A/12;
-        if(L0>LUM[bi]&&bi<RE[bi]){
-          if(t<(L0-LUM[bi])/((LUM[bi+1]-LUM[bi])||1)*S9)bi++;
-        }else if(L0<LUM[bi]&&bi>RS[bi]){
-          if(t<(LUM[bi]-L0)/((LUM[bi]-LUM[bi-1])||1)*S9)bi--;
-        }
-        pc=P[bi];
+      const i=y*w+x,q=i*4;
+      if(Lb[i]<0){idx[i]=-1;continue;}
+      // unsharp vs the 3x3 opaque-neighbour mean; transparent never dilutes
+      let sum=0,cnt=0;
+      for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+        const xx=x+dx,yy=y+dy;
+        if(xx<0||yy<0||xx>=w||yy>=h)continue;
+        const L2=Lb[yy*w+xx];if(L2<0)continue;sum+=L2;cnt++;
       }
-      d[i]=pc[0];d[i+1]=pc[1];d[i+2]=pc[2];d[i+3]=255;
+      const Ls=Lb[i]+K*(Lb[i]-sum/cnt);
+      let bi;
+      if(M&&M[q]>=128){
+        const bb=(BAYER[(y&3)*4+(x&3)]/15-.5)*A;
+        const lum=Ls+bb*25;
+        let bj=0,bd=1e9;
+        for(let s=0;s<8;s++){const dd=Math.abs(RL[s]-lum);if(dd<bd){bd=dd;bj=s;}}
+        bi=TR+bj;
+      }else{
+        bi=LU[(d[q]>>3)<<10|(d[q+1]>>3)<<5|(d[q+2]>>3)];  // ramp pick: true color
+        // walk to the shade nearest the SHARPENED luma, inside the ramp
+        while(bi<RE[bi]&&Math.abs(LUM[bi+1]-Ls)<Math.abs(LUM[bi]-Ls))bi++;
+        while(bi>RS[bi]&&Math.abs(LUM[bi-1]-Ls)<Math.abs(LUM[bi]-Ls))bi--;
+        const t=(BAYER[(y&3)*4+(x&3)]+.5)/16;             // dither the residual
+        if(Ls>LUM[bi]&&bi<RE[bi]){
+          if(t<(Ls-LUM[bi])/((LUM[bi+1]-LUM[bi])||1)*S9)bi++;
+        }else if(Ls<LUM[bi]&&bi>RS[bi]){
+          if(t<(LUM[bi]-Ls)/((LUM[bi]-LUM[bi-1])||1)*S9)bi--;
+        }
+      }
+      idx[i]=bi;
     }
-    // the outline bakes on the rim against REAL transparency only, so a body
-    // clipped by its cell wall never grows a false edge
-    const oc=P[R99.DARKS+1];
+    // outline on the index field: full warm-dark on thick bodies, one-two
+    // shades darker on thin features; rim tested against REAL transparency
+    // only (a cell-wall clip never grows a false edge)
+    const OC=R99.DARKS+1;
+    const out=new Int16Array(idx);
+    const tr=(xx,yy)=>xx<0||yy<0||xx>=w||yy>=h?0:(idx[yy*w+xx]<0?1:0);
     for(let y=0;y<h;y++)for(let x=0;x<w;x++){
-      const i=(y*w+x)*4;
-      if(!d[i+3])continue;
-      if((x>0&&!d[i-1])||(x<w-1&&!d[i+7])||(y>0&&!d[i-w*4+3])||(y<h-1&&!d[i+w*4+3])){
-        d[i]=oc[0];d[i+1]=oc[1];d[i+2]=oc[2];}
+      const i=y*w+x;if(idx[i]<0)continue;
+      if(!(tr(x-1,y)||tr(x+1,y)||tr(x,y-1)||tr(x,y+1)))continue;
+      const thin=
+        (tr(x-1,y)&&(tr(x+1,y)||tr(x+2,y)))||
+        (tr(x+1,y)&&(tr(x-1,y)||tr(x-2,y)))||
+        (tr(x,y-1)&&(tr(x,y+1)||tr(x,y+2)))||
+        (tr(x,y+1)&&(tr(x,y-1)||tr(x,y-2)));
+      out[i]=thin?Math.max(RS[idx[i]],idx[i]-2):OC;
     }
+    for(let i=0;i<n;i++){const q=i*4;
+      if(out[i]<0){d[q+3]=0;continue;}
+      const pc=P[out[i]];d[q]=pc[0];d[q+1]=pc[1];d[q+2]=pc[2];d[q+3]=255;}
     g.putImageData(im,0,0);};
   /* Palette-cycled water: four pre-built tile diamonds — CALM dark water
      (two near-identical shades broken by dither) with sparse sparkles that
@@ -987,7 +1008,7 @@ function getResSpr(type,h){
     if(h%2)fishAt(-6,-1.6,.7,true);
     g.fillStyle='rgba(228,242,246,.5)';
     for(let i=0;i<4;i++){g.beginPath();g.arc(-8+rnd()*16,-1+rnd()*2,.7,0,7);g.fill();}
-    const out={c,ox:ax,oy:ay-6,w:W,h:Ht};RES_SPR[key]=q99(out);return out;
+    const out={c,ox:ax,oy:ay-6,w:W,h:Ht};RES_SPR[key]=out;return out;
   }
   if(type==='meat'){
     // a fallen beast: hide over a low mass, legs folded, a scatter of feathers
@@ -1021,7 +1042,7 @@ function getResSpr(type,h){
       const gx=-13+rnd()*26,gy=-.5+rnd()*2.4;
       g.beginPath();g.moveTo(gx,gy);g.lineTo(gx+(rnd()-.5)*3,gy-2-rnd()*2);g.stroke();
     }
-    const out={c,ox:ax,oy:ay-2,w:W,h:Ht};RES_SPR[key]=q99(out);return out;
+    const out={c,ox:ax,oy:ay-2,w:W,h:Ht};RES_SPR[key]=out;return out;
   }
   if(type==='wood'){
     const rr=10+(h%4)*1.7;
@@ -1194,7 +1215,7 @@ function getResSpr(type,h){
   }
   spriteGrain(c,h*53+key.length*911,.8); // trees/gold/berries get the dither too
   const sp={c,ox:ax,oy:ay,w:W,h:Ht};
-  RES_SPR[key]=q99(sp);return sp;
+  RES_SPR[key]=sp;return sp;
 }
 function clampCam(){
   /* The 2D bounds below are an axis-aligned box in ISO screen space, which is
@@ -1658,21 +1679,24 @@ function mkIsoSpr(s,H,fn){
   return{c,ox:s*IW+28,oy:H+2,w,h,H};
 }
 /* ===== Classic '99 for the PROCEDURAL sprite caches (GFX99-PLAN Phase B) ===
-   Buildings, trees, resources, corpses, rubble, relic: the supersampled
-   canvas is downscaled to its on-screen 1x size (dither must live at OUTPUT
-   scale — the forge lesson) and run through the same post-chain as the unit
-   sheets. Applied at each cache-store site; apply99() FLUSHES these caches on
-   every toggle so keys never collide across looks (gotcha 3 by flush — the
-   USPR/BSPR sheet caches use a '/99' key dimension instead). */
-function q99(sp){
-  if(!OPT.r99||!sp||sp._q99)return sp;
-  const w=Math.max(1,Math.round(sp.w)),h=Math.max(1,Math.round(sp.h));
+   Buildings, trees, resources, corpses, rubble, relic: sp.c stays the
+   UNTOUCHED modern supersample; Classic world-draw sites call spc(sp) which
+   returns a lazily-built quantized variant at the zoom's blit scale — 1x, or
+   2x when R99EFF says so (the hard-pixel contract's "1x or 2x"; at 2x the
+   TREZ=2 source quantizes at native resolution, zero detail lost). Dither
+   always lives at OUTPUT scale — the forge lesson. Both looks coexist on the
+   sprite object, so the mode toggle needs no cache flushing. */
+function spc(sp){
+  if(!OPT.r99)return sp.c;
+  const eff=R99EFF||1,k=eff>1?'q2':'q1';
+  if(sp[k])return sp[k];
+  const w=Math.max(1,Math.round(sp.w*eff)),h=Math.max(1,Math.round(sp.h*eff));
   const c=document.createElement('canvas');c.width=w;c.height=h;
   const g=c.getContext('2d');
   g.imageSmoothingEnabled=true;g.imageSmoothingQuality='high';
   g.drawImage(sp.c,0,0,w,h);
   R99.post(c,{amp:10});
-  sp.c=c;sp._q99=true;return sp;
+  sp[k]=c;return c;
 }
 /* 2x2 stipple patterns — the era's 50% checkerboard (dens 2) and sparse 25%
    (dens 1). Soft alpha is FORBIDDEN in Classic; coverage does the blending. */
@@ -2409,8 +2433,8 @@ function getBldSpr(type,p,built,stage,vr,sl){
       }
     });
   }else sp=mkIsoSpr(BLDS[type].size,IHT[type],(g,ss)=>ISO_ART[type](g,ss,p,ab,vr));
-  if(sl)snowRim(sp.c,sl);          // snow first — the quant turns it to dither
-  ISPR[key]=q99(sp);return sp;
+  if(sl)snowRim(sp.c,sl);          // snow first — spc()'s quant turns it to dither
+  ISPR[key]=sp;return sp;
 }
 /* ---------- entity drawing ---------- */
 function drawBld(b){
@@ -2447,10 +2471,10 @@ function drawBld(b){
   // farms stay footprint-true: they tile edge-to-edge.
   const BS=d.thin||d.farm?1:BLD_VS2D;
   if(!bR){
-    if(BS===1)ctx.drawImage(sp.c,pt.x-sp.ox,pt.y-sp.oy,sp.w,sp.h);
+    if(BS===1)ctx.drawImage(spc(sp),pt.x-sp.ox,pt.y-sp.oy,sp.w,sp.h);
     else{
       const southY=pt.y+2*b.size*IH;
-      ctx.drawImage(sp.c,pt.x-sp.ox*BS,southY-(sp.oy+2*b.size*IH)*BS,sp.w*BS,sp.h*BS);
+      ctx.drawImage(spc(sp),pt.x-sp.ox*BS,southY-(sp.oy+2*b.size*IH)*BS,sp.w*BS,sp.h*BS);
     }
   }
   if(BLDS[b.type].gate&&b.built){
@@ -4157,15 +4181,16 @@ function sprGet(key,an,p){
    dimension — gotcha-3 discipline. Each (key,anim) also bakes a sheared 50%
    checkerboard SHADOW sheet (point 6), shared by all teams, replacing the
    soft ellipses in Classic. */
-function sprGet99(key,an,p){
+function sprGet99(key,an,p,eff){
+  eff=eff||1;   // 2 = the close-zoom sheet: the hard-pixel contract's "1x or 2x"
   const meta=USPR.meta[key],m=meta.anims[an];
   const team=(p===GAIA||p===undefined)?0:p;
-  const ck=key+'/'+an+'/'+team+'/99';
+  const ck=key+'/'+an+'/'+team+'/99'+(eff>1?'x2':'');
   const hit=USPR.tint[ck];if(hit)return hit;
   const base=sprImg(key+'/'+an,m.sheet);if(!base)return null;
   const msk=m.mask?sprImg(key+'/'+an+'/m',m.mask):false;
   if(m.mask&&msk===null)return null;             // mask still loading
-  const S0=SPR_SCALE/(USPR.res||1),cw=meta.cell[0],ch=meta.cell[1];
+  const S0=SPR_SCALE/(USPR.res||1)*eff,cw=meta.cell[0],ch=meta.cell[1];
   const ncw=Math.max(1,Math.round(cw*S0)),nch=Math.max(1,Math.round(ch*S0));
   const c=document.createElement('canvas');c.width=ncw*m.frames;c.height=nch*8;
   const g=c.getContext('2d');g.imageSmoothingEnabled=true;g.imageSmoothingQuality='high';
@@ -4181,9 +4206,9 @@ function sprGet99(key,an,p){
   }
   R99.post(c,{mask:mi,team,amp:12});
   const ax=Math.round(meta.anchorX*ncw/cw),ay=Math.round(meta.anchorY*nch/ch);
-  const shk=key+'/'+an+'/sh99';                    // shadows carry no colour: shared
+  const shk=key+'/'+an+'/sh99'+(eff>1?'x2':'');    // shadows carry no colour: shared
   const sh=USPR.tint[shk]||(USPR.tint[shk]=sprShadow99(c,ncw,nch,ax,ay,m.frames));
-  const out={c,cw:ncw,ch:nch,ax,ay,sh};
+  const out={c,cw:ncw,ch:nch,ax,ay,sh,eff};
   USPR.tint[ck]=out;return out;
 }
 /* Point 6: the era shadow — the unit's own silhouette sheared onto the ground
@@ -4223,13 +4248,14 @@ function sprDraw(u,moving){
        (rows 3-5 flip their mirror row — the key light and the baked shadow
        flip with them, the era's memory-trick quirk, point 7). Integer
        anchors, held frames, baked checkerboard shadow, no soft anything. */
-    const s9=sprGet99(key,an,u.p);if(!s9)return false;
+    const s9=sprGet99(key,an,u.p,R99EFF);if(!s9)return false;
+    const E=s9.eff||1; // dest is in world units: sheet px / E (1:1 on screen at z==E*1)
     const mir=d>=3&&d<=5,row=mir?((4-d)+8)%8:d;
     if(mir){ctx.save();ctx.scale(-1,1);}
     if(s9.sh)ctx.drawImage(s9.sh.c,f*s9.sh.cw,row*s9.ch,s9.sh.cw,s9.ch,
-      -s9.ax,4-s9.ay,s9.sh.cw,s9.ch);
+      -s9.ax/E,4-s9.ay/E,s9.sh.cw/E,s9.ch/E);
     ctx.drawImage(s9.c,f*s9.cw,row*s9.ch,s9.cw,s9.ch,
-      -s9.ax,4-s9.ay,s9.cw,s9.ch);
+      -s9.ax/E,4-s9.ay/E,s9.cw/E,s9.ch/E);
     if(mir)ctx.restore();
     return true;
   }
@@ -4295,16 +4321,17 @@ function bsprGet(type,age,team,sl){
 /* Phase B point 8: the town through the same '99 chain. Downscaled to the
    exact on-screen size (kk bakes BLD_VS2D in), snow first, then R99.post with
    the mask as a team-ramp remap. Cached under the '/99' key dimension. */
-function bsprGet99(type,age,team,sl){
+function bsprGet99(type,age,team,sl,eff){
+  eff=eff||1;
   const e=BSPR.meta.blds[type];if(!e)return null;
   const A=e.ages[age];if(!A)return null;
-  const ck=type+'/'+age+'/'+team+'/'+(sl|0)+'/99';
+  const ck=type+'/'+age+'/'+team+'/'+(sl|0)+'/99'+(eff>1?'x2':'');
   const hit=BSPR.tint[ck];if(hit)return hit;
   const base=bimg(type+'/'+age,A.sheet);if(!base)return null;
   const msk=A.mask?bimg(type+'/'+age+'/m',A.mask):false;
   if(A.mask&&msk===null)return null;
   const BS=BLDS[type].farm?1:BLD_VS2D;
-  const kk=BS*26/BSPR.meta.ppt;
+  const kk=BS*26/BSPR.meta.ppt*eff;
   const w=Math.max(1,Math.round(A.w*kk)),h=Math.max(1,Math.round(A.h*kk));
   const c=document.createElement('canvas');c.width=w;c.height=h;
   const g=c.getContext('2d');g.imageSmoothingEnabled=true;g.imageSmoothingQuality='high';
@@ -4321,7 +4348,7 @@ function bsprGet99(type,age,team,sl){
   // planes reading as clean bands (the quant is hue-locked, so this is purely
   // a texture-density knob now)
   R99.post(c,{mask:mi,team,amp:6});
-  const out={c,w,h,ax:Math.round(A.ax*w/A.w),ay:Math.round(A.ay*h/A.h)};
+  const out={c,w,h,ax:Math.round(A.ax*w/A.w),ay:Math.round(A.ay*h/A.h),eff};
   BSPR.tint[ck]=out;return out;
 }
 function bsprDraw(b,pt0,bl){
@@ -4335,9 +4362,9 @@ function bsprDraw(b,pt0,bl){
   const ps=isoPt(b.tx+b.size,b.ty+b.size); // the footprint's south corner
   ps.y-=bl;
   if(OPT.r99){
-    const s9=bsprGet99(b.type,age,b.p,wxSnowLvl);if(!s9)return false;
-    const z9=G.cam.z;
-    const rx=Math.round((ps.x-s9.ax)*z9)/z9,ry=Math.round((ps.y-s9.ay)*z9)/z9;
+    const s9=bsprGet99(b.type,age,b.p,wxSnowLvl,R99EFF);if(!s9)return false;
+    const E=s9.eff||1,z9=G.cam.z;
+    const rx=Math.round((ps.x-s9.ax/E)*z9)/z9,ry=Math.round((ps.y-s9.ay/E)*z9)/z9;
     if(!d.farm){ // sparse stipple contact shadow, tucked under the base —
       // 50% checker over light worn dirt read as hazard stripes (first cut)
       const pc9=isoPt(b.tx+b.size/2,b.ty+b.size/2);pc9.y-=bl;
@@ -4346,8 +4373,8 @@ function bsprDraw(b,pt0,bl){
       ctx.ellipse(pc9.x+b.size*3,pc9.y+2,b.size*IW*.72,b.size*IH*.66,0,0,7);
       ctx.fill();
     }
-    ctx.drawImage(s9.c,rx,ry,s9.w,s9.h);
-    return{x:rx,y:ry,w:s9.w,h:s9.h};
+    ctx.drawImage(s9.c,rx,ry,s9.w/E,s9.h/E);
+    return{x:rx,y:ry,w:s9.w/E,h:s9.h/E};
   }
   const img=bsprGet(b.type,age,b.p,wxSnowLvl);if(!img)return false;
   const BS=d.farm?1:BLD_VS2D;
@@ -4937,7 +4964,7 @@ function getCorpseSpr(p,big,st,ram){
     g.fillStyle='#2a2118';g.fillRect(L-.9,-.4,.9,.9);
     g.fillStyle='#cfc4a8';g.fillRect(-L-4,3.5,3,1);g.fillRect(L-3,4,2.4,1);
   }
-  const sp={c,ox:ax,oy:ay,w:W,h:H};CORPSE_SPR[key]=q99(sp);return sp;
+  const sp={c,ox:ax,oy:ay,w:W,h:H};CORPSE_SPR[key]=sp;return sp;
 }
 const RUB_SPR={};
 function getRubbleSpr(s,p,v){
@@ -4960,7 +4987,7 @@ function getRubbleSpr(s,p,v){
       g.beginPath();g.moveTo(q.x-7,q.y+3);g.lineTo(q.x+8,q.y-4+h(i,7)*4);g.stroke();}
     poly(g,[{x:M.x+4,y:M.y+2},{x:M.x+10,y:M.y-1},{x:M.x+8,y:M.y+4}],TEAMS[p].main,O2);
   });
-  RUB_SPR[key]=q99(sp);return sp;
+  RUB_SPR[key]=sp;return sp;
 }
 function getRelicSpr(){
   if(RELIC_SPR)return RELIC_SPR;
@@ -4978,7 +5005,7 @@ function getRelicSpr(){
   g.fillStyle='#f5da7a';g.fillRect(-1,-9.6,2,5.2);
   g.strokeStyle='rgba(255,240,190,.9)';g.lineWidth=1;
   g.beginPath();g.moveTo(7.5,-15);g.lineTo(7.5,-11);g.moveTo(5.5,-13);g.lineTo(9.5,-13);g.stroke();
-  RELIC_SPR=q99({c,ox:ax,oy:ay,w:W,h:H});return RELIC_SPR;
+  RELIC_SPR={c,ox:ax,oy:ay,w:W,h:H};return RELIC_SPR;
 }
 function drawMonk(u,t,sw,TC){drawManRig(u,t,TC,MAN_COSTUME.monk);}
 function drawMonk_legacy(u,t,sw,TC){
@@ -5096,13 +5123,13 @@ function drawCorpse(c){
     if(c.h)ctx.scale(-1,1);
     ctx.rotate((1-f)*-.55);ctx.scale(1,.45+.55*f);
     ctx.globalAlpha=OPT.r99?1:.85;
-    ctx.drawImage(sp.c,-sp.ox,-sp.oy,sp.w,sp.h);
+    ctx.drawImage(spc(sp),-sp.ox,-sp.oy,sp.w,sp.h);
     ctx.restore();ctx.globalAlpha=1;return;
   }
   ctx.globalAlpha=a;
   if(c.h){ctx.save();ctx.translate(cp.x,cp.y);ctx.scale(-1,1);
-    ctx.drawImage(sp.c,-sp.ox,-sp.oy,sp.w,sp.h);ctx.restore();}
-  else ctx.drawImage(sp.c,cp.x-sp.ox,cp.y-sp.oy,sp.w,sp.h);
+    ctx.drawImage(spc(sp),-sp.ox,-sp.oy,sp.w,sp.h);ctx.restore();}
+  else ctx.drawImage(spc(sp),cp.x-sp.ox,cp.y-sp.oy,sp.w,sp.h);
   ctx.globalAlpha=1;
 }
 function drawArrow(p){
@@ -5209,6 +5236,10 @@ function draw(){
   const vx0=G.cam.x-60,vx1=G.cam.x+vw/z+60,vy0=G.cam.y-100,vy1=G.cam.y+vh/z+60;
   cullX0=vx0;cullX1=vx1;cullY0=vy0;cullY1=vy1;
   RIG_LOD=z<.7;
+  // Classic '99: sprites blit 1:1 at z1 from the 1x bake and 1:1 at z2 from a
+  // native 2x bake — z2 was the zoom where 1x art went blocky against the
+  // TREZT=2 terrain (which is native there), Daniel's "needs more definition"
+  R99EFF=OPT.r99&&z>=2?2:1;
   /* Animated water. The old version gave every tile an independent wiggle;
      real water moves as COHERENT swells, so crest brightness now rides two
      travelling waves evaluated in WORLD tile space — the same crest line
@@ -5287,13 +5318,13 @@ function draw(){
       ctx.rotate(rb.tilt*.13*e);
       ctx.scale(1.13,1.13*(1-.72*e));                 // sink into its own base
       ctx.globalAlpha=1-.35*e;
-      ctx.drawImage(bs.c,-bs.ox,-(bs.oy+2*rb.size*IH),bs.w,bs.h);
+      ctx.drawImage(spc(bs),-bs.ox,-(bs.oy+2*rb.size*IH),bs.w,bs.h);
       ctx.restore();ctx.globalAlpha=1;
       continue;
     }
     const sp=getRubbleSpr(rb.size,rb.p,rb.v);
     ctx.globalAlpha=Math.min(.95,Math.min(rb.t/15,(age-.55)/.35));
-    ctx.drawImage(sp.c,p2.x-sp.ox,p2.y-sp.oy,sp.w,sp.h);
+    ctx.drawImage(spc(sp),p2.x-sp.ox,p2.y-sp.oy,sp.w,sp.h);
     ctx.globalAlpha=1;
   }
   // spent arrows bristling from the ground — and from whoever caught one
@@ -5326,7 +5357,7 @@ function draw(){
     const gp=isoPt(G.pend.tx,G.pend.ty);
     const sp=getBldSpr(G.pend.type,0,true);
     ctx.globalAlpha=.55;
-    ctx.drawImage(sp.c,gp.x-sp.ox,gp.y-sp.oy,sp.w,sp.h);
+    ctx.drawImage(spc(sp),gp.x-sp.ox,gp.y-sp.oy,sp.w,sp.h);
     ctx.globalAlpha=1;
     diamondPath(G.pend.tx,G.pend.ty,BLDS[G.pend.type].size);
     ctx.strokeStyle=ok?'#7dbb4e':'#c2493d';ctx.lineWidth=2;ctx.stroke();
@@ -5343,7 +5374,7 @@ function draw(){
         const ok=canPlaceType(G.placing,s2.tx,s2.ty);
         const gp=isoPt(s2.tx,s2.ty);
         ctx.globalAlpha=.55;
-        ctx.drawImage(sp.c,gp.x-sp.ox,gp.y-sp.oy,sp.w,sp.h);
+        ctx.drawImage(spc(sp),gp.x-sp.ox,gp.y-sp.oy,sp.w,sp.h);
         ctx.globalAlpha=1;
         if(!ok){diamondPath(s2.tx,s2.ty,1);
           ctx.fillStyle='rgba(178,58,48,.4)';ctx.fill();}
@@ -5382,14 +5413,14 @@ function draw(){
         // (skipped when zoomed out — invisible there and rotate is costly x2500 trees)
         const ang=Math.sin(G.t*.8+((e.r.x*13+e.r.y*29)%63)/10)*.007; // barely-there wind
         ctx.save();ctx.translate(rp.x,rp.y+8);ctx.rotate(ang);
-        ctx.drawImage(sp.c,-sp.ox,-sp.oy,sp.w,sp.h);ctx.restore();
-      }else ctx.drawImage(sp.c,rp.x-sp.ox,rp.y-sp.oy+8,sp.w,sp.h);
+        ctx.drawImage(spc(sp),-sp.ox,-sp.oy,sp.w,sp.h);ctx.restore();
+      }else ctx.drawImage(spc(sp),rp.x-sp.ox,rp.y-sp.oy+8,sp.w,sp.h);
     }
     else if(e.relic){
       const rp=isoE(e.relic.x+.5,e.relic.y+.5);
       if(rp.x<vx0||rp.x>vx1||rp.y<vy0||rp.y>vy1)continue;
       const sp=getRelicSpr();
-      ctx.drawImage(sp.c,rp.x-sp.ox,rp.y-sp.oy+6,sp.w,sp.h);
+      ctx.drawImage(spc(sp),rp.x-sp.ox,rp.y-sp.oy+6,sp.w,sp.h);
     }
     else if(e.b)drawBld(e.b);
     else drawUnit(e.u);

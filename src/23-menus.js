@@ -233,13 +233,8 @@ document.getElementById('campBack').onclick=()=>{
    leaving Classic restores the modern ground cleanly. Render-side only. */
 function apply99(){
   document.body.classList.toggle('r99',!!OPT.r99);
-  // Phase B: the per-page-load PROCEDURAL sprite caches bake ONE look in —
-  // flush them all so lazy rebuilds come back in the chosen look (gotcha 3 by
-  // flush; the USPR/BSPR sheet caches carry a '/99' key dimension instead).
-  try{
-    for(const o of [ISPR,RES_SPR,RUB_SPR,CORPSE_SPR])for(const k in o)delete o[k];
-    RELIC_SPR=null;
-  }catch(e){}
+  // (Phase B kept both looks side by side on every cached sprite — sp.c stays
+  // modern, spc() lazily bakes the '99 variants — so the toggle flushes nothing.)
   if(G){
     try{
       refreshTerrain();

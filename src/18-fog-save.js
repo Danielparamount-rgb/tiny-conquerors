@@ -55,6 +55,7 @@ function mkGroundTex(){
 }
 let cullX0=-1e9,cullX1=1e9,cullY0=-1e9,cullY1=1e9; // unit screen-cull bounds, set each draw()
 let RIG_LOD=false; // true below z .7 — rigs drop micro-detail (faces, mail rings, fletching)
+let R99EFF=1;      // Classic '99 sprite blit scale: 2 at close zoom (the "1x or 2x" contract), set per frame in draw()
 function updateFog(){
   const V=G.vis;
   for(let i=0;i<V.length;i++)if(V[i]===2)V[i]=1;
