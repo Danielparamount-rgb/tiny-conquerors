@@ -233,6 +233,13 @@ document.getElementById('campBack').onclick=()=>{
    leaving Classic restores the modern ground cleanly. Render-side only. */
 function apply99(){
   document.body.classList.toggle('r99',!!OPT.r99);
+  // Phase B: the per-page-load PROCEDURAL sprite caches bake ONE look in —
+  // flush them all so lazy rebuilds come back in the chosen look (gotcha 3 by
+  // flush; the USPR/BSPR sheet caches carry a '/99' key dimension instead).
+  try{
+    for(const o of [ISPR,RES_SPR,RUB_SPR,CORPSE_SPR])for(const k in o)delete o[k];
+    RELIC_SPR=null;
+  }catch(e){}
   if(G){
     try{
       refreshTerrain();
@@ -282,7 +289,7 @@ function buildSettings(){
   row('🌤 Reduce motion (no weather / sway)',toggle('reduceMotion',false));
   row('🔋 Battery saver (30 fps)',toggle('fps30',false));
   row('🫲 Left-handed layout',toggle('lefty',false,applyBodyOpts));
-  row('🕹 Classic \'99 graphics (Phase A/C — evolving)',toggle('r99',false,apply99));
+  row('🕹 Classic \'99 graphics (Phases A-C — evolving)',toggle('r99',false,apply99));
   row('🔍 Larger buttons',toggle('bigui',false,applyBodyOpts));
   row('🔠 Larger text',toggle('bigtext',false,applyBodyOpts));
   row('🗺 Larger minimap (phones)',toggle('bigmap',false,applyBodyOpts));
