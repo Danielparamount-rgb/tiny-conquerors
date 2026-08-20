@@ -394,14 +394,14 @@ function handleTap(cx,cy,mouse,right,shift){
   // carries it out; nothing here touches a unit directly any more.
   const selIds=selUnits.map(s=>s.id);
   if(haveSel&&(right||!mouse||G.amode)){
-    if(hitU&&!allied(hitU.p,localP)){issue('attack',{u:selIds,id:hitU.id,bld:false});flashSel();return;}
+    if(hitU&&!allied(hitU.p,localP)){issue('attack',{u:selIds,id:hitU.id,bld:false});flag99(hitU.x,hitU.y,1);flashSel();return;}
     // a beast you already own is still meat — send anyone who can swing at it
     if(hitU&&isAnimal(hitU)&&selUnits.some(s=>!UNITS[s.type].passive&&!UNITS[s.type].monk)){
-      issue('attack',{u:selIds,id:hitU.id,bld:false});
+      issue('attack',{u:selIds,id:hitU.id,bld:false});flag99(hitU.x,hitU.y,1);
       if(hitU.p===localP)toast('Slaughtering — villagers will butcher the carcass');
       flashSel();return;}
-    if(hitB&&!allied(hitB.p,localP)){issue('attack',{u:selIds,id:hitB.id,bld:true});flashSel();return;}
-    if(res){issue('gather',{u:selIds,key:resKey});flashSel();return;}
+    if(hitB&&!allied(hitB.p,localP)){issue('attack',{u:selIds,id:hitB.id,bld:true});flag99(hitB.tx+hitB.size/2,hitB.ty+hitB.size/2,1);flashSel();return;}
+    if(res){issue('gather',{u:selIds,key:resKey});flag99(res.x+.5,res.y+.5,0);flashSel();return;}
     const relic=onMap?G.relics.find(r=>!r.held&&!r.mon&&Math.hypot(r.x+.5-tw.x,r.y+.5-tw.y)<1):null;
     const monks=selUnits.filter(s=>UNITS[s.type].monk&&!UNITS[s.type].noRelic); // Missionaries can't carry relics
     if(relic&&monks.length){
@@ -438,16 +438,16 @@ function handleTap(cx,cy,mouse,right,shift){
     // a garbage tile.
     if(!hitU&&!hitB&&onMap){
       if(G.pmode){
-        issue('patrol',{u:selIds,x:tx,y:ty,f:formSel});
+        issue('patrol',{u:selIds,x:tx,y:ty,f:formSel});flag99(tx,ty,0);
         G.pmode=false;toast('Patrolling — they will walk the beat and engage what they meet');
         refreshPanel();return;
       }
       if(G.amode){
-        issue('amove',{u:selIds,x:tx,y:ty,f:formSel});
+        issue('amove',{u:selIds,x:tx,y:ty,f:formSel});flag99(tx,ty,1);
         G.amode=false;toast('Attack-moving — they will fight through anything they meet');
         refreshPanel();return;
       }
-      issue('move',{u:selIds,x:tx,y:ty,f:formSel,sh:shift?1:0});
+      issue('move',{u:selIds,x:tx,y:ty,f:formSel,sh:shift?1:0});flag99(tx,ty,0);
       flashSel();return;}
   }
   // Rally point: an own production building is selected and the tap names a

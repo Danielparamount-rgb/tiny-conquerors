@@ -235,6 +235,23 @@ function apply99(){
   document.body.classList.toggle('r99',!!OPT.r99);
   // (Phase B kept both looks side by side on every cached sprite — sp.c stays
   // modern, spc() lazily bakes the '99 variants — so the toggle flushes nothing.)
+  // Point 15: the period gauntlet cursor (desktop) — pixel art, hard edges
+  try{
+    if(!window.CUR99){
+      const rows=['..XX........','.XWWX.......','.XWWX.......','.XWWX.......',
+                  '.XWWXXXX....','.XWWXWWXXX..','XXWWWWWWWWX.','XWWWWWWWWWX.',
+                  'XWWWWWWWWX..','.XWWWWWWWX..','.XWWWWWWX...','..XXXXXX....'];
+      const cc=document.createElement('canvas');cc.width=24;cc.height=24;
+      const cg=cc.getContext('2d');
+      rows.forEach((row,y)=>{for(let x=0;x<row.length;x++){
+        if(row[x]==='.')continue;
+        cg.fillStyle=row[x]==='X'?'#241a0c':'#e8dcc0';
+        cg.fillRect(x*2,y*2,2,2);
+      }});
+      window.CUR99=cc.toDataURL();
+    }
+    view.style.cursor=OPT.r99?'url('+window.CUR99+') 6 2, auto':'';
+  }catch(e){}
   if(G){
     try{
       refreshTerrain();

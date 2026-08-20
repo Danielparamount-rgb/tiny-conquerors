@@ -1734,6 +1734,44 @@ function sh99(g,c,sp,eff){
   g.beginPath();g.ellipse(cx,cy,rx,ry,.1,0,7);g.fill();
   g.restore();
 }
+/* ===== Classic '99 FX (GFX99-PLAN Phase D, point 14) ========================
+   Fire is an 8-frame sprite cycle through the FIRE ramp, baked as raw pixels
+   at first use — the colors ARE palette entries, so no quant pass is needed.
+   Wall-clock frame index, like the palette-cycled water. */
+let FIRE99=null;
+function fire99(){
+  if(FIRE99)return FIRE99;
+  const FW=16,FH=24,c=document.createElement('canvas');
+  c.width=FW*8;c.height=FH;
+  const g=c.getContext('2d');
+  const col=i=>{const pc=R99.P[R99.FIRE+i];return 'rgb('+pc[0]+','+pc[1]+','+pc[2]+')';};
+  for(let f=0;f<8;f++){
+    const ox=f*FW,ph=f*Math.PI/4;
+    for(let x=-6;x<=6;x++){
+      const t=1-Math.abs(x)/7;
+      const hgt=Math.round((FH-3)*t*(.6+.24*Math.sin(x*1.9+ph)+.16*Math.sin(x*.7-ph*1.7)));
+      for(let y=0;y<hgt;y++){
+        const ry=y/(FH-3);
+        if(ry>.7&&((x+y+f)&1))continue;  // ragged licking tips, never a flat cap
+        // yellow-cored: era fire is bright — red only hugs the very base
+        g.fillStyle=col(ry>.6?6:ry>.38?5:ry>.18?4:ry>.07?2:1);
+        g.fillRect(ox+8+x,FH-1-y,1,1);
+      }
+    }
+    g.fillStyle=col(7);                  // the white heart sits low
+    g.fillRect(ox+7,FH-4,3,2);g.fillRect(ox+8,FH-6,1,2);
+  }
+  FIRE99=c;return c;
+}
+/* Point 15: the classic order-acknowledgment flag — 3 HELD frames at the
+   order target, green for move/gather, red for attack. Purely cosmetic:
+   a render-side list the sim never sees, fed from the input handlers. */
+const FLAGS99=[];
+function flag99(tx,ty,red){
+  if(!OPT.r99)return;
+  FLAGS99.push({x:tx,y:ty,t0:performance.now(),red:!!red});
+  if(FLAGS99.length>12)FLAGS99.shift();
+}
 /* 2x2 stipple patterns — the era's 50% checkerboard (dens 2) and sparse 25%
    (dens 1). Soft alpha is FORBIDDEN in Classic; coverage does the blending. */
 const PAT99={};
@@ -2479,7 +2517,9 @@ function drawBld(b){
   const pt=isoPt(b.tx,b.ty),pc=isoPt(b.tx+b.size/2,b.ty+b.size/2);
   pt.y-=bl;pc.y-=bl;
   if(G.sel.includes(b.id)||(G.inspect&&G.inspect.id===b.id)){
-    ctx.strokeStyle=G.inspect&&G.inspect.id===b.id?'rgba(230,230,230,.7)':'rgba(255,255,255,.95)';ctx.lineWidth=1.8;
+    ctx.strokeStyle=G.inspect&&G.inspect.id===b.id?(OPT.r99?'#e6e6e6':'rgba(230,230,230,.7)')
+                                                  :(OPT.r99?'#fff':'rgba(255,255,255,.95)');
+    ctx.lineWidth=OPT.r99?1:1.8;
     ctx.beginPath();ctx.ellipse(pc.x,pc.y,b.size*IW*.82,b.size*IH*.82,0,0,7);ctx.stroke();
     if(b.rally&&b.p===localP){ // the rally flag, with a dashed guide from the door
       const rp=isoPt(b.rally.x+.5,b.rally.y+.5);rp.y-=elevTile(b.rally.x,b.rally.y)*10;
@@ -2538,7 +2578,7 @@ function drawBld(b){
       ctx.beginPath();ctx.moveTo(pc.x-17,pc.y-10);ctx.lineTo(pc.x+17,pc.y-10);ctx.stroke();
     }
   }
-  if(b.flash>0){
+  if(b.flash>0&&!OPT.r99){ // alpha wash over the art — modern feedback only
     ctx.globalAlpha=Math.min(.4,b.flash*2.6);
     ctx.fillStyle='#fff';
     if(bR)ctx.fillRect(bR.x,bR.y,bR.w,bR.h);
@@ -2546,8 +2586,17 @@ function drawBld(b){
     ctx.globalAlpha=1;
   }
   if(b.built&&b.hp<b.maxhp*.75&&!d.thin&&!d.farm)drawFlames(b);
-  const barY=pt.y-sp.oy-3,barX=pc.x-15;
-  if(!b.built){
+  const barY=Math.round(pt.y-sp.oy-3),barX=Math.round(pc.x-15);
+  if(OPT.r99){ // hard whole-pixel bars: gold progress, red-under-green hp
+    if(!b.built){
+      ctx.fillStyle='#0a0804';ctx.fillRect(barX,barY,30,5);
+      ctx.fillStyle='#e5c95c';ctx.fillRect(barX+1,barY+1,Math.round(28*(b.prog/d.bt)),3);
+    }else if(b.hp<b.maxhp){
+      ctx.fillStyle='#0a0804';ctx.fillRect(barX,barY,30,5);
+      ctx.fillStyle='#a02818';ctx.fillRect(barX+1,barY+1,28,3);
+      ctx.fillStyle='#3f9c28';ctx.fillRect(barX+1,barY+1,Math.round(28*(b.hp/b.maxhp)),3);
+    }
+  }else if(!b.built){
     ctx.fillStyle='rgba(16,12,6,.75)';ctx.fillRect(barX,barY,30,4);
     ctx.fillStyle='#e5c95c';ctx.fillRect(barX+.5,barY+.5,29*(b.prog/d.bt),3);
   }else if(b.hp<b.maxhp){
@@ -2573,6 +2622,38 @@ function drawFlames(b){
   const pc=isoPt(b.tx+b.size/2,b.ty+b.size/2);
   pc.y-=elevTile(b.tx+b.size/2,b.ty+b.size/2)*10;
   const d=BLDS[b.type];
+  if(OPT.r99){
+    /* Point 14: stipple scorch, STEPPED dithered smoke puffs (they jump, the
+       thin tail just ends — nothing alpha-fades), and the 8-frame fire cycle. */
+    if(tier>=1){
+      const sc=Math.min(1,(1-r)*1.6);
+      ctx.fillStyle=pat99('rgb(16,12,8)',2);
+      ctx.beginPath();ctx.ellipse(pc.x,pc.y+b.size*6,b.size*13*sc,b.size*6.5*sc,0,0,7);ctx.fill();
+    }
+    const BSr=d.thin||d.farm?1:BLD_VS2D;
+    const roofR=(IHT[b.type]||18)*BSr;
+    const FS=fire99(),wf=(performance.now()/90)|0;
+    for(let i=0;i<1+tier;i++){
+      const h=hash2(b.id*31+i*7,b.id*13+i*29);
+      const ax=pc.x+(((h%100)/100)-.5)*b.size*IW*.9;
+      const ay=pc.y-roofR*(.25+((h>>>7)%40)/100)+b.size*IH*.3;
+      const puffs=tier===0?2:3;
+      for(let s2=0;s2<puffs;s2++){
+        const p=((G.t*.42)+(h>>>3)/97+s2/puffs)%1;
+        const pq=((p*5)|0)/5+.1;
+        if(pq>.75)continue;
+        const rise=(34+b.size*10+tier*9)*pq;
+        const rad=Math.max(2,Math.round(3.4+8.5*pq+tier*1.2));
+        ctx.fillStyle=pat99(pq<.4?'rgb(58,54,50)':'rgb(112,108,102)',2);
+        ctx.beginPath();ctx.arc(Math.round(ax),Math.round(ay-6-rise),rad,0,7);ctx.fill();
+      }
+      if(tier===0)continue;
+      const sc2=.8+tier*.35+b.size*.12;
+      const fw=Math.round(16*sc2),fh=Math.round(24*sc2);
+      ctx.drawImage(FS,((wf+i*3)&7)*16,0,16,24,Math.round(ax-fw/2),Math.round(ay-fh+2),fw,fh);
+    }
+    return;
+  }
   if(tier>=1){ // scorched ground creeping out from a burning building
     const sc=Math.min(1,(1-r)*1.6);
     ctx.globalAlpha=.16+.12*tier;
@@ -4445,8 +4526,10 @@ function drawUnit(u){
   const sw=moving?Math.sin(t):0; // legacy param, unused by the rigs
   const big=!!UNITS[u.type].cav||u.type==='ram'||!!UNITS[u.type].ship||!!UNITS[u.type].siege;
   if(G.sel.includes(u.id)||(G.inspect&&G.inspect.id===u.id)){
-    // white ellipse, exactly like the original
-    ctx.strokeStyle=G.inspect&&G.inspect.id===u.id?'rgba(230,230,230,.7)':'rgba(255,255,255,.95)';ctx.lineWidth=1.4;
+    // white ellipse, exactly like the original ('99: 1px, solid — point 15)
+    ctx.strokeStyle=G.inspect&&G.inspect.id===u.id?(OPT.r99?'#e6e6e6':'rgba(230,230,230,.7)')
+                                                  :(OPT.r99?'#fff':'rgba(255,255,255,.95)');
+    ctx.lineWidth=OPT.r99?1:1.4;
     ctx.beginPath();ctx.ellipse(px,py+4,big?12:9,big?5.5:4.2,0,0,7);ctx.stroke();
   }
   if(!OPT.r99){ // in Classic the '99 sheets bake their own sheared shadow
@@ -4467,16 +4550,23 @@ function drawUnit(u){
     drawUnitBody(u,t,sw,TEAMS[u.p]);
   }
   ctx.restore();
-  if(u.flash>0){
+  if(u.flash>0&&!OPT.r99){ // the hit glow is additive-era feedback; '99 has none
     ctx.globalAlpha=Math.min(.55,u.flash*3.4);
     ctx.fillStyle='#fff';
     ctx.beginPath();ctx.arc(px,py-8,big?10:7,0,7);ctx.fill();
     ctx.globalAlpha=1;
   }
   if(u.hp<u.maxhp){
-    ctx.fillStyle='rgba(16,12,6,.75)';ctx.fillRect(px-7,py-(big?22:19),14,2.6);
-    ctx.fillStyle=u.hp/u.maxhp>.4?'#5c9141':'#c2493d';
-    ctx.fillRect(px-6.6,py-(big?21.6:18.6),13.2*(u.hp/u.maxhp),1.8);
+    if(OPT.r99){ // hard red-under-green segment bar, whole pixels (point 15)
+      const bx=Math.round(px-7),by=Math.round(py-(big?22:19));
+      ctx.fillStyle='#0a0804';ctx.fillRect(bx-1,by-1,16,4);
+      ctx.fillStyle='#a02818';ctx.fillRect(bx,by,14,2);
+      ctx.fillStyle='#3f9c28';ctx.fillRect(bx,by,Math.round(14*u.hp/u.maxhp),2);
+    }else{
+      ctx.fillStyle='rgba(16,12,6,.75)';ctx.fillRect(px-7,py-(big?22:19),14,2.6);
+      ctx.fillStyle=u.hp/u.maxhp>.4?'#5c9141':'#c2493d';
+      ctx.fillRect(px-6.6,py-(big?21.6:18.6),13.2*(u.hp/u.maxhp),1.8);
+    }
   }
 }
 function limb(x1,y1,x2,y2,col,w){
@@ -5180,13 +5270,15 @@ function drawArrow(p){
   const px=ff=>a0.x+dx*ff,py=ff=>a0.y+dy*ff-Math.sin(ff*Math.PI)*arc;
   if(p.kind==='stone'||p.kind==='ball'){
     const x=px(f),y=py(f),r=p.kind==='stone'?3.1:2.2;
-    const f1=Math.max(0,f-.12);
-    ctx.strokeStyle='rgba(120,112,100,.3)';ctx.lineWidth=r*1.4;
-    ctx.beginPath();ctx.moveTo(px(f1),py(f1));ctx.lineTo(x,y);ctx.stroke();
+    if(!OPT.r99){ // soft motion trail is a modern tell
+      const f1=Math.max(0,f-.12);
+      ctx.strokeStyle='rgba(120,112,100,.3)';ctx.lineWidth=r*1.4;
+      ctx.beginPath();ctx.moveTo(px(f1),py(f1));ctx.lineTo(x,y);ctx.stroke();
+    }
     ctx.fillStyle=p.kind==='stone'?'#8d8478':'#3a3d42';
     ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill();
-    ctx.fillStyle='rgba(255,244,214,.45)';
-    ctx.beginPath();ctx.arc(x-r*.3,y-r*.35,r*.42,0,7);ctx.fill();
+    ctx.fillStyle=OPT.r99?'#fff4d6':'rgba(255,244,214,.45)';
+    ctx.beginPath();ctx.arc(x-r*.3,y-r*.35,OPT.r99?1:r*.42,0,7);ctx.fill();
     return;
   }
   if(p.kind==='bolt'){
@@ -5200,12 +5292,13 @@ function drawArrow(p){
     ctx.restore();
     return;
   }
-  // short fading motion streak behind the arrow
-  const f1=Math.max(0,f-.09),f2=Math.max(0,f-.18);
-  ctx.strokeStyle='rgba(235,225,200,.13)';ctx.lineWidth=1.3;
-  ctx.beginPath();ctx.moveTo(px(f2),py(f2));ctx.lineTo(px(f1),py(f1));ctx.stroke();
-  ctx.strokeStyle='rgba(235,225,200,.3)';
-  ctx.beginPath();ctx.moveTo(px(f1),py(f1));ctx.lineTo(px(f),py(f));ctx.stroke();
+  if(!OPT.r99){ // short fading motion streak behind the arrow — modern only
+    const f1=Math.max(0,f-.09),f2=Math.max(0,f-.18);
+    ctx.strokeStyle='rgba(235,225,200,.13)';ctx.lineWidth=1.3;
+    ctx.beginPath();ctx.moveTo(px(f2),py(f2));ctx.lineTo(px(f1),py(f1));ctx.stroke();
+    ctx.strokeStyle='rgba(235,225,200,.3)';
+    ctx.beginPath();ctx.moveTo(px(f1),py(f1));ctx.lineTo(px(f),py(f));ctx.stroke();
+  }
   const x=px(f),y=py(f);
   const vy=dy-Math.cos(f*Math.PI)*Math.PI*arc;
   const ang=Math.atan2(vy,dx);
@@ -5221,6 +5314,25 @@ function drawArrow(p){
 function drawFx(f){
   const a=Math.max(0,f.life/f.max);
   const fp=isoE(f.x,f.y),px=fp.x,py=fp.y;
+  if(OPT.r99&&f.kind!=='text'){
+    // Point 14: hard sprite-style particles — stipple smoke, cross sparks,
+    // full-opacity chips that simply END. Nothing glows, nothing alpha-fades.
+    if(f.kind==='smoke'){
+      const cc=f.col&&f.col[0]==='#'?f.col:'rgb('+(f.col||'66,62,58')+')';
+      ctx.fillStyle=pat99(cc,2);
+      ctx.beginPath();ctx.arc(Math.round(px),Math.round(py),Math.max(1,Math.round(f.r*(2.2-a))),0,7);ctx.fill();
+    }else if(f.kind==='spark'){
+      if(a>.25){
+        ctx.fillStyle='#ffe896';
+        ctx.fillRect(Math.round(px)-1,Math.round(py),3,1);
+        ctx.fillRect(Math.round(px),Math.round(py)-1,1,3);
+      }
+    }else if(a>.3){
+      ctx.fillStyle=f.col||'#caa66b';
+      ctx.fillRect(Math.round(px)-1,Math.round(py)-1,2,2);
+    }
+    return;
+  }
   if(f.kind==='text'){ // floating resource tally
     ctx.save();
     ctx.font='bold 11px "Segoe UI",system-ui,sans-serif';
@@ -5462,6 +5574,22 @@ function draw(){
     else if(e.b)drawBld(e.b);
     else drawUnit(e.u);
   }
+  // Classic '99 order flags (point 15): 3 held frames at the target, then gone
+  if(OPT.r99&&FLAGS99.length){
+    const nowF=performance.now();
+    for(let i=FLAGS99.length-1;i>=0;i--){
+      const F=FLAGS99[i],el=(nowF-F.t0)/1000;
+      if(el>.48){FLAGS99.splice(i,1);continue;}
+      const fr=Math.min(2,(el*6.25)|0);
+      const fp2=isoE(F.x,F.y),fx2=Math.round(fp2.x),fy2=Math.round(fp2.y);
+      ctx.fillStyle='#241a0c';ctx.fillRect(fx2,fy2-11,1,11);          // the pole
+      ctx.fillStyle=F.red?'#c22818':'#2f9e28';
+      if(fr===0)ctx.fillRect(fx2+1,fy2-11,6,4);                       // full wave
+      else if(fr===1){ctx.fillRect(fx2+1,fy2-11,5,3);ctx.fillRect(fx2+4,fy2-8,2,1);}
+      else ctx.fillRect(fx2+1,fy2-10,4,3);                            // settling
+      ctx.fillStyle='#0a0804';ctx.fillRect(fx2-1,fy2,3,1);            // ground nub
+    }
+  }
   drawGhosts(); // occluded allies show through as team-color silhouettes
   for(const p of G.proj){
     if(!tileVis(p.x0,p.y0)&&!tileVis(p.x1,p.y1))continue;
@@ -5579,7 +5707,16 @@ function drawMini(){
       // legacy raid pings (no owner) keep showing to everyone locally
       if(pg.p!==undefined&&!allied(pg.p,localP))continue;
       const el=G.t-pg.t,ag=(el%.8)/.8;
-      const mx=100+(pg.x-pg.y)*a,my=10+(pg.x+pg.y)*b2,r=3+ag*13;
+      const mx=100+(pg.x-pg.y)*a,my=10+(pg.x+pg.y)*b2;
+      if(OPT.r99){ // the era's event ping: a hard 2-frame blink, no ripple
+        if(((el*4)|0)%2===0){
+          mctx.fillStyle=((el/.8)|0)%2?'#fff':'#e82d1e';
+          mctx.beginPath();mctx.moveTo(mx,my-4);mctx.lineTo(mx+6,my);
+          mctx.lineTo(mx,my+4);mctx.lineTo(mx-6,my);mctx.closePath();mctx.fill();
+        }
+        continue;
+      }
+      const r=3+ag*13;
       mctx.strokeStyle=((el/.8)|0)%2
         ?'rgba(255,255,255,'+(1-ag).toFixed(2)+')'
         :'rgba(235,45,30,'+(1-ag).toFixed(2)+')';
