@@ -5900,9 +5900,11 @@ const R99={};
   const P=[];
   const hex=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
   const L=(a,b,t)=>Math.round(a+(b-a)*t);
+  const RS=[],RE=[],LUM=[]; // per-index ramp bounds + luma, for in-ramp dither
   const ramp=(n,c0,c1)=>{const s=P.length;
     for(let i=0;i<n;i++){const t=n===1?0:i/(n-1);
       P.push([L(c0[0],c1[0],t),L(c0[1],c1[1],t),L(c0[2],c1[2],t)]);}
+    for(let i=0;i<n;i++){RS[s+i]=s;RE[s+i]=s+n-1;}
     return s;};
   for(let tI=0;tI<8;tI++){ // team ramps: deep shadow -> main -> trim highlight
     const m=hex(TEAMS[tI].main),d=hex(TEAMS[tI].dark),tr=hex(TEAMS[tI].trim);
@@ -5926,6 +5928,7 @@ const R99={};
   R99.DARKS =ramp(6,[10,8,6],[74,66,52]);         // outlines, night, fog hue
   R99.BACK  =ramp(4,[16,22,8],[60,70,40]);        // backdrop greens
   R99.N=P.length;                                 // real colors; the pad below is never matched
+  for(let i=0;i<R99.N;i++)LUM[i]=P[i][0]*3+P[i][1]*6+P[i][2];
   while(P.length<256)P.push([255,0,255]);
   R99.P=P;
   let LUT=null;
@@ -5976,7 +5979,6 @@ const R99={};
     const im=g.getImageData(0,0,w,h),d=im.data,LU=R99.lut();
     const M=o.mask||null,TR=(o.team|0)*8;
     const A=o.amp===undefined?12:o.amp;
-    const NL=o.bands||6,ST=255/(NL-1);
     const RL=[];for(let i=0;i<8;i++){const pc=P[TR+i];RL.push(pc[0]*3+pc[1]*6+pc[2]);}
     for(let y=0;y<h;y++)for(let x=0;x<w;x++){
       const i=(y*w+x)*4;
@@ -5989,9 +5991,24 @@ const R99={};
         for(let s=0;s<8;s++){const dd=Math.abs(RL[s]-lum);if(dd<bd){bd=dd;bi=s;}}
         pc=P[TR+bi];
       }else{
-        let r=Math.round(d[i]/ST)*ST+bb,gg=Math.round(d[i+1]/ST)*ST+bb,b2=Math.round(d[i+2]/ST)*ST+bb;
-        r=r<0?0:r>255?255:r;gg=gg<0?0:gg>255?255:gg;b2=b2<0?0:b2>255?255:b2;
-        pc=P[LU[(r>>3)<<10|(gg>>3)<<5|(b2>>3)]];
+        /* HUE-LOCKED quantize (the tq-v81 roof bug, both halves): the ramp is
+           picked from the TRUE pixel color — the earlier per-channel posterize
+           collapsed warm low-saturation ratios (thatch 115,93,48 became
+           102,102,51) and sent whole roofs into the olive ramp, and an
+           RGB-space Bayer offset flipped midtones across hues as speckle. In
+           an indexed pipeline the palette's own shade steps ARE the posterize
+           (the Blender 5-band materials supply the banding); the Bayer only
+           dithers the SHADE within the chosen ramp — era indexed art dithered
+           along a ramp, never across hues. amp = dither strength (12 = full). */
+        const L0=d[i]*3+d[i+1]*6+d[i+2];
+        let bi=LU[(d[i]>>3)<<10|(d[i+1]>>3)<<5|(d[i+2]>>3)];
+        const t=(BAYER[(y&3)*4+(x&3)]+.5)/16,S9=A/12;
+        if(L0>LUM[bi]&&bi<RE[bi]){
+          if(t<(L0-LUM[bi])/((LUM[bi+1]-LUM[bi])||1)*S9)bi++;
+        }else if(L0<LUM[bi]&&bi>RS[bi]){
+          if(t<(LUM[bi]-L0)/((LUM[bi]-LUM[bi-1])||1)*S9)bi--;
+        }
+        pc=P[bi];
       }
       d[i]=pc[0];d[i+1]=pc[1];d[i+2]=pc[2];d[i+3]=255;
     }
@@ -10075,8 +10092,9 @@ function bsprGet99(type,age,team,sl){
     mi=mg.getImageData(0,0,w,h).data;
   }
   if(sl)snowRim(c,sl);
-  // amp 6, not the units' 12: big soft roof planes sit BETWEEN ramps, and a
-  // wide Bayer offset flips them across hues — speckle, not texture
+  // amp 6, not the units' 12: half-strength shade dither keeps the big roof
+  // planes reading as clean bands (the quant is hue-locked, so this is purely
+  // a texture-density knob now)
   R99.post(c,{mask:mi,team,amp:6});
   const out={c,w,h,ax:Math.round(A.ax*w/A.w),ay:Math.round(A.ay*h/A.h)};
   BSPR.tint[ck]=out;return out;
@@ -17281,7 +17299,7 @@ requestAnimationFrame(frame);
 
 <script>
 (function(){
-  var BUILD = 'tq-v81';
+  var BUILD = 'tq-v82';
   // The game reads this for the multiplayer version gate (gameVer() falls back
   // to 'dev' when the wrapper is absent, i.e. local test.html / the artifact).
   window.GAMEVER = BUILD;
