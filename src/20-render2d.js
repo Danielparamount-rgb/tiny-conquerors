@@ -147,6 +147,13 @@ const R99={};
   R99.FIRE  =ramp(8,[96,20,8],[255,238,170]);     // ember -> white heart
   R99.SKIN99=ramp(6,[96,62,40],[232,190,150]);
   R99.STEEL =ramp(6,[70,74,86],[214,220,232]);
+  // FINE ramps (r99-human): the era's units were smoothly shaded — the dither
+  // lived in the TERRAIN. 12 shades let faces and plate band like flesh and
+  // rounded steel instead of 3-color posters; the LUT picks these over the
+  // coarse ramps automatically wherever they're nearer.
+  R99.SKINF =ramp(12,[52,34,22],[240,198,158]);
+  R99.STEELF=ramp(12,[44,48,58],[228,234,244]);
+  R99.CLOTHF=ramp(10,[40,32,22],[212,192,152]);
   R99.GOLD99=ramp(6,[110,74,18],[244,214,120]);
   R99.BONE  =ramp(8,[40,32,22],[240,230,205]);    // bone / parchment / cloth
   R99.TERRA9=ramp(6,[130,44,32],[235,150,120]);
@@ -265,10 +272,12 @@ const R99={};
       }
       idx[i]=bi;
     }
-    // outline on the index field: full warm-dark on thick bodies, one-two
-    // shades darker on thin features; rim tested against REAL transparency
-    // only (a cell-wall clip never grows a false edge)
-    const OC=R99.DARKS+1;
+    // outline on the index field: HUE-TINTED — the rim becomes its own ramp's
+    // DARKEST shade (team indices: the dark end of the 8-block), one shade
+    // down on thin features. A flat near-black ring read as a sticker; era
+    // sprites outlined in the surface's own dark. Rim tested against REAL
+    // transparency only (a cell-wall clip never grows a false edge).
+    const darkOf=i2=>i2<64?(i2&~7):RS[i2];
     const out=new Int16Array(idx);
     const tr=(xx,yy)=>xx<0||yy<0||xx>=w||yy>=h?0:(idx[yy*w+xx]<0?1:0);
     for(let y=0;y<h;y++)for(let x=0;x<w;x++){
@@ -279,7 +288,7 @@ const R99={};
         (tr(x+1,y)&&(tr(x-1,y)||tr(x-2,y)))||
         (tr(x,y-1)&&(tr(x,y+1)||tr(x,y+2)))||
         (tr(x,y+1)&&(tr(x,y-1)||tr(x,y-2)));
-      out[i]=thin?Math.max(RS[idx[i]],idx[i]-1):OC;  // one shade, limbs stay bright
+      out[i]=thin?Math.max(darkOf(idx[i]),idx[i]-1):darkOf(idx[i]);
     }
     for(let i=0;i<n;i++){const q=i*4;
       if(out[i]<0){d[q+3]=0;continue;}
@@ -4334,7 +4343,7 @@ function sprGet99(key,an,p,eff){
   // to 1.12 for silhouette mass ("stick figure"), then to 1.22 so the HD
   // sheets' faces and armor have screen pixels to live on ("I want to see
   // faces"). Still well under building scale (BLD_VS2D 1.41).
-  const S0=SPR_SCALE/(USPR.res||1)*eff*1.22,cw=meta.cell[0],ch=meta.cell[1];
+  const S0=SPR_SCALE/(USPR.res||1)*eff*1.3,cw=meta.cell[0],ch=meta.cell[1];
   const ncw=Math.max(1,Math.round(cw*S0)),nch=Math.max(1,Math.round(ch*S0));
   const c=document.createElement('canvas');c.width=ncw*m.frames;c.height=nch*8;
   const g=c.getContext('2d');g.imageSmoothingEnabled=true;g.imageSmoothingQuality='high';
@@ -4348,7 +4357,9 @@ function sprGet99(key,an,p,eff){
       mg.drawImage(msk,f*cw,r*ch,cw,ch,f*ncw,r*nch,ncw,nch);
     mi=mg.getImageData(0,0,c.width,c.height).data;
   }
-  R99.post(c,{mask:mi,team,amp:12,at:72}); // at 72: keep the silhouette MASS
+  // amp 8 / sharp .6 (was 12/.8): with the fine ramps carrying the shading,
+  // heavy dither+sharpen reads as crunch, not detail. at 72 keeps the MASS.
+  R99.post(c,{mask:mi,team,amp:8,sharp:.6,at:72});
   const ax=Math.round(meta.anchorX*ncw/cw),ay=Math.round(meta.anchorY*nch/ch);
   const shk=key+'/'+an+'/sh99'+(eff>1?'x2':'');    // shadows carry no colour: shared
   const sh=USPR.tint[shk]||(USPR.tint[shk]=sprShadow99(c,ncw,nch,ax,ay,m.frames));
