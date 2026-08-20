@@ -5690,7 +5690,8 @@ function drawMini(){
   mctx.drawImage(maskC,0,0,MAP,MAP); // unexplored = pure black on the minimap
   mctx.setTransform(1,0,0,1,0,0);
   const z=G.cam.z;
-  mctx.strokeStyle='rgba(240,230,200,.95)';mctx.lineWidth=1;
+  // point 17: the viewport is a hard 1px white diamond in Classic
+  mctx.strokeStyle=OPT.r99?'#fff':'rgba(240,230,200,.95)';mctx.lineWidth=1;
   mctx.beginPath();
   const corners=[[0,0],[vw,0],[vw,vh],[0,vh]];
   corners.forEach(([cx,cy],i)=>{
@@ -5731,8 +5732,14 @@ function drawMini(){
   mctx.strokeStyle='#2a1608';mctx.lineWidth=7;mctx.stroke();
   mctx.strokeStyle='#8a6a1a';mctx.lineWidth=4.5;mctx.stroke();
   mctx.strokeStyle='#c9a227';mctx.lineWidth=2.5;mctx.stroke();
-  mctx.strokeStyle='rgba(255,235,170,.8)';mctx.lineWidth=.9;mctx.stroke();
+  if(!OPT.r99){mctx.strokeStyle='rgba(255,235,170,.8)';mctx.lineWidth=.9;mctx.stroke();}
   for(const[sx,sy] of MMD){
+    if(OPT.r99){ // hard-beveled corner studs: flat gold, dark rim, one glint px
+      mctx.fillStyle='#6d5216';mctx.beginPath();mctx.arc(sx,sy,4.2,0,7);mctx.fill();
+      mctx.fillStyle='#c9a227';mctx.beginPath();mctx.arc(sx-.5,sy-.5,3,0,7);mctx.fill();
+      mctx.fillStyle='#f5e6a0';mctx.fillRect(sx-2,sy-2,1.6,1.6);
+      continue;
+    }
     const gr=mctx.createRadialGradient(sx-1,sy-1,.5,sx,sy,4.5);
     gr.addColorStop(0,'#f5e6a0');gr.addColorStop(.6,'#c9a227');gr.addColorStop(1,'#6d5216');
     mctx.fillStyle=gr;mctx.beginPath();mctx.arc(sx,sy,4.2,0,7);mctx.fill();}

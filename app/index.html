@@ -328,6 +328,60 @@
   #endTitle.win{color:#4f7d3a;} #endTitle.lose{color:#8a2f27;}
   button{cursor:pointer;font-family:inherit;}
   button:focus-visible{outline:2px solid var(--gold);outline-offset:1px;}
+
+  /* ============ Classic '99 HUD skin (GFX99-PLAN point 16) ============
+     Hard 2px bevels — light top-left / dark bottom-right — carved stone
+     plates, gold trim, chunky serif with a hard 1px outline. SKIN ONLY:
+     body.r99 gates everything; no element changes size or place, every
+     2026 tap target survives. Pressed buttons INVERT the bevel (the era's
+     1-frame inset) instead of translating. */
+  body.r99,body.r99 button{font-family:Georgia,"Palatino Linotype","Times New Roman",serif;}
+  body.r99 *{border-radius:0 !important;}
+  body.r99 #topbar{background:#4a4438;border-bottom:2px solid #0a0804;
+    box-shadow:inset 0 2px 0 #6f675a, inset 0 -2px 0 #211c14;}
+  body.r99 .res{background:#191410;border:1px solid #0a0804;
+    box-shadow:inset 2px 2px 0 #0e0b06, 0 0 0 1px #6d5216;text-shadow:1px 1px 0 #000;}
+  body.r99 .res svg{filter:none;}
+  body.r99 #ageLbl{text-shadow:1px 1px 0 #000;}
+  body.r99 #menuBtn,body.r99 #sndBtn,body.r99 #zoomBtns button{
+    background:#4a4438;border:1px solid #0a0804;
+    box-shadow:inset 2px 2px 0 #6f675a, inset -2px -2px 0 #211c14;text-shadow:1px 1px 0 #000;}
+  body.r99 #menuBtn:active,body.r99 #sndBtn:active,body.r99 #zoomBtns button:active{
+    transform:none;box-shadow:inset 2px 2px 0 #211c14, inset -2px -2px 0 #6f675a;}
+  body.r99 #zoomBtns.docked button{background:#4a4438;border:1px solid #0a0804;}
+  body.r99 #deselBtn.live{background:#5a2a20;
+    box-shadow:inset 2px 2px 0 #7e4434, inset -2px -2px 0 #2c1410;}
+  body.r99 #idleBtn.live{background:#54421a;
+    box-shadow:inset 2px 2px 0 #7a622e, inset -2px -2px 0 #2a2010;}
+  body.r99 #mapframe{background:none;
+    box-shadow:inset 0 0 0 3px #0a0804, inset 0 0 0 5px #6d5216, inset 0 0 0 6px #c9a227, inset 0 0 0 7px #0a0804;}
+  body.r99 #minimap{filter:none;}
+  body.r99 #minimap.docked{filter:none;}
+  body.r99 #toast{background:#2c2418;border:1px solid #0a0804;
+    box-shadow:0 0 0 2px #6d5216, inset 2px 2px 0 #453927, inset -2px -2px 0 #17120a;}
+  body.r99 #panel{background:#413c30;border-top:3px solid #0a0804;
+    box-shadow:inset 0 2px 0 #6f675a, inset 0 -2px 0 #1a1610;}
+  body.r99 #scrollArea{background:#e4d3a4;
+    box-shadow:inset 0 0 0 2px #a8905c, inset 0 0 0 3px #0a0804;}
+  body.r99 #unitCard{background:#241f16;border:1px solid #0a0804;
+    box-shadow:inset 2px 2px 0 #3c352a, inset -2px -2px 0 #14100a, 0 0 0 1px #6d5216;}
+  body.r99 #cardPort{box-shadow:0 0 0 1px #0a0804, 0 0 0 3px #6d5216, 0 0 0 4px #0a0804;}
+  body.r99 .hpbar{border:1px solid #0a0804;}
+  body.r99 .hpbar i{background:#3f9c28;}
+  body.r99 .ptile{border:1px solid #0a0804;box-shadow:0 0 0 1px #6d5216;}
+  body.r99 .ptile i{background:#3f9c28;}
+  body.r99 .cmd{background:#4a4438;border:1px solid #0a0804;
+    box-shadow:inset 2px 2px 0 #6f675a, inset -2px -2px 0 #211c14;}
+  body.r99 .cmd:active{box-shadow:inset 2px 2px 0 #211c14, inset -2px -2px 0 #6f675a;}
+  body.r99 .cmd b{background:rgba(8,5,2,.85);text-shadow:1px 1px 0 #000;}
+  body.r99 .cmd.txt,body.r99 .cmd.go,body.r99 .cmd.warn{background:#3c372c;}
+  body.r99 .cmd.go{box-shadow:inset 2px 2px 0 #6f675a, inset -2px -2px 0 #211c14, 0 0 0 2px #c9a227;}
+  body.r99 .scroll{background:#e9d9ac;border:2px solid #0a0804;
+    box-shadow:0 0 0 3px #6d5216, 0 0 0 5px #0a0804, inset 0 0 0 2px #b89a62;}
+  body.r99 .bigbtn{background:#503c22;border:2px solid #0a0804;
+    box-shadow:inset 2px 2px 0 #7a5f38, inset -2px -2px 0 #2a1f10;text-shadow:1px 1px 0 #000;}
+  body.r99 .bigbtn:active{box-shadow:inset 2px 2px 0 #2a1f10, inset -2px -2px 0 #7a5f38;}
+  body.r99 .ovt{text-shadow:-1px 0 0 #000,1px 0 0 #000,0 -1px 0 #000,0 1px 0 #000;}
 </style>
 
 <div id="game">
@@ -11466,7 +11520,8 @@ function drawMini(){
   mctx.drawImage(maskC,0,0,MAP,MAP); // unexplored = pure black on the minimap
   mctx.setTransform(1,0,0,1,0,0);
   const z=G.cam.z;
-  mctx.strokeStyle='rgba(240,230,200,.95)';mctx.lineWidth=1;
+  // point 17: the viewport is a hard 1px white diamond in Classic
+  mctx.strokeStyle=OPT.r99?'#fff':'rgba(240,230,200,.95)';mctx.lineWidth=1;
   mctx.beginPath();
   const corners=[[0,0],[vw,0],[vw,vh],[0,vh]];
   corners.forEach(([cx,cy],i)=>{
@@ -11507,8 +11562,14 @@ function drawMini(){
   mctx.strokeStyle='#2a1608';mctx.lineWidth=7;mctx.stroke();
   mctx.strokeStyle='#8a6a1a';mctx.lineWidth=4.5;mctx.stroke();
   mctx.strokeStyle='#c9a227';mctx.lineWidth=2.5;mctx.stroke();
-  mctx.strokeStyle='rgba(255,235,170,.8)';mctx.lineWidth=.9;mctx.stroke();
+  if(!OPT.r99){mctx.strokeStyle='rgba(255,235,170,.8)';mctx.lineWidth=.9;mctx.stroke();}
   for(const[sx,sy] of MMD){
+    if(OPT.r99){ // hard-beveled corner studs: flat gold, dark rim, one glint px
+      mctx.fillStyle='#6d5216';mctx.beginPath();mctx.arc(sx,sy,4.2,0,7);mctx.fill();
+      mctx.fillStyle='#c9a227';mctx.beginPath();mctx.arc(sx-.5,sy-.5,3,0,7);mctx.fill();
+      mctx.fillStyle='#f5e6a0';mctx.fillRect(sx-2,sy-2,1.6,1.6);
+      continue;
+    }
     const gr=mctx.createRadialGradient(sx-1,sy-1,.5,sx,sy,4.5);
     gr.addColorStop(0,'#f5e6a0');gr.addColorStop(.6,'#c9a227');gr.addColorStop(1,'#6d5216');
     mctx.fillStyle=gr;mctx.beginPath();mctx.arc(sx,sy,4.2,0,7);mctx.fill();}
@@ -17517,7 +17578,7 @@ requestAnimationFrame(frame);
 
 <script>
 (function(){
-  var BUILD = 'tq-v87';
+  var BUILD = 'tq-v88';
   // The game reads this for the multiplayer version gate (gameVer() falls back
   // to 'dev' when the wrapper is absent, i.e. local test.html / the artifact).
   window.GAMEVER = BUILD;
