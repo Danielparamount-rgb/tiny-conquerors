@@ -236,10 +236,20 @@ const R99={};
       const Ls=Lb[i]+K*(Lb[i]-sum/cnt);
       let bi;
       if(M&&M[q]>=128){
-        const bb=(BAYER[(y&3)*4+(x&3)]/15-.5)*A;
-        const lum=Ls+bb*25;
+        /* Team cloth wants BANDS, not weave: the HD renders carry a per-pixel
+           cloth-weave bump that quantizes into all-over checker (noise at
+           sprite size, not detail). Shade is picked from HALF-SMOOTHED luma
+           (folds survive, weave flicker dies) and the residual dither runs at
+           .5 strength — dither marks band edges only. */
+        const Lm=Lb[i]*.5+(sum/cnt)*.5;
         let bj=0,bd=1e9;
-        for(let s=0;s<8;s++){const dd=Math.abs(RL[s]-lum);if(dd<bd){bd=dd;bj=s;}}
+        for(let s=0;s<8;s++){const dd=Math.abs(RL[s]-Lm);if(dd<bd){bd=dd;bj=s;}}
+        const t=(BAYER[(y&3)*4+(x&3)]+.5)/16,S9m=S9*.5;
+        if(Lm>RL[bj]&&bj<7){
+          if(t<(Lm-RL[bj])/((RL[bj+1]-RL[bj])||1)*S9m)bj++;
+        }else if(Lm<RL[bj]&&bj>0){
+          if(t<(RL[bj]-Lm)/((RL[bj]-RL[bj-1])||1)*S9m)bj--;
+        }
         bi=TR+bj;
       }else{
         bi=LU[(d[q]>>3)<<10|(d[q+1]>>3)<<5|(d[q+2]>>3)];  // ramp pick: true color
@@ -4216,7 +4226,12 @@ function sprInit(){
   // a 110px man instead of 55). USPR.res carries the multiplier so sprDraw
   // divides it back out; SD remains the fallback and the low-dpr default.
   // OPT.hdSprites===false opts out (Settings) — it is a big download.
-  const wantHD=(window.devicePixelRatio||1)>=2&&OPT.hdSprites!==false;
+  // Classic '99 ALWAYS wants the 2x sheets: its post-chain downscales them to
+  // the blit size, so the 110px-man renders (sculpted faces, mail rings,
+  // plate wear) survive into the 2x close-zoom bake — the SD 55px man has no
+  // face to give (Daniel: "I want to see faces, armor details"). Boot-time
+  // choice; a mid-session Classic toggle keeps whichever pack loaded.
+  const wantHD=((window.devicePixelRatio||1)>=2||OPT.r99)&&OPT.hdSprites!==false;
   const paths=[];
   if(wantHD)paths.push(['sprites-hd/',2],['app/sprites-hd/',2]);
   // 'sprites/' when served as the PWA (app/), 'app/sprites/' from the repo root
@@ -4315,9 +4330,11 @@ function sprGet99(key,an,p,eff){
   const base=sprImg(key+'/'+an,m.sheet);if(!base)return null;
   const msk=m.mask?sprImg(key+'/'+an+'/m',m.mask):false;
   if(m.mask&&msk===null)return null;             // mask still loading
-  // *1.12: Classic units run 12% bigger than the modern rigs — with the era
-  // silhouette mass they still read lean at rig scale (Daniel: "stick figure")
-  const S0=SPR_SCALE/(USPR.res||1)*eff*1.12,cw=meta.cell[0],ch=meta.cell[1];
+  // *1.22: Classic units run 22% bigger than the modern rigs — first bumped
+  // to 1.12 for silhouette mass ("stick figure"), then to 1.22 so the HD
+  // sheets' faces and armor have screen pixels to live on ("I want to see
+  // faces"). Still well under building scale (BLD_VS2D 1.41).
+  const S0=SPR_SCALE/(USPR.res||1)*eff*1.22,cw=meta.cell[0],ch=meta.cell[1];
   const ncw=Math.max(1,Math.round(cw*S0)),nch=Math.max(1,Math.round(ch*S0));
   const c=document.createElement('canvas');c.width=ncw*m.frames;c.height=nch*8;
   const g=c.getContext('2d');g.imageSmoothingEnabled=true;g.imageSmoothingQuality='high';
