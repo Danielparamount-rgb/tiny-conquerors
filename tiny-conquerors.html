@@ -6424,13 +6424,18 @@ function refreshTerrain(){
         tctx.lineTo(jx+(y2-y1?o:0),jy+(x2-x1?o:0));
       }
     };
-    tctx.lineWidth=2.4;
-    tctx.strokeStyle='rgba(240,248,205,.19)';
+    /* Classic '99 (point 12): high ground is a hard TERRACE, not a soft
+       contour — the translucent strokes vanish into the Bayer dither after
+       the quant. Solid sunlit lip on the NW rim, solid deep drop-shade on
+       the SE edge; the jittered wave stays so it reads as landform, not
+       lattice. The whole-terrain quant right after makes them indexed. */
+    tctx.lineWidth=OPT.r99?3:2.4;
+    tctx.strokeStyle=OPT.r99?'#a8be6e':'rgba(240,248,205,.19)'; // = GRASS ramp top: sunlit lip, not a cream path
     tctx.beginPath();
     if(!e(x,y-1))wav(x*TILE,y*TILE+1,x*TILE+TILE,y*TILE+1);
     if(!e(x-1,y))wav(x*TILE+1,y*TILE,x*TILE+1,y*TILE+TILE);
     tctx.stroke();
-    tctx.strokeStyle='rgba(22,34,12,.21)';
+    tctx.strokeStyle=OPT.r99?'#1c2a12':'rgba(22,34,12,.21)';
     tctx.beginPath();
     if(!e(x,y+1))wav(x*TILE,y*TILE+TILE-1,x*TILE+TILE,y*TILE+TILE-1);
     if(!e(x+1,y))wav(x*TILE+TILE-1,y*TILE,x*TILE+TILE-1,y*TILE+TILE);
@@ -6987,7 +6992,7 @@ function getResSpr(type,h){
     g.moveTo(-9.5,-11.5);g.lineTo(-6.5,-11.5);g.stroke();
   }
   spriteGrain(c,h*53+key.length*911,.8); // trees/gold/berries get the dither too
-  const sp={c,ox:ax,oy:ay,w:W,h:Ht};
+  const sp={c,ox:ax,oy:ay,w:W,h:Ht,sh99:1}; // sh99: Classic bakes a stipple ground shadow
   RES_SPR[key]=sp;return sp;
 }
 function clampCam(){
@@ -7468,8 +7473,32 @@ function spc(sp){
   const g=c.getContext('2d');
   g.imageSmoothingEnabled=true;g.imageSmoothingQuality='high';
   g.drawImage(sp.c,0,0,w,h);
+  if(sp.sh99)sh99(g,c,sp,eff);  // baked stipple ground shadow (point 11)
   R99.post(c,{amp:10});
   sp[k]=c;return c;
+}
+/* Point 11's baked shadow for trees / gold crags / berry bushes: their
+   painted soft shadows die at the 1-bit alpha cut, so Classic floated them.
+   A 50% checkerboard ellipse, sized from the art's own width, composited
+   UNDER the art (destination-over) before the quant — same stipple family
+   as the unit shadow sheets. */
+let PATC=null;
+function sh99(g,c,sp,eff){
+  const im=g.getImageData(0,0,c.width,c.height).data;
+  let x0=c.width,x1=0;
+  for(let y=0;y<c.height;y++)for(let x=0;x<c.width;x++)
+    if(im[(y*c.width+x)*4+3]>=128){if(x<x0)x0=x;if(x>x1)x1=x;}
+  if(x1<=x0)return;
+  if(!PATC){PATC=document.createElement('canvas');PATC.width=2;PATC.height=2;
+    const pg=PATC.getContext('2d');pg.fillStyle='rgb(24,19,12)';
+    pg.fillRect(0,0,1,1);pg.fillRect(1,1,1,1);}
+  const rx=(x1-x0)/2*.8,ry=Math.max(3,rx*.38);
+  const cx=sp.ox*eff+rx*.28,cy=Math.min(sp.oy*eff,c.height-ry-1);
+  g.save();
+  g.globalCompositeOperation='destination-over';
+  g.fillStyle=g.createPattern(PATC,'repeat');
+  g.beginPath();g.ellipse(cx,cy,rx,ry,.1,0,7);g.fill();
+  g.restore();
 }
 /* 2x2 stipple patterns — the era's 50% checkerboard (dens 2) and sparse 25%
    (dens 1). Soft alpha is FORBIDDEN in Classic; coverage does the blending. */
