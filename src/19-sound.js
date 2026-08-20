@@ -178,6 +178,7 @@ function snd(kind,wx,wy){
     case 'arrow':sWhoosh(.13,.05,3600,700);break;
     case 'click':sKnock(760,.05,.07);break; // wooden tock, not a beep
     case 'ack':sVoice(150+Math.random()*40,.13,.09);break; // "hup" — order acknowledged
+    case 'atkack':sVoice(112+Math.random()*24,.17,.11);sNoise(.06,.035,2600,.6);break; // harder war-grunt + steel hiss on attack orders
     case 'sel':sVoice(210+Math.random()*50,.09,.06);break; // shorter, higher "hm?" on select
     case 'place':sKnock(95,.16,.12);sNoise(.09,.05,500,1,'lowpass');break;
     case 'done': // hammer finish + warm chime

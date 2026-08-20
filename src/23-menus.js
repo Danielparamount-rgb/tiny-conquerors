@@ -298,6 +298,7 @@ function buildSettings(){
   row('🧭 Battle coach tips',toggle('coach',true));
   row('🎯 Slow time while placing / aiming (solo)',toggle('cmdSlow',true));
   row('🎥 Camera follows your battles',toggle('followFight',false));
+  row('🖱 Edge scrolling (mouse)',toggle('edgeScroll',true));
   row('🌤 Reduce motion (no weather / sway)',toggle('reduceMotion',false));
   row('🔋 Battery saver (30 fps)',toggle('fps30',false));
   row('🫲 Left-handed layout',toggle('lefty',false,applyBodyOpts));

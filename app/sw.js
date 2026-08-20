@@ -1,6 +1,6 @@
 // Tiny Conquerors service worker - offline-capable, but never stale.
 // Bump VERSION on every deploy; old caches are purged on activate.
-const VERSION = 'tq-v88';
+const VERSION = 'tq-v89';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 // Unit sprite sheets get their own cache that VERSION bumps do NOT purge: they
 // are ~23MB, immutable per filename, and re-downloading the lot on every deploy

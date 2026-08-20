@@ -28,6 +28,38 @@ function panScreen(dx,dy){
 /* Same two statements as centerOn but WITHOUT clampCam, so clampCam can move
    the camera without recursing into itself. */
 function camTo(x,y){const p=isoPt(x,y);G.cam.x=p.x-vw/G.cam.z/2;G.cam.y=p.y-vh/G.cam.z/2;}
+/* ---- play-feel pass (GFX99-PLAN point 20's reserved list): the camera ----
+   Held arrow keys and a mouse resting at the battlefield edge pan the camera
+   EVERY FRAME (panFeel, called from draw) at a constant brisk era speed —
+   the old per-keydown 48px jumps rode the OS key-repeat: a beat of lag, then
+   stutter. Camera-only; the sim never sees any of it. Edge scroll is
+   mouse-only, only while hovering the canvas itself with no button held,
+   and lives behind a Settings toggle. */
+const PANKEYS=new Set();
+let EDGEV=null,panFeelT=0;
+window.addEventListener('keyup',e=>PANKEYS.delete(e.key));
+window.addEventListener('blur',()=>{PANKEYS.clear();EDGEV=null;});
+window.addEventListener('mouseout',e=>{if(!e.relatedTarget)EDGEV=null;});
+window.addEventListener('pointermove',e=>{
+  if(e.pointerType!=='mouse'||OPT.edgeScroll===false||e.buttons||e.target!==view){EDGEV=null;return;}
+  const M=26,r=view.getBoundingClientRect();
+  let dx=0,dy=0;
+  if(e.clientX<r.left+M)dx=1;else if(e.clientX>r.right-M)dx=-1;
+  if(e.clientY<r.top+M)dy=1;else if(e.clientY>r.bottom-M)dy=-1;
+  EDGEV=(dx||dy)?{dx,dy}:null;
+});
+function panFeel(){
+  const now=performance.now(),dt=Math.min(.05,(now-panFeelT)/1000);
+  panFeelT=now;
+  if(!G||G.over)return;
+  let dx=0,dy=0;
+  if(PANKEYS.has('ArrowLeft'))dx+=1;if(PANKEYS.has('ArrowRight'))dx-=1;
+  if(PANKEYS.has('ArrowUp'))dy+=1;if(PANKEYS.has('ArrowDown'))dy-=1;
+  if(EDGEV){dx+=EDGEV.dx;dy+=EDGEV.dy;}
+  if(!dx&&!dy)return;
+  const s=560*dt; // constant and brisk — era scroll had no easing
+  panScreen(dx*s,dy*s);
+}
 function onDown(e){
   e.currentTarget.setPointerCapture(e.pointerId);
   if(e.pointerType==='mouse')mouseSeen=true;
@@ -394,13 +426,13 @@ function handleTap(cx,cy,mouse,right,shift){
   // carries it out; nothing here touches a unit directly any more.
   const selIds=selUnits.map(s=>s.id);
   if(haveSel&&(right||!mouse||G.amode)){
-    if(hitU&&!allied(hitU.p,localP)){issue('attack',{u:selIds,id:hitU.id,bld:false});flag99(hitU.x,hitU.y,1);flashSel();return;}
+    if(hitU&&!allied(hitU.p,localP)){issue('attack',{u:selIds,id:hitU.id,bld:false});flag99(hitU.x,hitU.y,1);flashSel(1);return;}
     // a beast you already own is still meat — send anyone who can swing at it
     if(hitU&&isAnimal(hitU)&&selUnits.some(s=>!UNITS[s.type].passive&&!UNITS[s.type].monk)){
       issue('attack',{u:selIds,id:hitU.id,bld:false});flag99(hitU.x,hitU.y,1);
       if(hitU.p===localP)toast('Slaughtering — villagers will butcher the carcass');
       flashSel();return;}
-    if(hitB&&!allied(hitB.p,localP)){issue('attack',{u:selIds,id:hitB.id,bld:true});flag99(hitB.tx+hitB.size/2,hitB.ty+hitB.size/2,1);flashSel();return;}
+    if(hitB&&!allied(hitB.p,localP)){issue('attack',{u:selIds,id:hitB.id,bld:true});flag99(hitB.tx+hitB.size/2,hitB.ty+hitB.size/2,1);flashSel(1);return;}
     if(res){issue('gather',{u:selIds,key:resKey});flag99(res.x+.5,res.y+.5,0);flashSel();return;}
     const relic=onMap?G.relics.find(r=>!r.held&&!r.mon&&Math.hypot(r.x+.5-tw.x,r.y+.5-tw.y)<1):null;
     const monks=selUnits.filter(s=>UNITS[s.type].monk&&!UNITS[s.type].noRelic); // Missionaries can't carry relics
@@ -438,12 +470,12 @@ function handleTap(cx,cy,mouse,right,shift){
     // a garbage tile.
     if(!hitU&&!hitB&&onMap){
       if(G.pmode){
-        issue('patrol',{u:selIds,x:tx,y:ty,f:formSel});flag99(tx,ty,0);
+        issue('patrol',{u:selIds,x:tx,y:ty,f:formSel});flag99(tx,ty,0);flashSel();
         G.pmode=false;toast('Patrolling — they will walk the beat and engage what they meet');
         refreshPanel();return;
       }
       if(G.amode){
-        issue('amove',{u:selIds,x:tx,y:ty,f:formSel});flag99(tx,ty,1);
+        issue('amove',{u:selIds,x:tx,y:ty,f:formSel});flag99(tx,ty,1);flashSel(1);
         G.amode=false;toast('Attack-moving — they will fight through anything they meet');
         refreshPanel();return;
       }
@@ -485,14 +517,14 @@ function handleTap(cx,cy,mouse,right,shift){
     lastTapT=now;lastTapId=hitU.id;
     refreshPanel();return;
   }
-  if(hitB&&hitB.p===localP){G.sel=[hitB.id];refreshPanel();return;}
+  if(hitB&&hitB.p===localP){G.sel=[hitB.id];snd('click');refreshPanel();return;}
   // inspect anything else: enemy/ally units & buildings, trees, gold, berries
   if(hitU){G.sel=[];G.inspect={id:hitU.id};refreshPanel();return;}
   if(hitB){G.sel=[];G.inspect={id:hitB.id};refreshPanel();return;}
   if(res&&tileKnown(res.x,res.y)){G.sel=[];G.inspect={res:resKey};refreshPanel();return;}
   G.sel=[];refreshPanel();
 }
-function flashSel(){snd('ack');} // acknowledgment grunt on every issued order
+function flashSel(atk){snd(atk?'atkack':'ack');} // acknowledgment grunt on every issued order; war-grunt for aggression
 function lineTiles(x0,y0,x1,y1){
   const out=[];let dx=Math.abs(x1-x0),dy=-Math.abs(y1-y0);
   const sx2=x0<x1?1:-1,sy2=y0<y1?1:-1;let err=dx+dy;

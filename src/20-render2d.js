@@ -5360,6 +5360,7 @@ function drawFx(f){
 /* ---------- frame ---------- */
 function draw(){
   if(!G||!vw||!vh)return;
+  panFeel(); // play-feel pass: held-key + edge scroll, applied per frame
   ctx.setTransform(dpr,0,0,dpr,0,0);
   ctx.fillStyle='#12160b';ctx.fillRect(0,0,vw,vh);
   const z=G.cam.z;

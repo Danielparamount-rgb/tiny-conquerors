@@ -508,10 +508,10 @@ window.addEventListener('keydown',e=>{
   if(menuOpen)return;
   // 48/z in world units IS a constant 48 screen px (screen = world*z), so these
   // are exact restatements that also work at any 3D camera angle.
-  if(e.key==='ArrowLeft'){panScreen(48,0);e.preventDefault();return;}
-  if(e.key==='ArrowRight'){panScreen(-48,0);e.preventDefault();return;}
-  if(e.key==='ArrowUp'){panScreen(0,48);e.preventDefault();return;}
-  if(e.key==='ArrowDown'){panScreen(0,-48);e.preventDefault();return;}
+  // arrows mark key-held state; panFeel (called from draw) pans per FRAME —
+  // continuous era scroll instead of key-repeat jumps (play-feel pass)
+  if(e.key==='ArrowLeft'||e.key==='ArrowRight'||e.key==='ArrowUp'||e.key==='ArrowDown'){
+    PANKEYS.add(e.key);e.preventDefault();return;}
   if(k==='+'||k==='='){zoomAt(Math.min(2.2,G.cam.z*1.2),vw/2,vh/2);return;}
   if(k==='-'){zoomAt(Math.max(.45,G.cam.z/1.2),vw/2,vh/2);return;}
   if(e.key===' '){
