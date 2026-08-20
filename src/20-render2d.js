@@ -211,10 +211,17 @@ const R99={};
     const M=o.mask||null,TR=(o.team|0)*8;
     const A=o.amp===undefined?12:o.amp,S9=A/12;
     const K=o.sharp===undefined?.8:o.sharp;
+    /* opts.at: the 1-bit alpha cut. UNIT sheets pass 72 (~28% coverage): the
+       50% default ERODES the silhouette half a px on every edge, which made
+       44px men read as stick figures. The default STAYS 128 because the
+       procedural art carries baked low-alpha drop shadows (dirtPad's stacked
+       .08+.11+.16 passes reach ~35% alpha where they overlap) — a lower cut
+       resurfaces them as solid black blobs. */
+    const AT=o.at===undefined?128:o.at;
     const RL=[];for(let i=0;i<8;i++){const pc=P[TR+i];RL.push(pc[0]*3+pc[1]*6+pc[2]);}
     const n=w*h;
     const Lb=new Float32Array(n);                 // luma field; -1 = transparent
-    for(let i=0;i<n;i++){const q=i*4;Lb[i]=d[q+3]<128?-1:d[q]*3+d[q+1]*6+d[q+2];}
+    for(let i=0;i<n;i++){const q=i*4;Lb[i]=d[q+3]<AT?-1:d[q]*3+d[q+1]*6+d[q+2];}
     const idx=new Int16Array(n);                  // palette index; -1 = transparent
     for(let y=0;y<h;y++)for(let x=0;x<w;x++){
       const i=y*w+x,q=i*4;
@@ -262,7 +269,7 @@ const R99={};
         (tr(x+1,y)&&(tr(x-1,y)||tr(x-2,y)))||
         (tr(x,y-1)&&(tr(x,y+1)||tr(x,y+2)))||
         (tr(x,y+1)&&(tr(x,y-1)||tr(x,y-2)));
-      out[i]=thin?Math.max(RS[idx[i]],idx[i]-2):OC;
+      out[i]=thin?Math.max(RS[idx[i]],idx[i]-1):OC;  // one shade, limbs stay bright
     }
     for(let i=0;i<n;i++){const q=i*4;
       if(out[i]<0){d[q+3]=0;continue;}
@@ -4190,7 +4197,9 @@ function sprGet99(key,an,p,eff){
   const base=sprImg(key+'/'+an,m.sheet);if(!base)return null;
   const msk=m.mask?sprImg(key+'/'+an+'/m',m.mask):false;
   if(m.mask&&msk===null)return null;             // mask still loading
-  const S0=SPR_SCALE/(USPR.res||1)*eff,cw=meta.cell[0],ch=meta.cell[1];
+  // *1.12: Classic units run 12% bigger than the modern rigs — with the era
+  // silhouette mass they still read lean at rig scale (Daniel: "stick figure")
+  const S0=SPR_SCALE/(USPR.res||1)*eff*1.12,cw=meta.cell[0],ch=meta.cell[1];
   const ncw=Math.max(1,Math.round(cw*S0)),nch=Math.max(1,Math.round(ch*S0));
   const c=document.createElement('canvas');c.width=ncw*m.frames;c.height=nch*8;
   const g=c.getContext('2d');g.imageSmoothingEnabled=true;g.imageSmoothingQuality='high';
@@ -4204,7 +4213,7 @@ function sprGet99(key,an,p,eff){
       mg.drawImage(msk,f*cw,r*ch,cw,ch,f*ncw,r*nch,ncw,nch);
     mi=mg.getImageData(0,0,c.width,c.height).data;
   }
-  R99.post(c,{mask:mi,team,amp:12});
+  R99.post(c,{mask:mi,team,amp:12,at:72}); // at 72: keep the silhouette MASS
   const ax=Math.round(meta.anchorX*ncw/cw),ay=Math.round(meta.anchorY*nch/ch);
   const shk=key+'/'+an+'/sh99'+(eff>1?'x2':'');    // shadows carry no colour: shared
   const sh=USPR.tint[shk]||(USPR.tint[shk]=sprShadow99(c,ncw,nch,ax,ay,m.frames));
