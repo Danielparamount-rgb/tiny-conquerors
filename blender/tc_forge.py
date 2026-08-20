@@ -59,6 +59,16 @@ CELL_DEFAULT = 128    # sprite cell in pixels
 PPM_DEFAULT  = 36.0   # pixels per metre, horizontally (a man lands ~55px tall)
 ANCHOR_Z     = 0.85   # metres above the feet that the camera centres on
 
+# --- r99-human proportion pass (2026-08-20, Daniel: "more actual human like")
+# The rigs are HEROIC on purpose (art gotcha 5: readable at 22px).  Classic '99
+# now draws a ~60px man from the HD renders, so man-rig meshes shrink the head
+# group and the hands about their own bone pivots at build time.  Bone-group
+# based, so every helmet, hat, beard, ear and fist travels with its bone -- and
+# RIDERS inherit it automatically (same bone names; the lifted pivot is read
+# from the armature itself).  Gated on the man-rig bone signature so horses,
+# beasts, ships and siege never qualify.
+HUMANIZE = {'head': 0.83, 'handR': 0.86, 'handL': 0.86}
+
 # ---------------------------------------------------------------------------
 # 2. PALETTE  (drawn from the game's own TEAMS / SKIN / OUT values)
 # ---------------------------------------------------------------------------
@@ -570,6 +580,20 @@ class Builder:
         self._emit(self._xform(vs, center, rot), fs, key, bone)
 
     def build(self, name, arm_obj):
+        # r99-human: shrink head/hand vert groups about their bone pivots
+        # BEFORE from_pydata and the rest attribute, so textures stay welded.
+        bones = arm_obj.data.bones
+        if 'shoulderR' in bones and 'head' in bones:
+            for bn, f in HUMANIZE.items():
+                if bn not in bones:
+                    continue
+                p = bones[bn].head_local
+                for vi, vb in enumerate(self.vert_bone):
+                    if vb == bn:
+                        v = self.verts[vi]
+                        self.verts[vi] = (p[0] + (v[0] - p[0]) * f,
+                                          p[1] + (v[1] - p[1]) * f,
+                                          p[2] + (v[2] - p[2]) * f)
         me = bpy.data.meshes.new(name)
         me.from_pydata(self.verts, [], self.faces)
         me.update()
@@ -1772,10 +1796,10 @@ def p_idle(t, c):
         'chest': (2 + 1.6 * s, 0, 1.2 * s),
         'spine': (1.0 * s, 0, 0),
         'head':  (-1.5 - 1.4 * s, 1.8 * s, 0),
-        'armR':  (-4 + 3.0 * s, 0, -5),
-        'armL':  (-4 + 3.0 * s, 0, 5),
-        'forearmR': (-14 - 4 * s, 0, 0),
-        'forearmL': (-14 - 4 * s, 0, 0),
+        'armR':  (-3 + 2.0 * s, 0, -5),
+        'armL':  (-3 + 2.0 * s, 0, 5),
+        'forearmR': (-10 - 3 * s, 0, 0),
+        'forearmL': (-10 - 3 * s, 0, 0),
     }
     root = (0, 0, 0.012 * s2)
     return P, root, (0, 0, 0)
@@ -1797,8 +1821,8 @@ def p_walk(t, c):
         'head':   (-4.0, 0, -2.0 * sw),
         'armR':   (-24 * sw, 0, -6),
         'armL':   (24 * sw, 0, 6),
-        'forearmR': (-18 - 12 * max(0.0, -sw), 0, 0),
-        'forearmL': (-18 - 12 * max(0.0, sw), 0, 0),
+        'forearmR': (-14 - 10 * max(0.0, -sw), 0, 0),
+        'forearmL': (-14 - 10 * max(0.0, sw), 0, 0),
     }
     root = (0, 0, 0.030 * abs(math.sin(a)) - 0.012)
     return P, root, (0, 0, 0)
@@ -2021,25 +2045,31 @@ MOUNT_LEGS = {
 # Rest ("carry") offsets, added on top of idle/walk/work so the weapon clears the
 # body.  Without these a sword held at the fist is simply inside the ribcage: the
 # arm hangs at x=0.21 and the torso is 0.47 wide.
+# r99-human arm fix (Daniel: "the arms look backwards"): the old X-flexes
+# (-40..-64) stacked on the idle bend and the 30-degree camera foreshortened
+# them into horizontal tray-arms.  The LATERAL z-swing is what actually clears
+# the ribcage; the flex only lifts the fist, so weapons now hang DOWN at the
+# side, AoE2-idle style.  Bows/lances keep their cross-body carry -- those
+# read as intended.
 CARRY = {
-    'sword':      {'armR': (-10, 0, -34), 'forearmR': (-40, 0, 0)},
-    'greatsword': {'armR': (-16, 0, -32), 'forearmR': (-46, 0, 0)},
+    'sword':      {'armR': (-6, 0, -34), 'forearmR': (-18, 0, 0)},
+    'greatsword': {'armR': (-8, 0, -32), 'forearmR': (-22, 0, 0)},
     'spear':      {'armR': (-4, 0, -26), 'forearmR': (-18, 0, 0)},
     'pike':       {'armR': (-4, 0, -24), 'forearmR': (-14, 0, 0)},
-    'axe':        {'armR': (-12, 0, -32), 'forearmR': (-44, 0, 0)},
-    'tool':       {'armR': (-14, 0, -28), 'forearmR': (-40, 0, 0)},
+    'axe':        {'armR': (-6, 0, -32), 'forearmR': (-20, 0, 0)},
+    'tool':       {'armR': (-6, 0, -28), 'forearmR': (-18, 0, 0)},
     'staff':      {'armR': (-6, 0, -24), 'forearmR': (-16, 0, 0)},
-    'javelin':    {'armR': (-18, 0, -30), 'forearmR': (-52, 0, 0)},
+    'javelin':    {'armR': (-10, 0, -30), 'forearmR': (-26, 0, 0)},
     'bow':        {'armL': (-14, 0, 30), 'forearmL': (-34, 0, 0)},
     'crossbow':   {'armL': (-10, 0, 26), 'forearmL': (-40, 0, 0)},
-    'twinsword':  {'armR': (-10, 0, -34), 'forearmR': (-40, 0, 0),
-                   'armL': (-10, 0, 34), 'forearmL': (-40, 0, 0)},
-    'gun':        {'armR': (-24, 0, -22), 'forearmR': (-58, 0, 0)},
-    'bomb':       {'armR': (-30, 0, -18), 'forearmR': (-64, 0, 0)},
+    'twinsword':  {'armR': (-6, 0, -34), 'forearmR': (-18, 0, 0),
+                   'armL': (-6, 0, 34), 'forearmL': (-18, 0, 0)},
+    'gun':        {'armR': (-14, 0, -22), 'forearmR': (-34, 0, 0)},
+    'bomb':       {'armR': (-20, 0, -18), 'forearmR': (-44, 0, 0)},
     'lance':      {'armR': (14, 0, -26), 'forearmR': (-24, 0, 0)},
 }
-CARRY_SHIELD = {'armL': (-8, 0, 13), 'forearmL': (-40, 0, 0)}
-CARRY_BUCKLER = {'armL': (-6, 0, 20), 'forearmL': (-34, 0, 0)}
+CARRY_SHIELD = {'armL': (-6, 0, 13), 'forearmL': (-24, 0, 0)}
+CARRY_BUCKLER = {'armL': (-5, 0, 20), 'forearmL': (-20, 0, 0)}
 
 def carry_pose(c):
     """The rest offsets this costume needs, weapon plus off-hand."""
