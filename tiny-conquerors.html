@@ -8244,6 +8244,14 @@ function drawBld(b){
   // farms stay footprint-true: they tile edge-to-edge.
   const BS=d.thin||d.farm?1:BLD_VS2D;
   if(!bR){
+    if(OPT.r99&&!d.thin&&!d.farm&&b.built){
+      // era grounding: dirtPad's baked soft shadow dies at the 1-bit alpha
+      // cut, so Classic gets the sparse stipple contact ellipse instead
+      ctx.fillStyle=pat99('rgb(26,20,12)',1);
+      ctx.beginPath();
+      ctx.ellipse(pc.x+b.size*3,pc.y+2,b.size*IW*.72,b.size*IH*.66,0,0,7);
+      ctx.fill();
+    }
     if(BS===1)ctx.drawImage(spc(sp),pt.x-sp.ox,pt.y-sp.oy,sp.w,sp.h);
     else{
       const southY=pt.y+2*b.size*IH;
@@ -10128,6 +10136,12 @@ function bsprGet99(type,age,team,sl,eff){
 }
 function bsprDraw(b,pt0,bl){
   if(!spritesOn||!BSPR.meta)return false;
+  /* Daniel's call (r99-town-choice, tq-v85): the PROCEDURAL town owns Classic
+     at EVERY zoom — through spc() it quantizes at native TREZ res and
+     out-details the 158px Blender sources; one design language, no art pop
+     between zoom steps. Modern mode keeps the Blender town untouched.
+     (bsprGet99 stays below should this ever revert to per-zoom.) */
+  if(OPT.r99)return false;
   const d=BLDS[b.type];
   if(d.thin||!b.built)return false;        // walls tile; sites scaffold — both stay procedural
   const e=BSPR.meta.blds[b.type];if(!e)return false;
@@ -10136,21 +10150,6 @@ function bsprDraw(b,pt0,bl){
   const A=e.ages[age];if(!A)return false;
   const ps=isoPt(b.tx+b.size,b.ty+b.size); // the footprint's south corner
   ps.y-=bl;
-  if(OPT.r99){
-    const s9=bsprGet99(b.type,age,b.p,wxSnowLvl,R99EFF);if(!s9)return false;
-    const E=s9.eff||1,z9=G.cam.z;
-    const rx=Math.round((ps.x-s9.ax/E)*z9)/z9,ry=Math.round((ps.y-s9.ay/E)*z9)/z9;
-    if(!d.farm){ // sparse stipple contact shadow, tucked under the base —
-      // 50% checker over light worn dirt read as hazard stripes (first cut)
-      const pc9=isoPt(b.tx+b.size/2,b.ty+b.size/2);pc9.y-=bl;
-      ctx.fillStyle=pat99('rgb(26,20,12)',1);
-      ctx.beginPath();
-      ctx.ellipse(pc9.x+b.size*3,pc9.y+2,b.size*IW*.72,b.size*IH*.66,0,0,7);
-      ctx.fill();
-    }
-    ctx.drawImage(s9.c,rx,ry,s9.w/E,s9.h/E);
-    return{x:rx,y:ry,w:s9.w/E,h:s9.h/E};
-  }
   const img=bsprGet(b.type,age,b.p,wxSnowLvl);if(!img)return false;
   const BS=d.farm?1:BLD_VS2D;
   /* ppt = sheet px per IW-halfwidth (52 at R=2), so game px per sheet px is
