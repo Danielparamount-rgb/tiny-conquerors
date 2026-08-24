@@ -6343,15 +6343,38 @@ function stampCleared(x,y){
     tctx.fillRect(px+(hash2(x*3+i,y*5)%23),py+(hash2(x,y*9+i)%23),2.4,2);
   }
   tctx.globalAlpha=1;
-  const sx=px+8+(h%10),sy=py+8+((h>>>3)%10);
+  // the stump — species and girth matched to the tree that stood here via
+  // getResSpr's own variant hash, NW-lit like everything else on the board
+  const hv=hash2(x*13,y*17),pine=hv%3===0;
+  const w=(10+(hv%4)*1.7)*.42,ht=w*.95;
+  const sx=px+9+(h%8),sy=py+10+((h>>>3)%8);
+  const bark=pine?'#4a3018':'#54381e',barkD=pine?'#2e1d0c':'#38240f';
+  const rs=mulberry(hv*97+3);
   tctx.fillStyle='rgba(18,26,10,.35)';
-  tctx.beginPath();tctx.ellipse(sx+1.5,sy+1.5,4.5,2,0,0,7);tctx.fill();
-  tctx.fillStyle='#5a3d20';tctx.fillRect(-2.6+sx,sy-2,5.2,3.6);
+  tctx.beginPath();tctx.ellipse(sx+w*.5,sy+1,w*1.6,w*.6,.12,0,7);tctx.fill();
+  tctx.fillStyle=bark;
+  tctx.beginPath();tctx.ellipse(sx,sy,w*1.25,w*.6,0,0,7);tctx.fill();
+  tctx.beginPath();tctx.ellipse(sx-w*.9,sy+w*.1,w*.38,w*.2,0,0,7);tctx.fill();
+  tctx.beginPath();tctx.ellipse(sx+w*.85,sy+w*.15,w*.4,w*.2,0,0,7);tctx.fill();
+  tctx.fillRect(sx-w,sy-ht,w*2,ht);
+  tctx.fillStyle=barkD;tctx.fillRect(sx+w*.15,sy-ht,w*.85,ht);
+  tctx.fillStyle='rgba(255,235,200,.16)';tctx.fillRect(sx-w,sy-ht,w*.35,ht);
+  tctx.strokeStyle='rgba(20,12,4,.55)';tctx.lineWidth=.7;
+  tctx.beginPath();tctx.moveTo(sx-w*.35,sy-ht+.5);tctx.lineTo(sx-w*.3,sy+w*.3);tctx.stroke();
+  tctx.beginPath();tctx.moveTo(sx+w*.5,sy-ht+.5);tctx.lineTo(sx+w*.55,sy+w*.2);tctx.stroke();
+  tctx.strokeStyle=barkD;tctx.lineWidth=1.2;
+  tctx.beginPath();tctx.ellipse(sx,sy-ht,w,w*.55,0,0,7);tctx.stroke();
+  tctx.fillStyle='#d8b578';
+  tctx.beginPath();tctx.ellipse(sx,sy-ht,w*.9,w*.48,0,0,7);tctx.fill();
+  tctx.fillStyle='#eed7a4';
+  tctx.beginPath();tctx.ellipse(sx-w*.12,sy-ht-.3,w*.55,w*.28,0,0,7);tctx.fill();
+  tctx.strokeStyle='#9a7440';tctx.lineWidth=1;
+  tctx.beginPath();tctx.ellipse(sx,sy-ht,w*.45,w*.24,0,0,7);tctx.stroke();
+  tctx.fillStyle='#a87e4a';
+  tctx.beginPath();tctx.arc(sx,sy-ht,1,0,7);tctx.fill();
   tctx.fillStyle='#c9a266';
-  tctx.beginPath();tctx.ellipse(sx,sy-2,2.6,1.5,0,0,7);tctx.fill();
-  tctx.strokeStyle='#8a6a3a';tctx.lineWidth=.7;
-  tctx.beginPath();tctx.ellipse(sx,sy-2,1.4,.8,0,0,7);tctx.stroke();
-  if(OPT.r99)R99.quant(terrain,(px-2)*TREZT,(py-2)*TREZT,(TILE+4)*TREZT,(TILE+4)*TREZT); // felled tiles stay indexed
+  for(let i=0;i<3;i++)tctx.fillRect(sx-w*2.2+rs()*w*1.6,sy+w*.3+rs()*3,1.8,1.2);
+  if(OPT.r99)R99.quant(terrain,(px-6)*TREZT,(py-6)*TREZT,(TILE+12)*TREZT,(TILE+12)*TREZT); // felled tiles stay indexed
 }
 // (render-side version counters are declared above genMap — see there)
 function refreshTerrain(){
@@ -17641,7 +17664,7 @@ requestAnimationFrame(frame);
 
 <script>
 (function(){
-  var BUILD = 'tq-v92';
+  var BUILD = 'tq-v93';
   // The game reads this for the multiplayer version gate (gameVer() falls back
   // to 'dev' when the wrapper is absent, i.e. local test.html / the artifact).
   window.GAMEVER = BUILD;
