@@ -1,0 +1,1806 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f2b21">
+<title>Stock Market 1968</title>
+</head>
+<body>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bevan&family=Archivo:wght@400;600;700;800&family=Courier+Prime:wght@400;700&display=swap">
+<style>
+/* ============================================================
+   STOCK MARKET 1968 — one committed visual world: a lithographed
+   1968 money-game board on a felt card table. Single theme by
+   design; every surface paints its own color explicitly.
+   ============================================================ */
+:root{
+  --felt:#0f2b21;            /* card-table felt, page ground */
+  --felt-hi:#164033;
+  --board:#eee3c2;           /* aged board stock */
+  --board-lo:#e2d4ab;
+  --paper:#f7efda;           /* card / sheet paper */
+  --paper-lo:#efe4c6;
+  --ink:#251f17;             /* warm letterpress ink */
+  --ink-soft:#4c4132;
+  --ink-faint:#7a6d58;
+  --rule:#c9b98e;            /* hairline rules on paper */
+  --red:#bf3527;             /* the red plastic slider strip */
+  --red-deep:#8c2318;
+  --green:#20573f;           /* exchange green */
+  --green-hi:#2e7154;
+  --gold:#c69b3a;
+  --gold-hi:#e3bd62;
+  --up:#1e6b43;
+  --down:#a02c1d;
+  --disabled:#9b8f76;
+  --shadow:0 3px 14px rgba(10,20,12,.45);
+  --sheet-shadow:0 -8px 30px rgba(10,20,12,.5);
+  --serif-slab:'Bevan',"Rockwell","Roboto Slab",Georgia,serif;
+  --grot:'Archivo',"Helvetica Neue",Arial,sans-serif;
+  --mono:'Courier Prime',"Courier New",Courier,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{
+  font-family:var(--grot);color:var(--ink);
+  background:
+    radial-gradient(120% 90% at 50% 0%,var(--felt-hi) 0%,var(--felt) 58%,#0a1f17 100%);
+  min-height:100vh;min-height:100dvh;
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+  overflow-x:hidden;
+}
+button{font-family:inherit;color:inherit;background:none;border:none;cursor:pointer;touch-action:manipulation}
+button:disabled{cursor:default}
+:is(button,select,input):focus-visible{outline:3px solid var(--gold-hi);outline-offset:2px}
+input,select{font-family:inherit;font-size:16px}
+svg{display:block}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.scr{display:none}
+.scr.on{display:block}
+
+/* ---------- shared paper card ---------- */
+.card-paper{
+  background:
+    repeating-linear-gradient(0deg,transparent 0 2px,rgba(122,100,60,.05) 2px 3px),
+    linear-gradient(160deg,var(--paper) 0%,var(--paper-lo) 100%);
+  border:2px solid var(--ink);border-radius:8px;
+  box-shadow:inset 0 0 0 4px var(--paper),inset 0 0 0 5px var(--rule),var(--shadow);
+}
+
+/* ============================ SPLASH ============================ */
+#splash{min-height:100vh;min-height:100dvh;display:none;align-items:center;justify-content:center;padding:22px 16px calc(22px + env(safe-area-inset-bottom))}
+#splash.on{display:flex}
+.boxlid{width:min(480px,100%);text-align:center;padding:34px 22px 26px;position:relative;overflow:hidden}
+.boxlid::before{content:"";position:absolute;inset:10px;border:1px solid var(--rule);border-radius:4px;pointer-events:none}
+.lid-eyebrow{font:700 12px/1 var(--grot);letter-spacing:.34em;color:var(--green);text-transform:uppercase;margin-bottom:14px}
+.lid-title{font-family:var(--serif-slab);font-weight:400;font-size:clamp(44px,13vw,64px);line-height:.94;color:var(--ink);text-shadow:2px 2px 0 var(--gold-hi);letter-spacing:.01em}
+.lid-title small{display:block;font-size:.42em;letter-spacing:.14em;color:var(--red);margin-top:8px}
+.lid-rosette{margin:16px auto 6px;width:150px}
+.lid-tag{font:italic 600 15px/1.5 Georgia,serif;color:var(--ink-soft);margin:10px 0 4px}
+.lid-sub{font:600 11px/1.6 var(--grot);letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:20px}
+.lid-btns{display:flex;flex-direction:column;gap:10px;align-items:center}
+.homage{margin-top:16px;font:400 11px/1.5 var(--grot);color:var(--ink-faint)}
+
+/* big period button */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:10px;
+  min-height:52px;padding:12px 28px;border-radius:6px;
+  font:800 16px/1 var(--grot);letter-spacing:.08em;text-transform:uppercase;
+  border:2px solid var(--ink);
+  background:linear-gradient(180deg,var(--green-hi),var(--green));color:var(--paper);
+  box-shadow:0 3px 0 var(--ink),0 6px 14px rgba(10,20,12,.35);
+  transition:transform .08s,box-shadow .08s;
+}
+.btn:active{transform:translateY(2px);box-shadow:0 1px 0 var(--ink)}
+.btn.alt{background:linear-gradient(180deg,#fbf3de,var(--paper-lo));color:var(--ink)}
+.btn.red{background:linear-gradient(180deg,#d4503f,var(--red));color:var(--paper)}
+.btn.gold{background:linear-gradient(180deg,var(--gold-hi),var(--gold));color:var(--ink)}
+.btn:disabled{background:var(--disabled);color:#efe9da;border-color:#6c6250;box-shadow:0 2px 0 #6c6250;transform:none}
+.btn.small{min-height:40px;padding:8px 16px;font-size:13px}
+
+/* ============================ SETUP ============================ */
+#setup{min-height:100vh;min-height:100dvh;display:none;align-items:center;justify-content:center;padding:18px 14px calc(24px + env(safe-area-inset-bottom))}
+#setup.on{display:flex}
+.setup-card{width:min(560px,100%);padding:22px 18px}
+.setup-h{font-family:var(--serif-slab);font-size:26px;text-align:center;margin-bottom:2px}
+.setup-sub{text-align:center;font:600 11px/1.5 var(--grot);letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:16px}
+.seat{display:flex;align-items:center;gap:8px;padding:8px 6px;border-bottom:1px solid var(--rule)}
+.seat-dot{width:26px;height:26px;border-radius:50%;border:2px solid var(--ink);flex:none;box-shadow:inset -2px -3px 0 rgba(0,0,0,.25)}
+.seat input[type=text]{flex:1;min-width:0;background:transparent;border:none;border-bottom:2px dashed var(--rule);padding:6px 2px;font:600 16px var(--grot);color:var(--ink)}
+.seat select{background:var(--paper);border:2px solid var(--ink);border-radius:6px;padding:6px 8px;font-weight:700}
+.seat .rm{font-size:20px;line-height:1;padding:6px 10px;color:var(--red);font-weight:800}
+.setup-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px;flex-wrap:wrap}
+.setup-row label{font:700 12px/1 var(--grot);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft)}
+.setup-row select{background:var(--paper);border:2px solid var(--ink);border-radius:6px;padding:8px 10px;font-weight:700}
+.setup-actions{display:flex;gap:10px;justify-content:center;margin-top:20px;flex-wrap:wrap}
+
+/* ============================ GAME SHELL ============================ */
+#game{display:none;min-height:100vh;min-height:100dvh}
+#game.on{display:flex;flex-direction:column}
+
+/* ticker tape */
+#tape{
+  background:#181008;color:#f4e8c8;overflow:hidden;white-space:nowrap;flex:none;
+  border-bottom:3px solid var(--gold);height:30px;display:flex;align-items:center;position:relative;
+}
+#tape::before,#tape::after{content:"";position:absolute;top:0;bottom:0;width:26px;z-index:2;pointer-events:none}
+#tape::before{left:0;background:linear-gradient(90deg,#181008,transparent)}
+#tape::after{right:0;background:linear-gradient(-90deg,#181008,transparent)}
+#tapeInner{display:inline-block;padding-left:100%;font:700 13px/1 var(--mono);letter-spacing:.06em;animation:tape 26s linear infinite}
+@keyframes tape{to{transform:translateX(-100%)}}
+#tapeInner .u{color:#8fd6a8}#tapeInner .d{color:#f0907d}#tapeInner .n{color:var(--gold-hi)}
+@media (prefers-reduced-motion:reduce){#tapeInner{animation:none;padding-left:8px}}
+
+/* top bar */
+#topbar{flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 12px;color:var(--paper)}
+#topbar .t{font-family:var(--serif-slab);font-size:17px;letter-spacing:.03em;color:#f0e2ba;text-shadow:1px 1px 0 rgba(0,0,0,.4)}
+#topbar .t small{color:var(--gold-hi);font-family:var(--grot);font-weight:700;font-size:10px;letter-spacing:.28em;display:block;margin-top:1px}
+#topbar .tools{display:flex;gap:6px}
+.tool{width:38px;height:38px;border-radius:8px;border:2px solid rgba(240,226,186,.5);color:#f0e2ba;font-size:17px;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.18)}
+.tool[aria-pressed="true"]{background:var(--gold);color:var(--ink);border-color:var(--gold-hi)}
+
+/* main column */
+#main{flex:1;display:flex;flex-direction:column;gap:10px;padding:2px 10px 8px;max-width:1160px;width:100%;margin:0 auto}
+@media (min-width:920px){
+  #main{flex-direction:row;align-items:flex-start;gap:16px;padding:6px 16px 12px}
+  #colBoard{flex:1.25;position:sticky;top:8px}
+  #colSide{flex:1;display:flex;flex-direction:column;gap:12px;min-width:340px}
+}
+
+/* ---------------- quotation board ---------------- */
+#quote{padding:8px 8px 10px}
+.q-head{display:flex;justify-content:space-between;align-items:baseline;padding:0 4px 6px}
+.q-title{font:800 11px/1 var(--grot);letter-spacing:.24em;text-transform:uppercase;color:var(--green)}
+.q-sub{font:700 10px/1 var(--mono);color:var(--ink-faint)}
+.q-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:5px}
+.q-col{display:flex;flex-direction:column;align-items:center;gap:4px;padding:4px 2px 6px;border-radius:6px;background:rgba(122,100,60,.07);border:1px solid var(--rule);min-width:0}
+.q-tick{font:800 10px/1 var(--grot);letter-spacing:.04em;color:var(--paper);padding:3px 4px;border-radius:4px;border:1px solid rgba(0,0,0,.35);width:100%;text-align:center}
+.q-rail{position:relative;width:14px;height:92px;background:linear-gradient(180deg,#d8c89d,#cbb887);border:1px solid var(--ink-soft);border-radius:7px;box-shadow:inset 0 1px 3px rgba(0,0,0,.3)}
+.q-rail::before{content:"";position:absolute;left:3px;right:3px;top:4px;bottom:4px;background:repeating-linear-gradient(0deg,transparent 0 9.5px,rgba(60,45,20,.35) 9.5px 10.5px)}
+.q-par{position:absolute;left:-3px;right:-3px;height:2px;background:var(--green);top:46px;opacity:.8}
+.q-slider{
+  position:absolute;left:-5px;width:24px;height:12px;border-radius:3px;
+  background:linear-gradient(180deg,#e05a45,var(--red) 55%,var(--red-deep));
+  border:1px solid #5f1109;box-shadow:0 1px 2px rgba(0,0,0,.45);
+  transition:top .5s cubic-bezier(.34,1.4,.5,1);
+}
+@media (prefers-reduced-motion:reduce){.q-slider{transition:none}}
+.q-price{font:700 13px/1 var(--mono);color:var(--ink)}
+.q-delta{font:700 10px/1 var(--mono);height:11px;color:var(--ink-faint)}
+.q-delta.up{color:var(--up)}.q-delta.dn{color:var(--down)}
+.q-col.split .q-tick{animation:flash .5s 3}
+@keyframes flash{50%{filter:brightness(1.8)}}
+
+/* ---------------- board ---------------- */
+#boardWrap{position:relative}
+#boardWrap svg{width:100%;height:auto;border-radius:10px;box-shadow:var(--shadow)}
+.sp-label{font:800 8.4px/1 var(--grot);letter-spacing:.02em;fill:var(--ink)}
+.sp-sub{font:700 7px/1 var(--grot);fill:var(--ink-soft);letter-spacing:.04em}
+.sp-tick{font:800 9.5px/1 var(--grot);fill:#f7efda}
+.sp-big{font-family:var(--serif-slab);font-size:12.5px;fill:var(--ink)}
+.sp-icon{font:800 13px/1 Georgia,serif;fill:var(--ink)}
+.ctr-t{font-family:var(--serif-slab);fill:var(--ink)}
+.ctr-s{font:800 7.5px/1 var(--grot);letter-spacing:.3em;fill:var(--green)}
+.ctr-m{font:italic 600 8.6px/1.4 Georgia,serif;fill:var(--ink-soft)}
+.pawn{transition:transform .22s ease}
+@media (prefers-reduced-motion:reduce){.pawn{transition:none}}
+.sp-hit{cursor:pointer}
+
+/* ---------------- dock ---------------- */
+#dock{
+  flex:none;position:sticky;bottom:0;z-index:30;
+  background:linear-gradient(180deg,#1c4636,var(--green) 30%,#16382a);
+  border-top:3px solid var(--gold);
+  padding:8px 10px calc(8px + env(safe-area-inset-bottom));
+  box-shadow:var(--sheet-shadow);
+}
+.dock-in{max-width:1160px;margin:0 auto;display:flex;flex-direction:column;gap:7px}
+#players{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+#players::-webkit-scrollbar{display:none}
+.pchip{
+  flex:none;display:flex;align-items:center;gap:7px;padding:5px 10px 5px 6px;border-radius:999px;
+  background:rgba(0,0,0,.25);border:2px solid transparent;color:#e9dcb6;
+}
+.pchip.cur{background:var(--paper);color:var(--ink);border-color:var(--gold-hi);box-shadow:0 0 0 2px rgba(0,0,0,.3)}
+.pchip .dot{width:20px;height:20px;border-radius:50%;border:2px solid rgba(0,0,0,.5);flex:none;box-shadow:inset -2px -2px 0 rgba(0,0,0,.3)}
+.pchip .nm{font:800 12px/1 var(--grot);letter-spacing:.02em;white-space:nowrap;max-width:90px;overflow:hidden;text-overflow:ellipsis}
+.pchip .nw{font:700 12px/1 var(--mono);white-space:nowrap}
+.dock-row{display:flex;align-items:stretch;gap:8px}
+#hint{flex:1;display:flex;align-items:center;font:600 13px/1.35 var(--grot);color:#f2e6c2;min-height:44px}
+#hint b{color:var(--gold-hi)}
+.dice-btn{
+  flex:none;display:flex;align-items:center;gap:7px;padding:6px 14px;border-radius:10px;
+  background:linear-gradient(180deg,#fbf3de,#ead9ae);border:2px solid var(--ink);
+  box-shadow:0 3px 0 var(--ink);font:800 13px/1 var(--grot);letter-spacing:.06em;color:var(--ink);
+}
+.dice-btn:active{transform:translateY(2px);box-shadow:0 1px 0 var(--ink)}
+.dice-btn:disabled{opacity:.45;transform:none;box-shadow:0 3px 0 var(--ink)}
+.die{width:34px;height:34px;border-radius:7px;background:linear-gradient(145deg,#fffbef,#e8d9b0);border:2px solid var(--ink);display:grid;place-items:center;font:800 19px/1 var(--grot);color:var(--ink);box-shadow:inset -2px -3px 0 rgba(120,90,40,.25)}
+.die.roll{animation:tumble .45s ease}
+@keyframes tumble{25%{transform:rotate(90deg) scale(.92)}60%{transform:rotate(210deg)}}
+@media (prefers-reduced-motion:reduce){.die.roll{animation:none}}
+.dock-btns{display:flex;gap:8px}
+.dock-btns .btn{flex:1;min-height:46px;padding:8px 10px;font-size:13px}
+
+/* ---------------- bottom sheet ---------------- */
+#dim{position:fixed;inset:0;background:rgba(8,16,10,.55);z-index:40;opacity:0;pointer-events:none;transition:opacity .2s}
+#dim.on{opacity:1;pointer-events:auto}
+#sheet{
+  position:fixed;left:0;right:0;bottom:0;z-index:41;max-height:86vh;max-height:86dvh;
+  transform:translateY(105%);transition:transform .26s cubic-bezier(.3,1,.4,1);
+  display:flex;flex-direction:column;
+  border-radius:16px 16px 0 0;border:2px solid var(--ink);border-bottom:none;
+  background:linear-gradient(180deg,var(--paper),var(--paper-lo));box-shadow:var(--sheet-shadow);
+  max-width:640px;margin:0 auto;
+}
+#sheet.on{transform:translateY(0)}
+@media (prefers-reduced-motion:reduce){#sheet{transition:none}}
+.sheet-grip{width:44px;height:5px;border-radius:3px;background:var(--rule);margin:8px auto 0}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;padding:8px 16px 8px;border-bottom:2px solid var(--ink)}
+.sheet-title{font-family:var(--serif-slab);font-size:19px}
+.sheet-x{font-size:22px;font-weight:800;padding:4px 10px;color:var(--red)}
+.sheet-body{overflow-y:auto;padding:12px 16px calc(16px + env(safe-area-inset-bottom));-webkit-overflow-scrolling:touch}
+
+/* trade rows */
+.trow{display:flex;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid var(--rule)}
+.trow:last-child{border-bottom:none}
+.mono-chip{width:38px;height:38px;border-radius:7px;flex:none;display:grid;place-items:center;color:var(--paper);font:800 12px/1 var(--grot);border:2px solid rgba(0,0,0,.35);box-shadow:inset -2px -2px 0 rgba(0,0,0,.2)}
+.trow .ti{flex:1;min-width:0}
+.trow .ti b{display:block;font:800 14px/1.2 var(--grot);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trow .ti small{font:600 11px/1.3 var(--grot);color:var(--ink-faint)}
+.trow .pr{text-align:right;font:700 14px/1.3 var(--mono)}
+.trow .pr small{display:block;font-size:11px;color:var(--ink-faint)}
+.trow .pr .up{color:var(--up)}.trow .pr .dn{color:var(--down)}
+
+/* buy/sell panel */
+.deal-card{padding:14px;margin-bottom:12px;text-align:center}
+.deal-name{font-family:var(--serif-slab);font-size:22px;line-height:1.1}
+.deal-sec{font:600 10px/1 var(--grot);letter-spacing:.22em;text-transform:uppercase;color:var(--ink-faint);margin:6px 0 10px}
+.deal-price{font:700 30px/1 var(--mono)}
+.deal-price small{font-size:14px;color:var(--ink-faint)}
+.qty-row{display:flex;align-items:center;justify-content:center;gap:8px;margin:14px 0 6px;flex-wrap:wrap}
+.qbtn{min-width:52px;min-height:44px;border-radius:8px;border:2px solid var(--ink);background:var(--paper);font:800 14px/1 var(--grot);box-shadow:0 2px 0 var(--ink)}
+.qbtn:active{transform:translateY(2px);box-shadow:none}
+.qbtn:disabled{opacity:.4}
+#qtyVal{font:700 30px/1 var(--mono);min-width:86px;text-align:center}
+.deal-total{font:700 15px/1.5 var(--mono);text-align:center;margin:6px 0 12px}
+.deal-total .bad{color:var(--down)}
+.deal-actions{display:flex;gap:10px}
+.deal-actions .btn{flex:1}
+
+/* ledger / certificates */
+.cert{position:relative;padding:10px 12px;margin-bottom:10px;border:2px solid var(--ink);border-radius:6px;background:linear-gradient(160deg,var(--paper),var(--paper-lo));box-shadow:inset 0 0 0 3px var(--paper),inset 0 0 0 4px var(--rule)}
+.cert-head{display:flex;align-items:center;gap:8px}
+.cert-shares{margin-left:auto;text-align:right;font:700 13px/1.35 var(--mono)}
+.cert-foot{display:flex;align-items:center;justify-content:space-between;margin-top:8px;gap:8px}
+.cert-foot .btn{min-height:38px;padding:6px 12px;font-size:12px}
+.lg-total{display:flex;justify-content:space-between;font:700 15px/1.6 var(--mono);border-top:2px solid var(--ink);margin-top:10px;padding-top:8px}
+
+/* ---------------- ticker card (event announce) ---------------- */
+#card{
+  position:fixed;left:50%;top:38%;z-index:50;transform:translate(-50%,-50%) scale(.7);
+  width:min(340px,88vw);opacity:0;pointer-events:none;text-align:center;padding:18px 16px;
+  transition:transform .24s cubic-bezier(.3,1.4,.5,1),opacity .2s;
+}
+#card.on{opacity:1;transform:translate(-50%,-50%) scale(1);pointer-events:auto;cursor:pointer}
+@media (prefers-reduced-motion:reduce){#card{transition:opacity .2s}}
+#cardKick{font:800 10px/1 var(--grot);letter-spacing:.3em;text-transform:uppercase;color:var(--red);margin-bottom:8px}
+#cardTitle{font-family:var(--serif-slab);font-size:24px;line-height:1.05}
+#cardBody{font:600 14px/1.5 var(--grot);color:var(--ink-soft);margin-top:8px}
+#cardBody b{color:var(--ink)}
+#cardBody .num{font-weight:700}
+
+/* toast + log */
+#toast{position:fixed;left:50%;bottom:calc(120px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);z-index:60;background:var(--ink);color:var(--paper);font:700 13px/1.3 var(--grot);padding:10px 16px;border-radius:8px;opacity:0;transition:.25s;pointer-events:none;max-width:88vw;text-align:center}
+#toast.on{opacity:1;transform:translateX(-50%)}
+#log{padding:10px 14px;max-height:180px;overflow-y:auto;display:none}
+#log.on{display:block}
+@media (min-width:920px){#log{display:block}}
+#log h3{font:800 11px/1 var(--grot);letter-spacing:.24em;text-transform:uppercase;color:var(--green);margin-bottom:8px}
+.log-line{font:400 12px/1.55 var(--mono);border-bottom:1px dotted var(--rule);padding:3px 0;color:var(--ink-soft)}
+.log-line b{color:var(--ink)}
+
+/* ---------------- win ---------------- */
+#win{position:fixed;inset:0;z-index:70;display:none;align-items:center;justify-content:center;background:rgba(10,26,18,.86);padding:18px}
+#win.on{display:flex}
+.win-card{width:min(440px,94vw);max-height:92vh;max-height:92dvh;overflow-y:auto;text-align:center;padding:26px 20px}
+.win-kick{font:800 11px/1 var(--grot);letter-spacing:.3em;color:var(--red);text-transform:uppercase}
+.win-name{font-family:var(--serif-slab);font-size:34px;margin:8px 0 2px}
+.win-sum{font:700 17px/1.4 var(--mono);color:var(--green);margin-bottom:12px}
+.win-stats{text-align:left;margin:0 auto 14px;max-width:320px}
+.win-stats .row{display:flex;justify-content:space-between;font:600 13px/1.9 var(--grot);border-bottom:1px dotted var(--rule)}
+.win-stats .row span:last-child{font-family:var(--mono);font-weight:700}
+#chart{width:100%;height:110px;margin:4px 0 14px}
+#confetti{position:fixed;inset:0;z-index:69;pointer-events:none}
+
+/* rules sheet text */
+.rules h3{font-family:var(--serif-slab);font-size:16px;margin:14px 0 4px;color:var(--green)}
+.rules p,.rules li{font:400 14px/1.6 var(--grot);color:var(--ink-soft)}
+.rules ul{padding-left:20px}
+.rules b{color:var(--ink)}
+.rules .fine{font-size:11.5px;color:var(--ink-faint);margin-top:12px;border-top:1px solid var(--rule);padding-top:8px}
+
+/* menu popover */
+#menuPop{position:fixed;top:74px;right:10px;z-index:45;display:none;flex-direction:column;min-width:210px;padding:8px}
+#menuPop.on{display:flex}
+#menuPop .btn{margin:4px 0;min-height:44px;font-size:13px}
+
+/* mobile board sizing: keep the square board from eating the viewport */
+@media (max-width:919px){
+  #boardWrap{max-width:min(94vw,540px);margin:0 auto;width:100%}
+}
+</style>
+<!-- ============================ SPLASH ============================ -->
+<div id="splash" class="scr on">
+  <div class="boxlid card-paper">
+    <div class="lid-eyebrow">The Classic Money Game</div>
+    <h1 class="lid-title">STOCK<br>MARKET<small>· 1968 ·</small></h1>
+    <svg class="lid-rosette" viewBox="0 0 150 44" role="img" aria-label="Bull and bear rosette">
+      <g fill="none" stroke="#20573f" stroke-width="2">
+        <path d="M8 22h38M104 22h38"/>
+      </g>
+      <circle cx="75" cy="22" r="19" fill="#20573f"/>
+      <circle cx="75" cy="22" r="19" fill="none" stroke="#c69b3a" stroke-width="2.5"/>
+      <text x="75" y="27.5" text-anchor="middle" font-family="Georgia,serif" font-weight="bold" font-size="15" fill="#f7efda">$</text>
+      <circle cx="46" cy="22" r="3" fill="#bf3527"/><circle cx="104" cy="22" r="3" fill="#bf3527"/>
+    </svg>
+    <p class="lid-tag">Fortunes rise and fall on the throw of the dice.</p>
+    <p class="lid-sub">2–8 investors &nbsp;·&nbsp; first to $100,000</p>
+    <div class="lid-btns">
+      <button class="btn" id="btnNew" style="min-width:230px">New Game</button>
+      <button class="btn gold" id="btnResume" style="min-width:230px;display:none">Resume Game</button>
+      <button class="btn alt small" id="btnRules0">How to Play</button>
+    </div>
+    <p class="homage">An original homage to the 1968 board-game classic. Not affiliated with the original publishers. Company names are historical references.</p>
+  </div>
+</div>
+
+<!-- ============================ SETUP ============================ -->
+<div id="setup" class="scr">
+  <div class="setup-card card-paper">
+    <h2 class="setup-h">Seat the Investors</h2>
+    <p class="setup-sub">Every investor starts with $5,000 and a salary</p>
+    <div id="seatList"></div>
+    <div style="text-align:center;margin-top:10px">
+      <button class="btn alt small" id="btnAddSeat">+ Add Investor</button>
+    </div>
+    <div class="setup-row">
+      <label for="optTarget">Win at</label>
+      <select id="optTarget">
+        <option value="100000" selected>$100,000 — the classic game</option>
+        <option value="50000">$50,000 — an evening game</option>
+        <option value="25000">$25,000 — a quick flutter</option>
+      </select>
+    </div>
+    <div class="setup-row">
+      <label for="optSpeed">Computer pace</label>
+      <select id="optSpeed">
+        <option value="normal" selected>Normal — watch their moves</option>
+        <option value="fast">Fast</option>
+        <option value="instant">Instant</option>
+      </select>
+    </div>
+    <div class="setup-actions">
+      <button class="btn alt small" id="btnBackSplash">Back</button>
+      <button class="btn" id="btnStart" style="min-width:200px">Open the Market</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ GAME ============================ -->
+<div id="game" class="scr">
+  <div id="tape" aria-hidden="true"><span id="tapeInner"></span></div>
+  <div id="topbar">
+    <div class="t">Stock Market<small>Est. 1968</small></div>
+    <div class="tools">
+      <button class="tool" id="btnSound" aria-label="Sound on or off" aria-pressed="true">&#9836;</button>
+      <button class="tool" id="btnMenu" aria-label="Menu">&#9776;</button>
+    </div>
+  </div>
+
+  <div id="main">
+    <div id="colBoard">
+      <div id="boardWrap"></div>
+    </div>
+    <div id="colSide">
+      <div id="quote" class="card-paper">
+        <div class="q-head">
+          <span class="q-title">Quotation Board</span>
+          <span class="q-sub num">par $100</span>
+        </div>
+        <div class="q-grid" id="qGrid"></div>
+      </div>
+      <div id="log" class="card-paper">
+        <h3>Ticker Wire</h3>
+        <div id="logLines"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="dock">
+    <div class="dock-in">
+      <div id="players"></div>
+      <div class="dock-row">
+        <p id="hint"></p>
+        <button class="dice-btn" id="btnRoll" aria-label="Roll the dice">
+          <span class="die" id="die1">?</span><span class="die" id="die2">?</span>
+          <span id="rollLbl">ROLL</span>
+        </button>
+      </div>
+      <div class="dock-btns">
+        <button class="btn alt" id="btnLedger">Ledger</button>
+        <button class="btn red" id="btnEndTurn" disabled>End Turn</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- menu popover -->
+<div id="menuPop" class="card-paper">
+  <button class="btn alt small" id="mRules">How to Play</button>
+  <button class="btn alt small" id="mLog">Ticker Wire</button>
+  <button class="btn alt small" id="mQuit">Abandon Game</button>
+</div>
+
+<!-- generic bottom sheet -->
+<div id="dim"></div>
+<div id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+  <div class="sheet-grip"></div>
+  <div class="sheet-head">
+    <h2 class="sheet-title" id="sheetTitle"></h2>
+    <button class="sheet-x" id="sheetX" aria-label="Close">&times;</button>
+  </div>
+  <div class="sheet-body" id="sheetBody"></div>
+</div>
+
+<!-- ticker card -->
+<div id="card" class="card-paper" role="status">
+  <div id="cardKick"></div>
+  <div id="cardTitle"></div>
+  <div id="cardBody"></div>
+</div>
+
+<div id="toast" role="status"></div>
+
+<!-- win -->
+<canvas id="confetti"></canvas>
+<div id="win">
+  <div class="win-card card-paper">
+    <div class="win-kick">The Market Has Closed</div>
+    <div class="win-name" id="winName"></div>
+    <div class="win-sum" id="winSum"></div>
+    <canvas id="chart"></canvas>
+    <div class="win-stats" id="winStats"></div>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+      <button class="btn" id="btnAgain">Play Again</button>
+      <button class="btn alt" id="btnToSplash">Main Menu</button>
+    </div>
+  </div>
+</div>
+<script>
+'use strict';
+/* ============================================================
+   ENGINE — pure game logic, no DOM. The UI (below) and the
+   headless simulator (window.__sim) both drive this.
+
+   Rule provenance: the mechanics skeleton (8 stocks, two dice,
+   roll-and-move, slider quotation board, dividends, meetings,
+   broker fees, buy windows, first to $100,000) follows the 1968
+   Western Publishing game as documented by collectors. Numeric
+   constants marked [R] are reconstructions where the box-back
+   text is not publicly archived — every one lives in CFG so it
+   can be trued up against a physical copy.
+   ============================================================ */
+
+const CFG = {
+  START_CASH: 5000,     // [R] period-standard opening stake
+  SALARY:     1000,     //     pay day, each time around the board
+  PAR:         100,     //     par value, all issues
+  PRICE_MAX:   200,     // [R] top of the quotation board — 2-for-1 split
+  PRICE_MIN:     0,     // [R] bottom — bankruptcy and reorganization
+  TICK:          5,     //     price granularity (die-driven moves)
+  DIV:           5,     // [R] dividend per share, paid at or above par
+  MEET:         10,     // [R] stockholders' meeting, per share of one holding
+  ANNUAL:        5,     // [R] annual meeting corner, per eligible share, all players
+  FEE:         200,     // [R] broker's fee
+  MKT:          10,     //     market advances / declines, all issues
+  WIN:      100000,     //     the classic goal
+  MAX_TURNS:  4000,     //     sim safety cap
+};
+
+const STOCKS = [
+  {code:'WLW', name:'F.W. Woolworth',      sector:'Five & Dime Stores', color:'#a93226'},
+  {code:'ALC', name:'Alcoa Aluminum',      sector:'Metals & Mining',    color:'#5d7b93'},
+  {code:'GMI', name:'General Mills',       sector:'Foods & Milling',    color:'#2e5f8f'},
+  {code:'MAY', name:'Maytag',              sector:'Home Appliances',    color:'#3d7a69'},
+  {code:'AMO', name:'American Motors',     sector:'Automobiles',        color:'#bf6b2a'},
+  {code:'ISH', name:'International Shoe',  sector:'Footwear',           color:'#77502f'},
+  {code:'WPC', name:'Western Publishing',  sector:'Printing & Books',   color:'#49682f'},
+  {code:'JIC', name:'J.I. Case',           sector:'Farm Machinery',     color:'#9c7c2c'},
+];
+
+const JOBS = [
+  {t:'Physician',       f:'House calls at all hours'},
+  {t:'Attorney',        f:'Reads the fine print twice'},
+  {t:'Airline Pilot',   f:'Jet-set and gets paid for it'},
+  {t:'Civil Engineer',  f:'Builds the interstate'},
+  {t:'Professor',       f:'Tenure and tweed'},
+  {t:'Sales Executive', f:'Always closing'},
+  {t:'Bank Teller',     f:'Counts other people’s money'},
+  {t:'Press Reporter',  f:'Gets the story by deadline'},
+];
+
+const PAWN_COLORS = ['#c0392b','#2e5f8f','#c69b3a','#3d7a69','#8e5aa8','#bf6b2a','#37818f','#5b4a3a'];
+
+/* Board: 40 spaces, movement 0→39 then around again.
+   Corners at 0, 10, 20, 30. Each company has exactly two BUY
+   windows and one TICKER REPORT space; net printed drift is zero
+   (the die-parity moves carry a mild built-in bull lean). */
+const BOARD = (() => {
+  const B = i => ({t:'buy',  s:i});
+  const T = i => ({t:'ticker', s:i});
+  return [
+    {t:'payday'},                                   // 0
+    B(0), T(2), B(1), {t:'div'}, B(2),              // 1-5
+    {t:'adv'}, B(3), T(4), {t:'meet'},              // 6-9
+    {t:'annual'},                                   // 10
+    B(4), T(0), B(5), {t:'fee'}, B(6),              // 11-15
+    {t:'div'}, B(7), T(3), {t:'dec'},               // 16-19
+    {t:'exchange'},                                 // 20
+    B(5), T(1), B(0), {t:'div'}, B(4),              // 21-25
+    {t:'adv'}, B(1), T(5), {t:'meet'},              // 26-29
+    {t:'flurry'},                                   // 30
+    B(7), T(6), B(3), {t:'fee'}, B(6),              // 31-35
+    {t:'div'}, B(2), T(7), {t:'dec'},               // 36-39
+  ];
+})();
+
+/* mulberry32 — tiny seedable RNG so saves and sims replay honestly */
+function makeRng(seed){ let a = seed >>> 0;
+  return () => { a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+
+class Game {
+  constructor(setup){
+    this.st = {
+      v: 1,
+      seed: setup.seed,
+      rngN: 0,
+      target: setup.target || CFG.WIN,
+      speed: setup.speed || 'normal',
+      prices: STOCKS.map(() => CFG.PAR),
+      players: setup.players.map((p, i) => ({
+        name: p.name, ai: !!p.ai, color: p.color || PAWN_COLORS[i],
+        persona: p.ai ? (i % 3) : -1,          // 0 shrewd, 1 bold, 2 cautious
+        job: setup.jobs ? setup.jobs[i] : i % JOBS.length,
+        cash: CFG.START_CASH, pos: 0, laps: 0,
+        shares: STOCKS.map(() => 0),
+        stats: {earned:0, spentFees:0, divs:0, splits:0, busts:0, bestTrade:0},
+        nwHist: [CFG.START_CASH],
+      })),
+      turn: 0, phase: 'idle',       // idle → rolled → done
+      pending: null,                 // choice awaiting input {kind, space}
+      dice: [0,0], turnCount: 0,
+      splits: 0, busts: 0,
+      log: [], over: false, winner: -1,
+    };
+    this._rng = makeRng(this.st.seed);
+    for (let i = 0; i < this.st.rngN; i++) this._rng();
+  }
+
+  /* restore from a saved plain-state object */
+  static fromSave(s){
+    const g = Object.create(Game.prototype);
+    g.st = s;
+    g._rng = makeRng(s.seed);
+    for (let i = 0; i < s.rngN; i++) g._rng();
+    return g;
+  }
+
+  rand(){ this.st.rngN++; return this._rng(); }
+  die(){ return 1 + Math.floor(this.rand() * 6); }
+
+  cur(){ return this.st.players[this.st.turn]; }
+  price(i){ return this.st.prices[i]; }
+  netWorth(p){ return p.cash + p.shares.reduce((a, n, i) => a + n * this.st.prices[i], 0); }
+
+  addLog(msg){ this.st.log.push(msg); if (this.st.log.length > 120) this.st.log.shift(); }
+
+  /* ---- price movement with split / bankruptcy handling ----
+     Returns a list of side-events for the UI to announce. */
+  movePrice(i, delta){
+    const ev = [];
+    const st = this.st;
+    let p = st.prices[i] + delta;
+    if (p >= CFG.PRICE_MAX){
+      // 2-for-1 split: certificate counts double, price returns to par
+      st.prices[i] = CFG.PAR;
+      st.splits++;
+      st.players.forEach(pl => { if (pl.shares[i] > 0){ pl.shares[i] *= 2; pl.stats.splits++; } });
+      ev.push({kind:'split', s:i});
+      this.addLog(`${STOCKS[i].code} splits 2-for-1 at $${CFG.PRICE_MAX} — back to $${CFG.PAR}`);
+    } else if (p <= CFG.PRICE_MIN){
+      // bankrupt: certificates void, company reorganized at par
+      st.prices[i] = CFG.PAR;
+      st.busts++;
+      st.players.forEach(pl => { if (pl.shares[i] > 0){ pl.shares[i] = 0; pl.stats.busts++; } });
+      ev.push({kind:'bust', s:i});
+      this.addLog(`${STOCKS[i].code} goes bankrupt — shares void, reorganized at $${CFG.PAR}`);
+    } else {
+      st.prices[i] = p;
+      ev.push({kind:'move', s:i, d:delta});
+    }
+    return ev;
+  }
+
+  /* ---- turn flow ---- */
+  roll(){
+    const st = this.st;
+    if (st.phase !== 'idle' || st.over) return null;
+    const d1 = this.die(), d2 = this.die();
+    st.dice = [d1, d2];
+    const from = this.cur().pos;
+    const steps = d1 + d2;
+    const to = (from + steps) % 40;
+    const passedPayday = from + steps >= 40;
+    st.phase = 'rolled';
+    return {d1, d2, from, to, steps, passedPayday};
+  }
+
+  /* apply landing; returns {space, events[], needs} where needs is
+     null or a choice the UI/AI must answer before endTurn */
+  land(moveInfo){
+    const st = this.st, p = this.cur();
+    p.pos = moveInfo.to;
+    const events = [];
+    if (moveInfo.passedPayday){
+      p.laps++; p.cash += CFG.SALARY; p.stats.earned += CFG.SALARY;
+      events.push({kind:'salary', amt:CFG.SALARY});
+      this.addLog(`${p.name} passes PAY DAY, collects $${CFG.SALARY}`);
+    }
+    const sp = BOARD[p.pos];
+    let needs = null;
+    switch (sp.t){
+      case 'payday': break; // salary already paid by the pass check above
+      case 'adv':
+        this.addLog('Market advances — every issue up $' + CFG.MKT);
+        STOCKS.forEach((_, i) => events.push(...this.movePrice(i, CFG.MKT)));
+        events.push({kind:'market', d:CFG.MKT});
+        break;
+      case 'dec':
+        this.addLog('Market declines — every issue down $' + CFG.MKT);
+        STOCKS.forEach((_, i) => events.push(...this.movePrice(i, -CFG.MKT)));
+        events.push({kind:'market', d:-CFG.MKT});
+        break;
+      case 'flurry': {
+        const d = this.die();
+        const dir = d % 2 === 0 ? 1 : -1;
+        const amt = dir * d * CFG.TICK;
+        this.addLog(`Bull &amp; Bear corner: die shows ${d} — market ${dir>0?'up':'down'} $${Math.abs(amt)}`);
+        STOCKS.forEach((_, i) => events.push(...this.movePrice(i, amt)));
+        events.push({kind:'flurry', die:d, d:amt});
+        break;
+      }
+      case 'ticker': {
+        const d = this.die();
+        const dir = d % 2 === 0 ? 1 : -1;
+        const amt = dir * d * CFG.TICK;
+        this.addLog(`Ticker report: ${STOCKS[sp.s].code} die shows ${d} — ${dir>0?'up':'down'} $${Math.abs(amt)}`);
+        events.push({kind:'tickerRoll', s:sp.s, die:d, d:amt});
+        events.push(...this.movePrice(sp.s, amt));
+        break;
+      }
+      case 'div': {
+        let sum = 0;
+        STOCKS.forEach((_, i) => {
+          if (p.shares[i] > 0 && this.st.prices[i] >= CFG.PAR) sum += p.shares[i] * CFG.DIV;
+        });
+        if (sum > 0){ p.cash += sum; p.stats.divs += sum; }
+        events.push({kind:'dividend', amt:sum});
+        this.addLog(sum > 0 ? `${p.name} collects $${sum} in dividends` : `${p.name} lands on Dividends — nothing at or above par`);
+        break;
+      }
+      case 'fee': {
+        const owed = CFG.FEE;
+        const paid = this.forcePay(p, owed, events);
+        events.push({kind:'fee', amt:paid});
+        p.stats.spentFees += paid;
+        this.addLog(`${p.name} pays the broker $${paid}`);
+        break;
+      }
+      case 'annual': {
+        const detail = [];
+        this.st.players.forEach(pl => {
+          let sum = 0;
+          STOCKS.forEach((_, i) => {
+            if (pl.shares[i] > 0 && this.st.prices[i] >= CFG.PAR) sum += pl.shares[i] * CFG.ANNUAL;
+          });
+          if (pl === p) sum *= 2;               // the host attends in person
+          if (sum > 0){ pl.cash += sum; pl.stats.divs += sum; detail.push({name:pl.name, amt:sum}); }
+        });
+        events.push({kind:'annual', detail});
+        this.addLog(`Annual meeting — payouts to ${detail.length || 'no'} shareholder${detail.length===1?'':'s'}`);
+        break;
+      }
+      case 'meet': {
+        if (STOCKS.some((_, i) => p.shares[i] > 0)) needs = {kind:'meet'};
+        else this.addLog(`${p.name} attends a stockholders' meeting but holds no shares`);
+        break;
+      }
+      case 'buy':
+        needs = {kind:'buy', s:sp.s};
+        break;
+      case 'exchange':
+        needs = {kind:'exchange'};
+        break;
+    }
+    st.pending = needs;
+    if (!needs) st.phase = 'done';
+    return {space:sp, events, needs};
+  }
+
+  /* pay what is owed, force-selling holdings if cash runs short */
+  forcePay(p, owed, events){
+    if (p.cash < owed){
+      // sell from the largest holding by value until covered
+      const order = STOCKS.map((_, i) => i)
+        .filter(i => p.shares[i] > 0)
+        .sort((a, b) => p.shares[b] * this.st.prices[b] - p.shares[a] * this.st.prices[a]);
+      for (const i of order){
+        while (p.cash < owed && p.shares[i] > 0){
+          const q = Math.min(p.shares[i], Math.max(1, Math.ceil((owed - p.cash) / Math.max(1, this.st.prices[i]))));
+          p.shares[i] -= q; p.cash += q * this.st.prices[i];
+          events.push({kind:'forcedSale', s:i, q});
+          this.addLog(`${p.name} is sold out of ${q} ${STOCKS[i].code} to cover the broker`);
+        }
+        if (p.cash >= owed) break;
+      }
+    }
+    const paid = Math.min(p.cash, owed);
+    p.cash -= paid;
+    return paid;
+  }
+
+  /* ---- player actions ---- */
+  buy(s, qty){
+    const p = this.cur(), price = this.st.prices[s];
+    if (qty < 1 || price <= 0) return false;
+    const cost = qty * price;
+    if (cost > p.cash) return false;
+    p.cash -= cost; p.shares[s] += qty;
+    if (cost > p.stats.bestTrade) p.stats.bestTrade = cost;
+    this.addLog(`${p.name} buys ${qty} ${STOCKS[s].code} at $${price} — $${cost}`);
+    return true;
+  }
+  sell(s, qty){
+    const p = this.cur(), price = this.st.prices[s];
+    if (qty < 1 || p.shares[s] < qty) return false;
+    p.shares[s] -= qty; p.cash += qty * price;
+    this.addLog(`${p.name} sells ${qty} ${STOCKS[s].code} at $${price} — $${qty * price}`);
+    return true;
+  }
+  chooseMeeting(s){
+    const p = this.cur();
+    if (p.shares[s] < 1) return 0;
+    const amt = p.shares[s] * CFG.MEET;
+    p.cash += amt; p.stats.divs += amt;
+    this.addLog(`${p.name}'s meeting with ${STOCKS[s].code} pays $${amt}`);
+    return amt;
+  }
+  resolvePending(){ this.st.pending = null; this.st.phase = 'done'; }
+
+  endTurn(){
+    const st = this.st;
+    st.pending = null;
+    st.turnCount++;
+    // record net worth history + win check for everyone
+    st.players.forEach(pl => pl.nwHist.push(this.netWorth(pl)));
+    let best = -1, bestNW = -1;
+    st.players.forEach((pl, i) => { const nw = this.netWorth(pl); if (nw > bestNW){ bestNW = nw; best = i; } });
+    if (bestNW >= st.target){
+      st.over = true; st.winner = best;
+      this.addLog(`${st.players[best].name} reaches $${bestNW.toLocaleString('en-US')} — the market closes!`);
+      return true;
+    }
+    st.turn = (st.turn + 1) % st.players.length;
+    st.phase = 'idle';
+    return false;
+  }
+}
+
+/* ============================================================
+   AI — three light personas. 0 shrewd, 1 bold, 2 cautious.
+   ============================================================ */
+const AI = {
+  reserve(p){ return [600, 300, 1200][p.persona] || 600; },
+  buyCeil(p){ return [115, 130, 100][p.persona] || 115; },
+
+  preTurnSells(g){
+    const p = g.cur();
+    STOCKS.forEach((_, i) => {
+      const pr = g.price(i), n = p.shares[i];
+      if (n < 1) return;
+      if (pr <= 40){ g.sell(i, n); }                                 // bail before bankruptcy
+      else if (p.persona === 2 && pr >= 160){ g.sell(i, Math.ceil(n / 2)); } // cautious banks gains
+    });
+  },
+
+  wantQty(g, s){
+    const p = g.cur(), pr = g.price(s);
+    if (pr > this.buyCeil(p) || pr < 30) return 0;
+    const budget = p.cash - this.reserve(p);
+    if (budget < pr) return 0;
+    return Math.floor(budget / pr);
+  },
+
+  answer(g, needs){
+    const p = g.cur();
+    if (needs.kind === 'buy'){
+      const q = this.wantQty(g, needs.s);
+      if (q > 0) g.buy(needs.s, q);
+    } else if (needs.kind === 'exchange'){
+      // buy the most attractive issue: cheap but clear of the bust zone
+      let best = -1, bestScore = -1;
+      STOCKS.forEach((_, i) => {
+        const pr = g.price(i);
+        if (pr < 45 || pr > this.buyCeil(p)) return;
+        const score = (this.buyCeil(p) - pr) + (pr >= CFG.PAR ? 6 : 0); // slight taste for dividend payers
+        if (score > bestScore){ bestScore = score; best = i; }
+      });
+      if (best >= 0){ const q = this.wantQty(g, best); if (q > 0) g.buy(best, q); }
+    } else if (needs.kind === 'meet'){
+      let best = 0, bestN = -1;
+      STOCKS.forEach((_, i) => { if (p.shares[i] > bestN){ bestN = p.shares[i]; best = i; } });
+      g.chooseMeeting(best);
+    }
+    g.resolvePending();
+  },
+};
+
+/* ============================================================
+   Headless simulator: window.__sim(games, players) → stats.
+   Drives the same engine with AI seats only, no timing, no DOM.
+   ============================================================ */
+window.__sim = function(nGames = 10, nPlayers = 3, target = CFG.WIN, seed0 = 12345){
+  const out = {games: [], capped: 0};
+  for (let gi = 0; gi < nGames; gi++){
+    const g = new Game({
+      seed: seed0 + gi * 7919,
+      target,
+      players: Array.from({length: nPlayers}, (_, i) => ({name: 'AI' + (i + 1), ai: true})),
+    });
+    let guard = CFG.MAX_TURNS;
+    while (!g.st.over && guard-- > 0){
+      AI.preTurnSells(g);
+      const mv = g.roll();
+      const res = g.land(mv);
+      if (res.needs) AI.answer(g, res.needs);
+      g.endTurn();
+    }
+    if (!g.st.over) out.capped++;
+    const w = g.st.winner;
+    out.games.push({
+      turns: g.st.turnCount,
+      lapsOfWinner: w >= 0 ? g.st.players[w].laps : -1,
+      winnerNW: w >= 0 ? g.netWorth(g.st.players[w]) : -1,
+      splits: g.st.splits, busts: g.st.busts,
+      prices: g.st.prices.slice(),
+    });
+  }
+  const done = out.games.filter(x => x.winnerNW > 0);
+  const med = a => { const s = a.slice().sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : -1; };
+  out.medianTurns = med(done.map(x => x.turns));
+  out.medianLaps = med(done.map(x => x.lapsOfWinner));
+  out.medianSplits = med(done.map(x => x.splits));
+  out.medianBusts = med(done.map(x => x.busts));
+  return out;
+};
+</script>
+<script>
+'use strict';
+/* ============================================================
+   UI LAYER — renders engine state, animates turns, hosts sheets.
+   ============================================================ */
+const $ = id => document.getElementById(id);
+const fmt = n => '$' + Math.round(n).toLocaleString('en-US');
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const SAVE_KEY = 'sm68';
+
+const V = {
+  g: null,            // Game instance
+  seats: [{name:'Investor 1', ai:false}, {name:'The Computer', ai:true}],
+  target: CFG.WIN, speed: 'normal',
+  busy: false,        // an animation or AI turn is running
+  sound: true,
+  cells: [],          // board geometry
+  card: {timer:0, resolve:null},
+};
+
+/* ---------------- storage (never let a blocked store crash the game) --- */
+function store(k, v){ try{ if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); }catch(e){} }
+function read(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function saveGame(){
+  if (!V.g || V.g.st.over) return;
+  store(SAVE_KEY, JSON.stringify({st: V.g.st, seats: V.seats, target: V.target, speed: V.speed}));
+}
+
+/* ================= AUDIO — everything synthesized live ================= */
+const Snd = (() => {
+  let ctx = null;
+  const ac = () => {
+    if (!ctx){ const AC = window.AudioContext || window.webkitAudioContext; if (AC) ctx = new AC(); }
+    if (ctx && ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  };
+  function tone(freq, dur, type = 'sine', gain = .12, when = 0, slide = 0){
+    const c = ac(); if (!c || !V.sound) return;
+    const t = c.currentTime + when;
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, freq + slide), t + dur);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(gain, t + .012);
+    g.gain.exponentialRampToValueAtTime(.0008, t + dur);
+    o.connect(g).connect(c.destination);
+    o.start(t); o.stop(t + dur + .05);
+  }
+  function thud(dur = .09, f = 900, gain = .18, when = 0){
+    const c = ac(); if (!c || !V.sound) return;
+    const t = c.currentTime + when;
+    const n = c.createBufferSource(), buf = c.createBuffer(1, c.sampleRate * dur, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+    n.buffer = buf;
+    const fl = c.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = f;
+    const g = c.createGain(); g.gain.value = gain;
+    n.connect(fl).connect(g).connect(c.destination); n.start(t);
+  }
+  return {
+    unlock(){ ac(); },
+    dice(){ thud(.05, 2200, .14); thud(.05, 1800, .12, .07); thud(.06, 1500, .1, .15); },
+    hop(){ tone(560, .05, 'triangle', .06); },
+    tick(){ tone(1250, .03, 'square', .04); },
+    cash(){ tone(880, .12, 'triangle', .1); tone(1318, .18, 'triangle', .09, .06); },
+    pay(){ thud(.05, 3000, .08); tone(988, .1, 'triangle', .09, .04); tone(1480, .16, 'triangle', .08, .1); },
+    down(){ tone(220, .25, 'sawtooth', .07, 0, -80); },
+    fee(){ tone(330, .12, 'square', .06); tone(262, .18, 'square', .06, .1); },
+    split(){ [523, 659, 784, 1047].forEach((f, i) => tone(f, .22, 'triangle', .1, i * .09)); },
+    bust(){ [392, 311, 247, 175].forEach((f, i) => tone(f, .3, 'sawtooth', .08, i * .14, -30)); },
+    gavel(){ thud(.08, 700, .2); thud(.08, 700, .16, .16); },
+    win(){ [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => tone(f, .3, 'triangle', .11, i * .13)); },
+  };
+})();
+
+/* ================= BOARD (SVG, drawn once) ================= */
+const BS = 1000, CO = 132, EW = (BS - 2 * CO) / 9;
+function cellRect(i){
+  if (i === 0)  return {x: BS - CO, y: BS - CO, w: CO, h: CO};
+  if (i < 10)   return {x: BS - CO - EW * i, y: BS - CO, w: EW, h: CO};
+  if (i === 10) return {x: 0, y: BS - CO, w: CO, h: CO};
+  if (i < 20)   return {x: 0, y: BS - CO - EW * (i - 10), w: CO, h: EW};
+  if (i === 20) return {x: 0, y: 0, w: CO, h: CO};
+  if (i < 30)   return {x: CO + EW * (i - 21), y: 0, w: EW, h: CO};
+  if (i === 30) return {x: BS - CO, y: 0, w: CO, h: CO};
+  return {x: BS - CO, y: CO + EW * (i - 31), w: CO, h: EW};
+}
+const SIDE = i => i === 0 || i === 10 || i === 20 || i === 30 ? 'corner' : i < 10 ? 'bottom' : i < 20 ? 'left' : i < 30 ? 'top' : 'right';
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+function spaceLook(sp){
+  switch (sp.t){
+    case 'buy':    return {band: STOCKS[sp.s].color, l1: STOCKS[sp.s].code, l2: 'BUY'};
+    case 'ticker': return {band: '#3b3f52', l1: STOCKS[sp.s].code, l2: 'TICKER'};
+    case 'div':    return {band: '#20573f', l1: 'DIV', l2: 'COLLECT'};
+    case 'adv':    return {band: '#1e6b43', l1: '▲ $10', l2: 'MARKET'};
+    case 'dec':    return {band: '#a02c1d', l1: '▼ $10', l2: 'MARKET'};
+    case 'fee':    return {band: '#6b5327', l1: 'FEE', l2: 'BROKER'};
+    case 'meet':   return {band: '#7a4a86', l1: 'MEET', l2: 'HOLDERS'};
+    default:       return {band: '#20573f', l1: '', l2: ''};
+  }
+}
+function describeSpace(i){
+  const sp = BOARD[i];
+  switch (sp.t){
+    case 'payday':  return ['Pay Day', `Land here or pass it and collect your ${fmt(CFG.SALARY)} salary.`];
+    case 'annual':  return ['Annual Meeting', `Every investor collects ${fmt(CFG.ANNUAL)} per share on holdings at or above par — the player who lands here collects double.`];
+    case 'exchange':return ['The Exchange', 'Open outcry — buy shares of any company at today’s prices.'];
+    case 'flurry':  return ['Bull & Bear', 'One die decides the whole market: even, every issue rises the roll × $5; odd, every issue falls.'];
+    case 'buy':     return [`Buying Window — ${STOCKS[sp.s].name}`, 'You may buy any number of shares at today’s price.'];
+    case 'ticker':  return [`Ticker Report — ${STOCKS[sp.s].name}`, 'One die moves this stock: even up, odd down, the roll × $5.'];
+    case 'div':     return ['Dividends', `Collect ${fmt(CFG.DIV)} per share on each of your holdings trading at or above par ($${CFG.PAR}).`];
+    case 'adv':     return ['Market Advances', `Every issue on the board rises $${CFG.MKT}.`];
+    case 'dec':     return ['Market Declines', `Every issue on the board falls $${CFG.MKT}.`];
+    case 'fee':     return ['Broker’s Fee', `Pay your broker ${fmt(CFG.FEE)}.`];
+    case 'meet':    return ['Stockholders’ Meeting', `Attend the meeting of one company you own and collect ${fmt(CFG.MEET)} per share.`];
+  }
+  return ['', ''];
+}
+
+function buildBoard(){
+  const P = [];
+  P.push(`<svg viewBox="0 0 ${BS} ${BS}" role="img" aria-label="Game board">`);
+  P.push(`<rect x="0" y="0" width="${BS}" height="${BS}" rx="14" fill="#153c2e"/>`);
+  P.push(`<rect x="4" y="4" width="${BS-8}" height="${BS-8}" rx="11" fill="none" stroke="#c69b3a" stroke-width="3"/>`);
+  P.push(`<rect x="${CO}" y="${CO}" width="${BS-2*CO}" height="${BS-2*CO}" fill="#e9dfbe"/>`);
+  // center medallion
+  const cx = BS/2, cy = BS/2;
+  P.push(`<g text-anchor="middle">`);
+  P.push(`<circle cx="${cx}" cy="${cy}" r="170" fill="#f2e9cd" stroke="#251f17" stroke-width="3"/>`);
+  P.push(`<circle cx="${cx}" cy="${cy}" r="158" fill="none" stroke="#c69b3a" stroke-width="2"/>`);
+  P.push(`<circle cx="${cx}" cy="${cy}" r="152" fill="none" stroke="#20573f" stroke-width="1"/>`);
+  P.push(`<text class="ctr-s" x="${cx}" y="${cy-96}">THE CLASSIC MONEY GAME</text>`);
+  P.push(`<text class="ctr-t" x="${cx}" y="${cy-30}" font-size="52">STOCK</text>`);
+  P.push(`<text class="ctr-t" x="${cx}" y="${cy+26}" font-size="52">MARKET</text>`);
+  P.push(`<text class="ctr-s" x="${cx}" y="${cy+62}" fill="#bf3527">· 1968 ·</text>`);
+  P.push(`<text class="ctr-m" x="${cx}" y="${cy+92}">Fortunes rise and fall</text>`);
+  P.push(`<text class="ctr-m" x="${cx}" y="${cy+108}">on the throw of the dice</text>`);
+  P.push(`</g>`);
+
+  for (let i = 0; i < 40; i++){
+    const r = cellRect(i); V.cells[i] = {...r, cx: r.x + r.w/2, cy: r.y + r.h/2};
+    const sp = BOARD[i], side = SIDE(i);
+    P.push(`<g>`);
+    P.push(`<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="#efe4c4" stroke="#251f17" stroke-width="2"/>`);
+    if (side === 'corner'){
+      const cLook = {payday:'#c69b3a', annual:'#20573f', exchange:'#bf3527', flurry:'#3b3f52'}[sp.t];
+      const cTxt  = {payday:['PAY','DAY'], annual:['ANNUAL','MEETING'], exchange:['THE','EXCHANGE'], flurry:['BULL &','BEAR']}[sp.t];
+      const light = sp.t === 'payday';
+      P.push(`<rect x="${r.x+5}" y="${r.y+5}" width="${r.w-10}" height="${r.h-10}" fill="${cLook}" stroke="#251f17" stroke-width="1.5"/>`);
+      P.push(`<text x="${r.x+r.w/2}" y="${r.y+r.h/2-8}" text-anchor="middle" class="sp-big" fill="${light?'#251f17':'#f7efda'}" style="fill:${light?'#251f17':'#f7efda'};font-size:19px">${cTxt[0]}</text>`);
+      P.push(`<text x="${r.x+r.w/2}" y="${r.y+r.h/2+16}" text-anchor="middle" class="sp-big" style="fill:${light?'#251f17':'#f7efda'};font-size:19px">${cTxt[1]}</text>`);
+      const gx = r.x + r.w/2, gy = r.y + r.h/2 + 38;
+      if (sp.t === 'flurry'){
+        // a drawn die (5 pips) — text die glyphs are missing in many fonts
+        P.push(`<g><rect x="${gx-12}" y="${gy-6}" width="24" height="24" rx="5" fill="#f7efda" stroke="#251f17" stroke-width="1.6"/>` +
+          [[-6,-0.5],[6,-0.5],[0,5.5],[-6,11.5],[6,11.5]].map(p => `<circle cx="${gx+p[0]}" cy="${gy+p[1]+.5}" r="2.2" fill="#251f17"/>`).join('') + `</g>`);
+      } else if (sp.t === 'annual'){
+        // a drawn balance scale
+        P.push(`<g stroke="#e3bd62" stroke-width="2" fill="none">` +
+          `<line x1="${gx}" y1="${gy-4}" x2="${gx}" y2="${gy+16}"/>` +
+          `<line x1="${gx-16}" y1="${gy}" x2="${gx+16}" y2="${gy}"/>` +
+          `<path d="M ${gx-16} ${gy} l -5 10 a 6.5 6.5 0 0 0 10 0 z"/>` +
+          `<path d="M ${gx+16} ${gy} l -5 10 a 6.5 6.5 0 0 0 10 0 z"/>` +
+          `<line x1="${gx-8}" y1="${gy+16}" x2="${gx+8}" y2="${gy+16}"/></g>`);
+      } else {
+        const glyph = sp.t === 'payday' ? '$' : '⇄';
+        P.push(`<text x="${gx}" y="${gy+10}" text-anchor="middle" style="font:800 22px Georgia,serif;fill:${light?'#251f17':'#e3bd62'}">${glyph}</text>`);
+      }
+    } else {
+      const lk = spaceLook(sp);
+      // color band on the inner edge (toward the center of the board)
+      const bw = 24;
+      let bx = r.x, by = r.y, bwid = r.w, bhei = bw;
+      if (side === 'bottom'){ by = r.y; bhei = bw; }
+      if (side === 'top'){ by = r.y + r.h - bw; bhei = bw; }
+      if (side === 'left'){ bx = r.x + r.w - bw; bwid = bw; bhei = r.h; }
+      if (side === 'right'){ bx = r.x; bwid = bw; bhei = r.h; }
+      P.push(`<rect x="${bx}" y="${by}" width="${bwid}" height="${bhei}" fill="${lk.band}" stroke="#251f17" stroke-width="1.2"/>`);
+      // stacked horizontal labels centered in the paper area
+      const px = side === 'left' ? r.x + (r.w - bw)/2 : side === 'right' ? r.x + bw + (r.w - bw)/2 : r.x + r.w/2;
+      const pyMid = side === 'bottom' ? r.y + bw + (r.h - bw)/2 : side === 'top' ? r.y + (r.h - bw)/2 : r.y + r.h/2;
+      P.push(`<text x="${px}" y="${pyMid-2}" text-anchor="middle" class="sp-label" style="font-size:${sp.t==='buy'||sp.t==='ticker'?13:11}px">${lk.l1}</text>`);
+      P.push(`<text x="${px}" y="${pyMid+13}" text-anchor="middle" class="sp-sub" style="font-size:8.5px">${lk.l2}</text>`);
+    }
+    P.push(`<rect class="sp-hit" data-i="${i}" x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="transparent"/>`);
+    P.push(`</g>`);
+  }
+  P.push(`<g id="pawnLayer"></g>`);
+  P.push(`</svg>`);
+  $('boardWrap').innerHTML = P.join('');
+  $('boardWrap').querySelectorAll('.sp-hit').forEach(el => {
+    el.addEventListener('click', () => {
+      const [t, b] = describeSpace(+el.dataset.i);
+      toast(`${t} — ${b}`, 3200);
+    });
+  });
+}
+
+const FAN = [[0,0],[16,-10],[-16,-10],[16,12],[-16,12],[0,-20],[0,22],[30,0]];
+function pawnXY(pIdx){
+  const g = V.g; const pos = g.st.players[pIdx].pos;
+  const here = g.st.players.map((p, i) => p.pos === pos ? i : -1).filter(i => i >= 0);
+  const slot = here.indexOf(pIdx);
+  const c = V.cells[pos];
+  const f = FAN[slot % FAN.length];
+  return [c.cx + f[0], c.cy + f[1]];
+}
+function renderPawns(){
+  const layer = document.getElementById('pawnLayer');
+  if (!layer || !V.g) return;
+  if (!layer.childElementCount){
+    layer.innerHTML = V.g.st.players.map((p, i) =>
+      `<g class="pawn" id="pawn${i}"><circle r="14" fill="${p.color}" stroke="#251f17" stroke-width="2.5"/>` +
+      `<text y="4.5" text-anchor="middle" style="font:800 12px Archivo,sans-serif;fill:#f7efda">${esc(p.name.trim().charAt(0).toUpperCase() || '?')}</text></g>`).join('');
+  }
+  V.g.st.players.forEach((p, i) => {
+    const [x, y] = pawnXY(i);
+    const el = document.getElementById('pawn' + i);
+    if (el) el.setAttribute('transform', `translate(${x},${y})`);
+  });
+}
+
+/* ================= QUOTATION BOARD ================= */
+let lastPrices = null;
+function buildQuote(){
+  $('qGrid').innerHTML = STOCKS.map((s, i) =>
+    `<div class="q-col" id="qc${i}">
+      <span class="q-tick" style="background:${s.color}">${s.code}</span>
+      <div class="q-rail"><div class="q-par"></div><div class="q-slider" id="qs${i}"></div></div>
+      <span class="q-price num" id="qp${i}"></span>
+      <span class="q-delta num" id="qd${i}"></span>
+    </div>`).join('');
+  lastPrices = null;
+}
+function renderQuote(){
+  if (!V.g) return;
+  const RAIL = 92, SL = 12;
+  V.g.st.prices.forEach((p, i) => {
+    const top = (1 - p / CFG.PRICE_MAX) * (RAIL - SL);
+    $('qs' + i).style.top = top.toFixed(1) + 'px';
+    $('qp' + i).textContent = '$' + p;
+    const d = lastPrices ? p - lastPrices[i] : 0;
+    const de = $('qd' + i);
+    if (d){ de.textContent = (d > 0 ? '▲' : '▼') + Math.abs(d); de.className = 'q-delta num ' + (d > 0 ? 'up' : 'dn'); }
+    else { de.textContent = ' '; de.className = 'q-delta num'; }
+  });
+  lastPrices = V.g.st.prices.slice();
+}
+
+/* ================= DOCK / TAPE / LOG ================= */
+function renderPlayers(){
+  const g = V.g;
+  $('players').innerHTML = g.st.players.map((p, i) =>
+    `<div class="pchip${i === g.st.turn ? ' cur' : ''}">
+      <span class="dot" style="background:${p.color}"></span>
+      <span class="nm">${esc(p.name)}${p.ai ? ' ⚙' : ''}</span>
+      <span class="nw num">${fmt(g.netWorth(p))}</span>
+    </div>`).join('');
+}
+function renderTape(){
+  const g = V.g; if (!g) return;
+  const parts = STOCKS.map((s, i) => {
+    const p = g.st.prices[i];
+    const cls = p > CFG.PAR ? 'u' : p < CFG.PAR ? 'd' : 'n';
+    return `${s.code} <span class="${cls}">$${p}</span>`;
+  });
+  const news = g.st.log.slice(-2).map(l => `<span class="n">☞ ${esc(l).toUpperCase()}</span>`);
+  $('tapeInner').innerHTML = [...parts, ...news].join(' &nbsp;·&nbsp; ') + ' &nbsp;·&nbsp; ';
+}
+function renderLog(){
+  if (!V.g) return;
+  $('logLines').innerHTML = V.g.st.log.slice(-30).reverse().map(l => `<div class="log-line">${esc(l)}</div>`).join('');
+}
+function renderHint(){
+  const g = V.g; if (!g) return;
+  const p = g.cur();
+  if (g.st.over){ $('hint').innerHTML = 'The market has closed.'; return; }
+  if (p.ai){ $('hint').innerHTML = `<span><b>${esc(p.name)}</b> is playing…</span>`; }
+  else if (g.st.phase === 'idle'){ $('hint').innerHTML = `<span><b>${esc(p.name)}</b> — your throw. You may sell from the Ledger first.</span>`; }
+  else if (g.st.pending){ $('hint').innerHTML = `<span><b>${esc(p.name)}</b> — resolve your landing.</span>`; }
+  else { $('hint').innerHTML = `<span><b>${esc(p.name)}</b> — trade from the Ledger, then end your turn.</span>`; }
+}
+function renderButtons(){
+  const g = V.g; if (!g) return;
+  const p = g.cur(), human = !p.ai;
+  $('btnRoll').disabled = !(human && g.st.phase === 'idle' && !V.busy && !g.st.over);
+  $('btnEndTurn').disabled = !(human && g.st.phase === 'done' && !V.busy && !g.st.over);
+}
+function renderAll(){ renderPlayers(); renderPawns(); renderQuote(); renderTape(); renderLog(); renderHint(); renderButtons(); }
+
+/* ================= TOAST + TICKER CARD ================= */
+let toastT = 0;
+function toast(msg, ms = 2200){
+  const t = $('toast'); t.textContent = msg; t.classList.add('on');
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), ms);
+}
+function cardMs(){
+  if (!V.g) return 1500;
+  const p = V.g.cur();
+  if (p.ai){ return {normal:1400, fast:600, instant:0}[V.g.st.speed]; }
+  return 1600;
+}
+function showCard(kick, title, body){
+  const ms = cardMs();
+  if (ms === 0) return Promise.resolve();
+  return new Promise(res => {
+    $('cardKick').textContent = kick; $('cardTitle').textContent = title; $('cardBody').innerHTML = body;
+    const c = $('card'); c.classList.add('on');
+    const done = () => { c.classList.remove('on'); c.removeEventListener('click', done); clearTimeout(V.card.timer); setTimeout(res, 160); };
+    c.addEventListener('click', done);
+    V.card.timer = setTimeout(done, ms);
+  });
+}
+
+/* ================= EVENT PRESENTATION ================= */
+async function playEvents(events){
+  const g = V.g;
+  let quoteDirty = false;
+  for (const ev of events){
+    switch (ev.kind){
+      case 'move': quoteDirty = true; Snd.tick(); break;
+      case 'salary':
+        Snd.pay();
+        await showCard('Pay Day', 'Salary Collected', `<b>${esc(g.cur().name)}</b> collects <b class="num">${fmt(ev.amt)}</b>.`);
+        renderPlayers(); break;
+      case 'market':
+        if (quoteDirty){ renderQuote(); quoteDirty = false; }
+        ev.d > 0 ? Snd.cash() : Snd.down();
+        await showCard('Market News', ev.d > 0 ? 'Market Advances' : 'Market Declines',
+          `Every issue moves <b class="num">${ev.d > 0 ? '+' : '−'}$${Math.abs(ev.d)}</b>.`);
+        break;
+      case 'flurry':
+        if (quoteDirty){ renderQuote(); quoteDirty = false; }
+        ev.d > 0 ? Snd.cash() : Snd.down();
+        await showCard('Bull & Bear', ev.d > 0 ? 'The Bulls Have It' : 'The Bears Have It',
+          `The die shows <b>${ev.die}</b> — the whole market moves <b class="num">${ev.d > 0 ? '+' : '−'}$${Math.abs(ev.d)}</b>.`);
+        break;
+      case 'tickerRoll':
+        ev.d > 0 ? Snd.cash() : Snd.down();
+        await showCard('Ticker Report', STOCKS[ev.s].name,
+          `The die shows <b>${ev.die}</b> — ${STOCKS[ev.s].code} moves <b class="num">${ev.d > 0 ? '+' : '−'}$${Math.abs(ev.d)}</b>.`);
+        break;
+      case 'split': {
+        renderQuote(); quoteDirty = false;
+        Snd.split();
+        const qc = $('qc' + ev.s); if (qc){ qc.classList.add('split'); setTimeout(() => qc.classList.remove('split'), 1600); }
+        await showCard('Stock Split!', STOCKS[ev.s].name,
+          `${STOCKS[ev.s].code} hits <b class="num">$${CFG.PRICE_MAX}</b> and splits 2-for-1.<br>Certificates double; the price returns to <b class="num">$${CFG.PAR}</b>.`);
+        renderPlayers(); break;
+      }
+      case 'bust':
+        renderQuote(); quoteDirty = false;
+        Snd.bust();
+        await showCard('Bankrupt!', STOCKS[ev.s].name,
+          `${STOCKS[ev.s].code} collapses — all certificates are void.<br>The company is reorganized at <b class="num">$${CFG.PAR}</b>.`);
+        renderPlayers(); break;
+      case 'dividend':
+        if (ev.amt > 0){ Snd.cash(); await showCard('Dividends', 'The Mail Brings Checks', `<b>${esc(g.cur().name)}</b> collects <b class="num">${fmt(ev.amt)}</b> on holdings at or above par.`); }
+        else await showCard('Dividends', 'Nothing Today', 'No holdings at or above par — no checks in the mail.');
+        renderPlayers(); break;
+      case 'fee':
+        Snd.fee();
+        await showCard('Broker’s Fee', 'The Broker Collects', `<b>${esc(g.cur().name)}</b> pays <b class="num">${fmt(ev.amt)}</b>.`);
+        renderPlayers(); break;
+      case 'annual': {
+        Snd.gavel();
+        const lines = ev.detail.length
+          ? ev.detail.map(d => `<b>${esc(d.name)}</b> collects <b class="num">${fmt(d.amt)}</b>`).join('<br>')
+          : 'No holdings at or above par anywhere in the room.';
+        await showCard('Annual Meeting', 'All Shareholders Report', lines);
+        renderPlayers(); break;
+      }
+      case 'forcedSale':
+        toast(`Forced sale: ${ev.q} ${STOCKS[ev.s].code} to cover the broker`, 2600);
+        break;
+    }
+  }
+  if (quoteDirty) renderQuote();
+}
+
+/* ================= SHEETS ================= */
+let sheetOnClose = null;
+function openSheet(title, build, onClose){
+  $('sheetTitle').textContent = title;
+  const b = $('sheetBody'); b.innerHTML = ''; build(b);
+  $('dim').classList.add('on'); $('sheet').classList.add('on');
+  sheetOnClose = onClose || null;
+}
+function closeSheet(){
+  $('dim').classList.remove('on'); $('sheet').classList.remove('on');
+  const f = sheetOnClose; sheetOnClose = null;
+  if (f) f();
+}
+
+function stockRow(i, right){
+  const s = STOCKS[i], p = V.g.st.prices[i];
+  const rel = p > CFG.PAR ? `<span class="up">▲ above par</span>` : p < CFG.PAR ? `<span class="dn">▼ below par</span>` : 'at par';
+  return `<div class="trow">
+    <span class="mono-chip" style="background:${s.color}">${s.code}</span>
+    <span class="ti"><b>${s.name}</b><small>${s.sector}</small></span>
+    <span class="pr num">$${p}<small>${rel}</small></span>
+    ${right || ''}
+  </div>`;
+}
+
+/* deal panel: buy or sell a single issue */
+function dealPanel(box, sIdx, mode, after){
+  const g = V.g, p = g.cur(), s = STOCKS[sIdx];
+  let qty = 0;
+  const price = () => g.st.prices[sIdx];
+  const maxQ = () => mode === 'buy' ? Math.floor(p.cash / price()) : p.shares[sIdx];
+  box.innerHTML = `
+    <div class="deal-card card-paper">
+      <div style="display:flex;justify-content:center;margin-bottom:8px"><span class="mono-chip" style="background:${s.color};width:46px;height:46px;font-size:14px">${s.code}</span></div>
+      <div class="deal-name">${s.name}</div>
+      <div class="deal-sec">${s.sector} · ${mode === 'buy' ? 'Buying' : 'Selling'}</div>
+      <div class="deal-price num">$${price()}<small> / share</small></div>
+      <div class="qty-row">
+        <button class="qbtn" data-d="-25">−25</button><button class="qbtn" data-d="-5">−5</button><button class="qbtn" data-d="-1">−1</button>
+        <span id="qtyVal" class="num">0</span>
+        <button class="qbtn" data-d="1">+1</button><button class="qbtn" data-d="5">+5</button><button class="qbtn" data-d="25">+25</button>
+        <button class="qbtn" data-d="max">MAX</button>
+      </div>
+      <div class="deal-total num" id="dealTotal"></div>
+      <div class="deal-actions">
+        <button class="btn alt" id="dealPass">${mode === 'buy' ? 'Pass' : 'Back'}</button>
+        <button class="btn ${mode === 'buy' ? '' : 'red'}" id="dealGo" disabled></button>
+      </div>
+    </div>
+    <p style="font:600 12px/1.5 Archivo,sans-serif;color:var(--ink-faint);text-align:center">
+      ${mode === 'buy' ? `Cash on hand: <b class="num">${fmt(p.cash)}</b> · You hold <b class="num">${p.shares[sIdx]}</b> shares` : `You hold <b class="num">${p.shares[sIdx]}</b> shares`}
+    </p>`;
+  const upd = () => {
+    qty = Math.max(0, Math.min(qty, maxQ()));
+    box.querySelector('#qtyVal').textContent = qty;
+    const total = qty * price();
+    box.querySelector('#dealTotal').innerHTML = mode === 'buy'
+      ? `Cost: <b>${fmt(total)}</b> — leaves ${fmt(p.cash - total)}`
+      : `Proceeds: <b>${fmt(total)}</b>`;
+    const go = box.querySelector('#dealGo');
+    go.textContent = (mode === 'buy' ? 'Buy ' : 'Sell ') + qty + (qty === 1 ? ' share' : ' shares');
+    go.disabled = qty < 1;
+  };
+  box.querySelectorAll('.qbtn').forEach(b => b.addEventListener('click', () => {
+    if (b.dataset.d === 'max') qty = maxQ(); else qty += +b.dataset.d;
+    upd();
+  }));
+  box.querySelector('#dealPass').addEventListener('click', () => after(false));
+  box.querySelector('#dealGo').addEventListener('click', () => {
+    const ok = mode === 'buy' ? g.buy(sIdx, qty) : g.sell(sIdx, qty);
+    if (ok){ (mode === 'buy' ? Snd.cash : Snd.pay)(); toast(`${mode === 'buy' ? 'Bought' : 'Sold'} ${qty} ${s.code} at $${price()}`); }
+    renderAll(); saveGame();
+    after(ok);
+  });
+  upd();
+}
+
+/* the three landing sheets */
+function sheetBuy(sIdx){
+  const done = () => { if (V.g.st.pending){ V.g.resolvePending(); } renderAll(); saveGame(); onActionResolved(); };
+  openSheet('Buying Window', b => dealPanel(b, sIdx, 'buy', () => closeSheet()), done);
+}
+function sheetExchange(){
+  const done = () => { if (V.g.st.pending){ V.g.resolvePending(); } renderAll(); saveGame(); onActionResolved(); };
+  const buildList = b => {
+    b.innerHTML = `<p style="font:600 12px/1.5 Archivo,sans-serif;color:var(--ink-faint);margin-bottom:8px">Open outcry — buy as many issues as your cash allows. Sell from the Ledger.</p>` +
+      STOCKS.map((_, i) => stockRow(i, `<button class="btn small" data-b="${i}">Buy</button>`)).join('') +
+      `<div style="margin-top:14px;text-align:center"><button class="btn gold" id="exDone" style="min-width:180px">Done Trading</button></div>`;
+    b.querySelectorAll('[data-b]').forEach(el => el.addEventListener('click', () => {
+      dealPanel(b, +el.dataset.b, 'buy', () => buildList(b));
+    }));
+    b.querySelector('#exDone').addEventListener('click', () => closeSheet());
+  };
+  openSheet('The Exchange', buildList, done);
+}
+function sheetMeeting(){
+  const g = V.g, p = g.cur();
+  let chosen = false;
+  const done = () => {
+    if (!chosen && g.st.pending){
+      // closing without choosing: attend your largest meeting automatically
+      let best = -1, bestN = 0;
+      STOCKS.forEach((_, i) => { if (p.shares[i] > bestN){ bestN = p.shares[i]; best = i; } });
+      if (best >= 0){ const amt = g.chooseMeeting(best); toast(`Attended ${STOCKS[best].code} meeting — ${fmt(amt)}`); Snd.gavel(); }
+      g.resolvePending();
+    }
+    renderAll(); saveGame(); onActionResolved();
+  };
+  openSheet('Stockholders’ Meeting', b => {
+    b.innerHTML = `<p style="font:600 12px/1.5 Archivo,sans-serif;color:var(--ink-faint);margin-bottom:8px">Choose one meeting to attend — collect ${fmt(CFG.MEET)} per share held.</p>` +
+      STOCKS.map((_, i) => p.shares[i] > 0
+        ? stockRow(i, `<button class="btn small gold" data-m="${i}">${fmt(p.shares[i] * CFG.MEET)}</button>`) : '').join('');
+    b.querySelectorAll('[data-m]').forEach(el => el.addEventListener('click', () => {
+      const i = +el.dataset.m;
+      const amt = g.chooseMeeting(i);
+      chosen = true; g.resolvePending();
+      Snd.gavel(); toast(`Meeting adjourned — ${fmt(amt)} collected`);
+      closeSheet();
+    }));
+  }, done);
+}
+
+/* ledger: inspect any player; trade on your own turn */
+function sheetLedger(){
+  const g = V.g;
+  let sel = g.st.turn;
+  const build = b => {
+    const p = g.st.players[sel];
+    const mine = sel === g.st.turn && !p.ai && !V.busy && !g.st.over && g.st.phase !== 'rolled';
+    const certs = STOCKS.map((s, i) => {
+      if (p.shares[i] < 1) return '';
+      const val = p.shares[i] * g.st.prices[i];
+      return `<div class="cert">
+        <div class="cert-head">
+          <span class="mono-chip" style="background:${s.color}">${s.code}</span>
+          <span class="ti"><b style="font:800 13px Archivo,sans-serif">${s.name}</b><br><small style="font:600 10px Archivo,sans-serif;color:var(--ink-faint)">REGISTERED SHARE CERTIFICATE</small></span>
+          <span class="cert-shares">${p.shares[i]} sh<br>@ $${g.st.prices[i]}</span>
+        </div>
+        <div class="cert-foot">
+          <span class="num" style="font-weight:700">${fmt(val)}</span>
+          ${mine ? `<button class="btn red" data-s="${i}">Sell</button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+    b.innerHTML = `
+      <div id="lgTabs" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px">${g.st.players.map((pl, i) =>
+        `<button class="pchip${i === sel ? ' cur' : ''}" data-t="${i}" style="border-color:${i === sel ? 'var(--ink)' : 'transparent'}"><span class="dot" style="background:${pl.color}"></span><span class="nm">${esc(pl.name)}</span></button>`).join('')}
+      </div>
+      <div class="trow"><span class="ti"><b>Cash on hand</b><small>${esc(JOBS[p.job].t)} — salary ${fmt(CFG.SALARY)} a lap</small></span><span class="pr num">${fmt(p.cash)}</span></div>
+      ${certs || '<p style="font:600 13px/2 Archivo,sans-serif;color:var(--ink-faint);text-align:center;padding:12px 0">No certificates held.</p>'}
+      <div class="lg-total"><span>NET WORTH</span><span>${fmt(g.netWorth(p))}</span></div>`;
+    b.querySelectorAll('[data-t]').forEach(el => el.addEventListener('click', () => { sel = +el.dataset.t; build(b); }));
+    b.querySelectorAll('[data-s]').forEach(el => el.addEventListener('click', () => {
+      dealPanel(b, +el.dataset.s, 'sell', () => build(b));
+    }));
+  };
+  openSheet('The Ledger', build);
+}
+
+function sheetRules(){
+  openSheet('How to Play', b => {
+    b.innerHTML = `<div class="rules">
+      <h3>The Object</h3>
+      <p>Be the first investor to be worth <b>${fmt(V.g ? V.g.st.target : CFG.WIN)}</b> — cash plus stock at today's prices.</p>
+      <h3>Your Turn</h3>
+      <ul>
+        <li>Sell any of your holdings first, if you like (open the <b>Ledger</b>).</li>
+        <li>Throw the dice and move around the board.</li>
+        <li>Do what the space says — the board moves the market.</li>
+        <li>End your turn.</li>
+      </ul>
+      <h3>The Spaces</h3>
+      <ul>
+        <li><b>Pay Day</b> — collect your ${fmt(CFG.SALARY)} salary every time around.</li>
+        <li><b>Buying windows</b> — buy any number of shares of the company named, at today's price. Buying happens only here and at The Exchange.</li>
+        <li><b>Ticker Report</b> — one die moves that stock: even up, odd down, roll × $5.</li>
+        <li><b>Market Advances / Declines</b> — every issue moves $${CFG.MKT}.</li>
+        <li><b>Dividends</b> — collect ${fmt(CFG.DIV)} a share on holdings at or above par ($${CFG.PAR}).</li>
+        <li><b>Stockholders' Meeting</b> — attend one company you own; collect ${fmt(CFG.MEET)} a share.</li>
+        <li><b>Annual Meeting</b> (corner) — everyone collects ${fmt(CFG.ANNUAL)} a share on holdings at or above par; the player landing collects double.</li>
+        <li><b>The Exchange</b> (corner) — open trading in every issue.</li>
+        <li><b>Bull &amp; Bear</b> (corner) — one die swings the entire market.</li>
+        <li><b>Broker's Fee</b> — pay ${fmt(CFG.FEE)}.</li>
+      </ul>
+      <h3>Splits &amp; Bankruptcies</h3>
+      <p>A stock reaching <b>$${CFG.PRICE_MAX}</b> splits two-for-one: certificates double and the price returns to $${CFG.PAR}. A stock falling to <b>$0</b> is bankrupt: certificates are void and the company is reorganized at $${CFG.PAR}.</p>
+      <p class="fine">An original homage to the 1968 roll-and-move classic: eight blue-chip stocks, a slider quotation board, dividends, meetings and the race to $100,000 follow the original design as documented by collectors; exact dollar amounts on the original box-back are reconstructed where no archive survives. Company names are historical references. Not affiliated with the original publishers.</p>
+    </div>`;
+  });
+}
+
+/* ================= TURN FLOW ================= */
+function onActionResolved(){ renderHint(); renderButtons(); }
+
+async function animateMove(mv){
+  const g = V.g;
+  const instant = (g.cur().ai && g.st.speed === 'instant') || RM;
+  if (instant){ renderPawns(); return; }
+  const stepMs = g.cur().ai && g.st.speed === 'fast' ? 80 : 190;
+  const pIdx = g.st.turn, from = mv.from;
+  for (let k = 1; k <= mv.steps; k++){
+    const pos = (from + k) % 40;
+    const c = V.cells[pos];
+    const el = document.getElementById('pawn' + pIdx);
+    if (el) el.setAttribute('transform', `translate(${c.cx},${c.cy})`);
+    Snd.hop();
+    await sleep(stepMs);
+  }
+  renderPawns();
+}
+
+async function rollDiceAnim(d1, d2){
+  const g = V.g;
+  if ((g.cur().ai && g.st.speed === 'instant') || RM){ $('die1').textContent = d1; $('die2').textContent = d2; return; }
+  Snd.dice();
+  const e1 = $('die1'), e2 = $('die2');
+  e1.classList.add('roll'); e2.classList.add('roll');
+  for (let i = 0; i < 6; i++){
+    e1.textContent = 1 + Math.floor(Math.random() * 6);
+    e2.textContent = 1 + Math.floor(Math.random() * 6);
+    await sleep(65);
+  }
+  e1.textContent = d1; e2.textContent = d2;
+  e1.classList.remove('roll'); e2.classList.remove('roll');
+  await sleep(180);
+}
+
+async function takeRoll(){
+  const g = V.g;
+  const mv = g.roll();
+  if (!mv) return null;
+  renderButtons();
+  await rollDiceAnim(mv.d1, mv.d2);
+  await animateMove(mv);
+  const res = g.land(mv);
+  renderTape();
+  await playEvents(res.events);
+  renderAll();
+  return res;
+}
+
+async function humanRoll(){
+  if (V.busy || !V.g || V.g.st.over) return;
+  Snd.unlock();
+  V.busy = true;
+  const res = await takeRoll();
+  V.busy = false;
+  if (!res){ renderButtons(); return; }
+  if (res.needs){
+    if (res.needs.kind === 'buy') sheetBuy(res.needs.s);
+    else if (res.needs.kind === 'exchange') sheetExchange();
+    else if (res.needs.kind === 'meet') sheetMeeting();
+  }
+  renderAll();
+}
+
+function humanEndTurn(){
+  const g = V.g;
+  if (V.busy || !g || g.st.phase !== 'done' || g.cur().ai) return;
+  finishTurn();
+}
+
+function finishTurn(){
+  const g = V.g;
+  const over = g.endTurn();
+  if (over){ store(SAVE_KEY, null); renderAll(); showWin(); return; }
+  saveGame();
+  renderAll();
+  runLoop();
+}
+
+async function aiTurn(){
+  const g = V.g;
+  const pause = {normal:650, fast:250, instant:0}[g.st.speed];
+  V.busy = true;
+  renderHint(); renderButtons();
+  await sleep(pause);
+  AI.preTurnSells(g);
+  renderAll();
+  const res = await takeRoll();
+  if (res && res.needs){
+    await sleep(pause / 2);
+    AI.answer(g, res.needs);
+    renderAll();
+  }
+  await sleep(pause);
+  V.busy = false;
+  finishTurn();
+}
+
+function runLoop(){
+  const g = V.g;
+  if (!g || g.st.over) return;
+  if (g.cur().ai){ aiTurn(); }
+  else { renderHint(); renderButtons(); }
+}
+
+/* ================= WIN ================= */
+function drawChart(){
+  const g = V.g, cv = $('chart');
+  const W = cv.clientWidth || 360, H = 110, dpr = window.devicePixelRatio || 1;
+  cv.width = W * dpr; cv.height = H * dpr;
+  const x = cv.getContext('2d'); x.scale(dpr, dpr);
+  x.fillStyle = '#f2e9cd'; x.fillRect(0, 0, W, H);
+  const hists = g.st.players.map(p => p.nwHist);
+  const maxLen = Math.max(...hists.map(h => h.length));
+  const maxV = Math.max(g.st.target, ...hists.flat());
+  const px = (i) => 8 + (W - 16) * (maxLen < 2 ? 1 : i / (maxLen - 1));
+  const py = (v) => H - 8 - (H - 20) * (v / maxV);
+  // target rule
+  x.strokeStyle = 'rgba(37,31,23,.35)'; x.setLineDash([4, 4]); x.lineWidth = 1;
+  x.beginPath(); x.moveTo(8, py(g.st.target)); x.lineTo(W - 8, py(g.st.target)); x.stroke();
+  x.setLineDash([]);
+  x.fillStyle = 'rgba(37,31,23,.6)'; x.font = '600 9px Archivo,sans-serif';
+  x.fillText(fmt(g.st.target), 10, py(g.st.target) - 3);
+  // shade a light color toward ink so every line reads on cream
+  const shade = (hex, f = .78) => {
+    const n = parseInt(hex.slice(1), 16);
+    const ch = s => Math.round(((n >> s) & 255) * f);
+    return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
+  };
+  g.st.players.forEach((p, pi) => {
+    const win = pi === g.st.winner;
+    x.strokeStyle = shade(p.color, win ? 1 : .82);
+    x.globalAlpha = win ? 1 : .55;
+    x.lineWidth = win ? 2.5 : 1.5;
+    x.beginPath();
+    p.nwHist.forEach((v, i) => { const X = px(i), Y = py(v); i ? x.lineTo(X, Y) : x.moveTo(X, Y); });
+    x.stroke();
+    if (win){
+      const lx = px(p.nwHist.length - 1), ly = py(p.nwHist[p.nwHist.length - 1]);
+      x.fillStyle = shade(p.color, 1);
+      x.beginPath(); x.arc(lx, ly, 3.5, 0, 7); x.fill();
+    }
+    x.globalAlpha = 1;
+  });
+}
+
+let confettiRun = false;
+function confetti(){
+  if (RM) return;
+  const cv = $('confetti'), x = cv.getContext('2d');
+  const W = cv.width = innerWidth, H = cv.height = innerHeight;
+  const cols = ['#bf3527', '#c69b3a', '#20573f', '#f7efda', '#5d7b93'];
+  const bits = Array.from({length: 90}, () => ({
+    x: Math.random() * W, y: -20 - Math.random() * H,
+    w: 5 + Math.random() * 4, h: 12 + Math.random() * 16,
+    v: 1.6 + Math.random() * 2.4, r: Math.random() * 6.28, vr: (Math.random() - .5) * .18,
+    c: cols[Math.floor(Math.random() * cols.length)],
+  }));
+  confettiRun = true;
+  (function frame(){
+    if (!confettiRun){ x.clearRect(0, 0, W, H); return; }
+    x.clearRect(0, 0, W, H);
+    bits.forEach(b => {
+      b.y += b.v; b.r += b.vr;
+      if (b.y > H + 30){ b.y = -30; b.x = Math.random() * W; }
+      x.save(); x.translate(b.x, b.y); x.rotate(b.r);
+      x.fillStyle = b.c; x.fillRect(-b.w / 2, -b.h / 2, b.w, b.h);
+      x.restore();
+    });
+    requestAnimationFrame(frame);
+  })();
+}
+
+function showWin(){
+  const g = V.g, w = g.st.players[g.st.winner];
+  $('winName').textContent = w.name;
+  $('winSum').textContent = fmt(g.netWorth(w)) + ' · ' + JOBS[w.job].t;
+  const rows = [
+    ['Times around the board', w.laps],
+    ['Dividends & meetings', fmt(w.stats.divs)],
+    ['Splits ridden', w.stats.splits],
+    ['Bankruptcies survived', w.stats.busts],
+    ['Biggest single purchase', fmt(w.stats.bestTrade)],
+    ['Broker fees paid', fmt(w.stats.spentFees)],
+    ['Turns played (table)', g.st.turnCount],
+  ];
+  $('winStats').innerHTML = rows.map(r => `<div class="row"><span>${r[0]}</span><span>${r[1]}</span></div>`).join('');
+  $('win').classList.add('on');
+  drawChart();
+  confetti();
+  Snd.win();
+}
+
+/* ================= SETUP SCREEN ================= */
+function renderSeats(){
+  $('seatList').innerHTML = V.seats.map((s, i) => `
+    <div class="seat">
+      <span class="seat-dot" style="background:${PAWN_COLORS[i]}"></span>
+      <input type="text" maxlength="14" value="${esc(s.name)}" data-n="${i}" aria-label="Investor name">
+      <select data-k="${i}" aria-label="Human or computer">
+        <option value="h"${s.ai ? '' : ' selected'}>Human</option>
+        <option value="c"${s.ai ? ' selected' : ''}>Computer</option>
+      </select>
+      ${V.seats.length > 2 ? `<button class="rm" data-r="${i}" aria-label="Remove investor">×</button>` : ''}
+    </div>`).join('');
+  $('seatList').querySelectorAll('[data-n]').forEach(el => el.addEventListener('input', () => { V.seats[+el.dataset.n].name = el.value; }));
+  $('seatList').querySelectorAll('[data-k]').forEach(el => el.addEventListener('change', () => {
+    const i = +el.dataset.k; V.seats[i].ai = el.value === 'c';
+    if (el.value === 'c' && /^Investor \d+$/.test(V.seats[i].name)){ V.seats[i].name = 'Computer ' + (i + 1); renderSeats(); }
+  }));
+  $('seatList').querySelectorAll('[data-r]').forEach(el => el.addEventListener('click', () => { V.seats.splice(+el.dataset.r, 1); renderSeats(); }));
+  $('btnAddSeat').style.display = V.seats.length >= 8 ? 'none' : '';
+}
+
+function showScr(name){
+  ['splash', 'setup', 'game'].forEach(s => $(s).classList.toggle('on', s === name));
+}
+
+function startGame(){
+  const jobs = JOBS.map((_, i) => i);
+  for (let i = jobs.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [jobs[i], jobs[j]] = [jobs[j], jobs[i]]; }
+  V.g = new Game({
+    seed: (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0,
+    target: V.target, speed: V.speed,
+    players: V.seats.map((s, i) => ({name: s.name.trim() || 'Investor ' + (i + 1), ai: s.ai, color: PAWN_COLORS[i]})),
+    jobs: V.seats.map((_, i) => jobs[i % jobs.length]),
+  });
+  V.g.addLog('The market opens. Every investor starts with ' + fmt(CFG.START_CASH) + '.');
+  buildBoard(); buildQuote();
+  lastPrices = null;
+  $('die1').textContent = '?'; $('die2').textContent = '?';
+  showScr('game');
+  saveGame();
+  renderAll();
+  toast('The market is open — first throw: ' + V.g.cur().name, 2600);
+  runLoop();
+}
+
+function resumeGame(saved){
+  V.g = Game.fromSave(saved.st);
+  V.seats = saved.seats || V.seats;
+  V.target = saved.target || CFG.WIN;
+  V.speed = saved.speed || 'normal';
+  buildBoard(); buildQuote();
+  lastPrices = null;
+  $('die1').textContent = '?'; $('die2').textContent = '?';
+  showScr('game');
+  renderAll();
+  toast('Game resumed — ' + V.g.cur().name + ' to play', 2600);
+  runLoop();
+}
+
+/* ================= WIRING ================= */
+function wire(){
+  $('btnNew').addEventListener('click', () => { Snd.unlock(); renderSeats(); showScr('setup'); });
+  $('btnRules0').addEventListener('click', sheetRules);
+  $('btnResume').addEventListener('click', () => {
+    Snd.unlock();
+    try{ resumeGame(JSON.parse(read(SAVE_KEY))); }
+    catch(e){ store(SAVE_KEY, null); toast('Saved game could not be read — starting fresh'); renderSeats(); showScr('setup'); }
+  });
+  $('btnAddSeat').addEventListener('click', () => {
+    if (V.seats.length < 8){ V.seats.push({name: 'Investor ' + (V.seats.length + 1), ai: true}); V.seats[V.seats.length-1].name = 'Computer ' + V.seats.length; renderSeats(); }
+  });
+  $('btnBackSplash').addEventListener('click', () => showScr('splash'));
+  $('btnStart').addEventListener('click', () => {
+    V.target = +$('optTarget').value;
+    V.speed = $('optSpeed').value;
+    startGame();
+  });
+  $('btnRoll').addEventListener('click', humanRoll);
+  $('btnEndTurn').addEventListener('click', humanEndTurn);
+  $('btnLedger').addEventListener('click', () => { if (V.g) sheetLedger(); });
+  $('sheetX').addEventListener('click', closeSheet);
+  $('dim').addEventListener('click', closeSheet);
+  $('btnSound').addEventListener('click', () => {
+    V.sound = !V.sound;
+    $('btnSound').setAttribute('aria-pressed', String(V.sound));
+    $('btnSound').textContent = V.sound ? '♬' : '♪';
+    store('sm68-sound', V.sound ? '1' : '0');
+    if (V.sound) Snd.unlock();
+  });
+  $('btnMenu').addEventListener('click', () => $('menuPop').classList.toggle('on'));
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#menuPop') && !e.target.closest('#btnMenu')) $('menuPop').classList.remove('on');
+  });
+  $('mRules').addEventListener('click', () => { $('menuPop').classList.remove('on'); sheetRules(); });
+  $('mLog').addEventListener('click', () => { $('menuPop').classList.remove('on'); $('log').classList.toggle('on'); renderLog(); });
+  $('mQuit').addEventListener('click', () => {
+    $('menuPop').classList.remove('on');
+    openSheet('Abandon Game?', b => {
+      b.innerHTML = `<p style="font:600 14px/1.6 Archivo,sans-serif;color:var(--ink-soft);text-align:center;margin-bottom:14px">The saved game will be torn up.</p>
+        <div style="display:flex;gap:10px"><button class="btn alt" id="qNo" style="flex:1">Keep Playing</button><button class="btn red" id="qYes" style="flex:1">Abandon</button></div>`;
+      b.querySelector('#qNo').addEventListener('click', closeSheet);
+      b.querySelector('#qYes').addEventListener('click', () => {
+        store(SAVE_KEY, null); V.g = null; confettiRun = false;
+        closeSheet(); $('win').classList.remove('on'); showScr('splash'); refreshResume();
+      });
+    });
+  });
+  $('btnAgain').addEventListener('click', () => {
+    confettiRun = false; $('win').classList.remove('on');
+    startGame();
+  });
+  $('btnToSplash').addEventListener('click', () => {
+    confettiRun = false; $('win').classList.remove('on'); V.g = null;
+    showScr('splash'); refreshResume();
+  });
+  window.addEventListener('resize', () => { if ($('win').classList.contains('on')) drawChart(); });
+}
+
+function refreshResume(){
+  let has = false;
+  try{ const s = read(SAVE_KEY); has = !!(s && JSON.parse(s).st && !JSON.parse(s).st.over); }catch(e){}
+  $('btnResume').style.display = has ? '' : 'none';
+}
+
+function boot(){
+  wire();
+  V.sound = read('sm68-sound') !== '0';
+  $('btnSound').textContent = V.sound ? '♬' : '♪';
+  $('btnSound').setAttribute('aria-pressed', String(V.sound));
+  refreshResume();
+  showScr('splash');
+}
+document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', boot) : boot();
+</script>
+</body>
+</html>

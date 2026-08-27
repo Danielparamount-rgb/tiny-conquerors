@@ -28,6 +28,15 @@ git add -A && git commit -m "..." && git push
 
 The host redeploys on push to `main`.
 
+## Also in this repo: Stock Market 1968
+
+`stock-market.html` — an original web revival of the 1968 roll-and-move stock-market board
+game: 8 blue-chip stocks, a slider quotation board, dividends, stockholders' meetings, and
+the race to $100,000. 2–8 investors (pass-and-play humans and/or computer opponents),
+phone-first, single self-contained file, autosaves locally. Deployable copy lives at
+`app/market/index.html` (served at `/market/` by the static host). Design and provenance
+notes: `STOCK-MARKET-NOTES.md`.
+
 ## Art and audio
 
 All graphics and sounds are original: buildings, units, and terrain are drawn procedurally to
