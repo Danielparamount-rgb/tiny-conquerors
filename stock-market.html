@@ -23,7 +23,7 @@
   --paper-lo:#efe4c6;
   --ink:#251f17;             /* warm letterpress ink */
   --ink-soft:#4c4132;
-  --ink-faint:#7a6d58;
+  --ink-faint:#665b49;
   --rule:#c9b98e;            /* hairline rules on paper */
   --red:#bf3527;             /* the red plastic slider strip */
   --red-deep:#8c2318;
@@ -110,7 +110,8 @@ svg{display:block}
 .seat-dot{width:26px;height:26px;border-radius:50%;border:2px solid var(--ink);flex:none;box-shadow:inset -2px -3px 0 rgba(0,0,0,.25)}
 .seat input[type=text]{flex:1;min-width:0;background:transparent;border:none;border-bottom:2px dashed var(--rule);padding:6px 2px;font:600 16px var(--grot);color:var(--ink)}
 .seat select{background:var(--paper);border:2px solid var(--ink);border-radius:6px;padding:6px 8px;font-weight:700}
-.seat .rm{font-size:20px;line-height:1;padding:6px 10px;color:var(--red);font-weight:800}
+.seat .rm{font-size:20px;line-height:1;padding:6px 10px;color:var(--red);font-weight:800;min-width:44px;min-height:44px}
+.seat select,.setup-row select{min-height:44px}
 .setup-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px;flex-wrap:wrap}
 .setup-row label{font:700 12px/1 var(--grot);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft)}
 .setup-row select{background:var(--paper);border:2px solid var(--ink);border-radius:6px;padding:8px 10px;font-weight:700}
@@ -138,7 +139,7 @@ svg{display:block}
 #topbar .t{font-family:var(--serif-slab);font-size:17px;letter-spacing:.03em;color:#f0e2ba;text-shadow:1px 1px 0 rgba(0,0,0,.4)}
 #topbar .t small{color:var(--gold-hi);font-family:var(--grot);font-weight:700;font-size:10px;letter-spacing:.28em;display:block;margin-top:1px}
 #topbar .tools{display:flex;gap:6px}
-.tool{width:38px;height:38px;border-radius:8px;border:2px solid rgba(240,226,186,.5);color:#f0e2ba;font-size:17px;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.18)}
+.tool{width:44px;height:44px;border-radius:8px;border:2px solid rgba(240,226,186,.5);color:#f0e2ba;font-size:17px;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.18)}
 .tool[aria-pressed="true"]{background:var(--gold);color:var(--ink);border-color:var(--gold-hi)}
 
 /* main column */
@@ -186,7 +187,8 @@ svg{display:block}
 .ctr-m{font:italic 600 8.6px/1.4 Georgia,serif;fill:var(--ink-soft)}
 .pawn{transition:transform .22s ease}
 @media (prefers-reduced-motion:reduce){.pawn{transition:none}}
-.sp-hit{cursor:pointer}
+.sp-hit{cursor:pointer;outline:none}
+.sp-hit:focus-visible{stroke:var(--gold-hi);stroke-width:5}
 
 /* ---------------- dock ---------------- */
 #dock{
@@ -240,7 +242,7 @@ svg{display:block}
 .sheet-grip{width:44px;height:5px;border-radius:3px;background:var(--rule);margin:8px auto 0}
 .sheet-head{display:flex;align-items:center;justify-content:space-between;padding:8px 16px 8px;border-bottom:2px solid var(--ink)}
 .sheet-title{font-family:var(--serif-slab);font-size:19px}
-.sheet-x{font-size:22px;font-weight:800;padding:4px 10px;color:var(--red)}
+.sheet-x{font-size:22px;font-weight:800;padding:4px 10px;color:var(--red);min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center}
 .sheet-body{overflow-y:auto;padding:12px 16px calc(16px + env(safe-area-inset-bottom));-webkit-overflow-scrolling:touch}
 
 /* trade rows */
@@ -275,7 +277,9 @@ svg{display:block}
 .cert-head{display:flex;align-items:center;gap:8px}
 .cert-shares{margin-left:auto;text-align:right;font:700 13px/1.35 var(--mono)}
 .cert-foot{display:flex;align-items:center;justify-content:space-between;margin-top:8px;gap:8px}
-.cert-foot .btn{min-height:38px;padding:6px 12px;font-size:12px}
+.cert-foot .btn{min-height:44px;padding:6px 14px;font-size:12px}
+#lgTabs .pchip{background:rgba(0,0,0,.12);color:var(--ink);min-height:40px}
+#lgTabs .pchip.cur{background:var(--paper)}
 .lg-total{display:flex;justify-content:space-between;font:700 15px/1.6 var(--mono);border-top:2px solid var(--ink);margin-top:10px;padding-top:8px}
 
 /* ---------------- ticker card (event announce) ---------------- */
@@ -327,10 +331,18 @@ svg{display:block}
 #menuPop.on{display:flex}
 #menuPop .btn{margin:4px 0;min-height:44px;font-size:13px}
 
-/* mobile board sizing: keep the square board from eating the viewport */
+/* mobile board sizing: keep the square board from eating the viewport,
+   and scale board type UP so labels survive the shrink to ~350px */
 @media (max-width:919px){
-  #boardWrap{max-width:min(94vw,540px);margin:0 auto;width:100%}
+  #boardWrap{max-width:min(96vw,540px);margin:0 auto;width:100%}
+  .sp-label{font-size:19px!important}
+  .sp-sub{font-size:12px!important}
+  .sp-big{font-size:21px!important}
+  .ctr-m{font-size:11px}
+  .pawn text{font-size:17px!important}
+  .pawn circle{r:19px}
 }
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 </style>
 <!-- ============================ SPLASH ============================ -->
 <div id="splash" class="scr on">
@@ -423,7 +435,7 @@ svg{display:block}
     <div class="dock-in">
       <div id="players"></div>
       <div class="dock-row">
-        <p id="hint"></p>
+        <p id="hint" role="status"></p>
         <button class="dice-btn" id="btnRoll" aria-label="Roll the dice">
           <span class="die" id="die1">?</span><span class="die" id="die2">?</span>
           <span id="rollLbl">ROLL</span>
@@ -446,7 +458,7 @@ svg{display:block}
 
 <!-- generic bottom sheet -->
 <div id="dim"></div>
-<div id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+<div id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" tabindex="-1">
   <div class="sheet-grip"></div>
   <div class="sheet-head">
     <h2 class="sheet-title" id="sheetTitle"></h2>
@@ -463,6 +475,7 @@ svg{display:block}
 </div>
 
 <div id="toast" role="status"></div>
+<span id="sr" class="vh" role="status"></span>
 
 <!-- win -->
 <canvas id="confetti"></canvas>
@@ -681,7 +694,7 @@ class Game {
         const d = this.die();
         const dir = d % 2 === 0 ? 1 : -1;
         const amt = dir * d * CFG.TICK;
-        this.addLog(`Bull &amp; Bear corner: die shows ${d} — market ${dir>0?'up':'down'} $${Math.abs(amt)}`);
+        this.addLog(`Bull & Bear corner: die shows ${d} — market ${dir>0?'up':'down'} $${Math.abs(amt)}`);
         STOCKS.forEach((_, i) => events.push(...this.movePrice(i, amt)));
         events.push({kind:'flurry', die:d, d:amt});
         break;
@@ -729,7 +742,10 @@ class Game {
       }
       case 'meet': {
         if (STOCKS.some((_, i) => p.shares[i] > 0)) needs = {kind:'meet'};
-        else this.addLog(`${p.name} attends a stockholders' meeting but holds no shares`);
+        else {
+          events.push({kind:'noMeeting'});
+          this.addLog(`${p.name} attends a stockholders' meeting but holds no shares`);
+        }
         break;
       }
       case 'buy':
@@ -785,17 +801,21 @@ class Game {
     return true;
   }
   chooseMeeting(s){
+    // one payout per landing: only valid while the meeting choice is pending
+    if (!this.st.pending || this.st.pending.kind !== 'meet') return 0;
     const p = this.cur();
     if (p.shares[s] < 1) return 0;
     const amt = p.shares[s] * CFG.MEET;
     p.cash += amt; p.stats.divs += amt;
     this.addLog(`${p.name}'s meeting with ${STOCKS[s].code} pays $${amt}`);
+    this.resolvePending();
     return amt;
   }
   resolvePending(){ this.st.pending = null; this.st.phase = 'done'; }
 
   endTurn(){
     const st = this.st;
+    if (st.over) return true;
     st.pending = null;
     st.turnCount++;
     // record net worth history + win check for everyone
@@ -914,6 +934,7 @@ const SAVE_KEY = 'sm68';
 
 const V = {
   g: null,            // Game instance
+  gen: 0,             // bumped on new/resume/abandon so stale async turns bail out
   seats: [{name:'Investor 1', ai:false}, {name:'The Computer', ai:true}],
   target: CFG.WIN, speed: 'normal',
   busy: false,        // an animation or AI turn is running
@@ -1024,7 +1045,7 @@ function describeSpace(i){
 
 function buildBoard(){
   const P = [];
-  P.push(`<svg viewBox="0 0 ${BS} ${BS}" role="img" aria-label="Game board">`);
+  P.push(`<svg viewBox="0 0 ${BS} ${BS}" role="group" aria-label="Game board">`);
   P.push(`<rect x="0" y="0" width="${BS}" height="${BS}" rx="14" fill="#153c2e"/>`);
   P.push(`<rect x="4" y="4" width="${BS-8}" height="${BS-8}" rx="11" fill="none" stroke="#c69b3a" stroke-width="3"/>`);
   P.push(`<rect x="${CO}" y="${CO}" width="${BS-2*CO}" height="${BS-2*CO}" fill="#e9dfbe"/>`);
@@ -1087,16 +1108,21 @@ function buildBoard(){
       P.push(`<text x="${px}" y="${pyMid-2}" text-anchor="middle" class="sp-label" style="font-size:${sp.t==='buy'||sp.t==='ticker'?13:11}px">${lk.l1}</text>`);
       P.push(`<text x="${px}" y="${pyMid+13}" text-anchor="middle" class="sp-sub" style="font-size:8.5px">${lk.l2}</text>`);
     }
-    P.push(`<rect class="sp-hit" data-i="${i}" x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="transparent"/>`);
+    const [dT, dB] = describeSpace(i);
+    P.push(`<rect class="sp-hit" data-i="${i}" tabindex="0" role="button" aria-label="${esc(dT + ' — ' + dB)}" x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="transparent"/>`);
     P.push(`</g>`);
   }
   P.push(`<g id="pawnLayer"></g>`);
   P.push(`</svg>`);
   $('boardWrap').innerHTML = P.join('');
   $('boardWrap').querySelectorAll('.sp-hit').forEach(el => {
-    el.addEventListener('click', () => {
+    const show = () => {
       const [t, b] = describeSpace(+el.dataset.i);
       toast(`${t} — ${b}`, 3200);
+    };
+    el.addEventListener('click', show);
+    el.addEventListener('keydown', ev => {
+      if (ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); show(); }
     });
   });
 }
@@ -1154,7 +1180,7 @@ function renderQuote(){
 
 /* ================= DOCK / TAPE / LOG ================= */
 function renderPlayers(){
-  const g = V.g;
+  const g = V.g; if (!g) return;
   $('players').innerHTML = g.st.players.map((p, i) =>
     `<div class="pchip${i === g.st.turn ? ' cur' : ''}">
       <span class="dot" style="background:${p.color}"></span>
@@ -1191,7 +1217,7 @@ function renderButtons(){
   $('btnRoll').disabled = !(human && g.st.phase === 'idle' && !V.busy && !g.st.over);
   $('btnEndTurn').disabled = !(human && g.st.phase === 'done' && !V.busy && !g.st.over);
 }
-function renderAll(){ renderPlayers(); renderPawns(); renderQuote(); renderTape(); renderLog(); renderHint(); renderButtons(); }
+function renderAll(){ if (!V.g) return; renderPlayers(); renderPawns(); renderQuote(); renderTape(); renderLog(); renderHint(); renderButtons(); }
 
 /* ================= TOAST + TICKER CARD ================= */
 let toastT = 0;
@@ -1278,22 +1304,32 @@ async function playEvents(events){
       case 'forcedSale':
         toast(`Forced sale: ${ev.q} ${STOCKS[ev.s].code} to cover the broker`, 2600);
         break;
+      case 'noMeeting':
+        await showCard('Stockholders’ Meeting', 'Turned Away at the Door', 'No share certificates, no seat at the table.');
+        break;
     }
   }
   if (quoteDirty) renderQuote();
 }
 
 /* ================= SHEETS ================= */
-let sheetOnClose = null;
+let sheetOnClose = null, sheetPrevFocus = null;
+const SCREENS = ['splash', 'setup', 'game'];
 function openSheet(title, build, onClose){
   $('sheetTitle').textContent = title;
   const b = $('sheetBody'); b.innerHTML = ''; build(b);
+  if (!$('sheet').classList.contains('on')) sheetPrevFocus = document.activeElement;
+  SCREENS.forEach(s => { const el = $(s); if (el.classList.contains('on')) el.inert = true; });
   $('dim').classList.add('on'); $('sheet').classList.add('on');
+  $('sheet').focus();
   sheetOnClose = onClose || null;
 }
 function closeSheet(){
+  SCREENS.forEach(s => { $(s).inert = false; });
   $('dim').classList.remove('on'); $('sheet').classList.remove('on');
   const f = sheetOnClose; sheetOnClose = null;
+  if (sheetPrevFocus && document.contains(sheetPrevFocus)){ try{ sheetPrevFocus.focus(); }catch(e){} }
+  sheetPrevFocus = null;
   if (f) f();
 }
 
@@ -1362,17 +1398,37 @@ function dealPanel(box, sIdx, mode, after){
 
 /* the three landing sheets */
 function sheetBuy(sIdx){
-  const done = () => { if (V.g.st.pending){ V.g.resolvePending(); } renderAll(); saveGame(); onActionResolved(); };
-  openSheet('Buying Window', b => dealPanel(b, sIdx, 'buy', () => closeSheet()), done);
+  const g = V.g;
+  const done = () => { if (g.st.pending){ g.resolvePending(); } renderAll(); saveGame(); onActionResolved(); };
+  const build = b => {
+    dealPanel(b, sIdx, 'buy', () => closeSheet());
+    const held = STOCKS.map((_, i) => i).filter(i => g.cur().shares[i] > 0);
+    if (held.length){
+      const div = document.createElement('div');
+      div.innerHTML = `<p style="font:600 12px/1.5 Archivo,sans-serif;color:var(--ink-faint);margin:10px 0 4px">Need cash? Sell a holding, then keep buying:</p>` +
+        held.map(i => stockRow(i, `<button class="btn small red" data-sx="${i}">Sell</button>`)).join('');
+      b.appendChild(div);
+      div.querySelectorAll('[data-sx]').forEach(el => el.addEventListener('click', () => {
+        dealPanel(b, +el.dataset.sx, 'sell', () => build(b));
+      }));
+    }
+  };
+  openSheet('Buying Window', build, done);
 }
 function sheetExchange(){
   const done = () => { if (V.g.st.pending){ V.g.resolvePending(); } renderAll(); saveGame(); onActionResolved(); };
   const buildList = b => {
-    b.innerHTML = `<p style="font:600 12px/1.5 Archivo,sans-serif;color:var(--ink-faint);margin-bottom:8px">Open outcry — buy as many issues as your cash allows. Sell from the Ledger.</p>` +
-      STOCKS.map((_, i) => stockRow(i, `<button class="btn small" data-b="${i}">Buy</button>`)).join('') +
+    const p = V.g.cur();
+    b.innerHTML = `<p style="font:600 12px/1.5 Archivo,sans-serif;color:var(--ink-faint);margin-bottom:8px">Open outcry — buy any issue, or sell holdings here to raise cash.</p>` +
+      STOCKS.map((_, i) => stockRow(i,
+        `<button class="btn small" data-b="${i}">Buy</button>` +
+        (p.shares[i] > 0 ? `<button class="btn small red" data-x="${i}">Sell</button>` : ''))).join('') +
       `<div style="margin-top:14px;text-align:center"><button class="btn gold" id="exDone" style="min-width:180px">Done Trading</button></div>`;
     b.querySelectorAll('[data-b]').forEach(el => el.addEventListener('click', () => {
       dealPanel(b, +el.dataset.b, 'buy', () => buildList(b));
+    }));
+    b.querySelectorAll('[data-x]').forEach(el => el.addEventListener('click', () => {
+      dealPanel(b, +el.dataset.x, 'sell', () => buildList(b));
     }));
     b.querySelector('#exDone').addEventListener('click', () => closeSheet());
   };
@@ -1396,10 +1452,8 @@ function sheetMeeting(){
       STOCKS.map((_, i) => p.shares[i] > 0
         ? stockRow(i, `<button class="btn small gold" data-m="${i}">${fmt(p.shares[i] * CFG.MEET)}</button>`) : '').join('');
     b.querySelectorAll('[data-m]').forEach(el => el.addEventListener('click', () => {
-      const i = +el.dataset.m;
-      const amt = g.chooseMeeting(i);
-      chosen = true; g.resolvePending();
-      Snd.gavel(); toast(`Meeting adjourned — ${fmt(amt)} collected`);
+      const amt = g.chooseMeeting(+el.dataset.m);
+      if (amt > 0){ chosen = true; Snd.gavel(); toast(`Meeting adjourned — ${fmt(amt)} collected`); }
       closeSheet();
     }));
   }, done);
@@ -1411,7 +1465,7 @@ function sheetLedger(){
   let sel = g.st.turn;
   const build = b => {
     const p = g.st.players[sel];
-    const mine = sel === g.st.turn && !p.ai && !V.busy && !g.st.over && g.st.phase !== 'rolled';
+    const mine = sel === g.st.turn && !p.ai && !V.busy && !g.st.over;
     const certs = STOCKS.map((s, i) => {
       if (p.shares[i] < 1) return '';
       const val = p.shares[i] * g.st.prices[i];
@@ -1516,10 +1570,15 @@ async function takeRoll(){
   if (!mv) return null;
   renderButtons();
   await rollDiceAnim(mv.d1, mv.d2);
+  if (V.g !== g) return null;
+  const [spT] = describeSpace(mv.to);
+  $('sr').textContent = `${g.cur().name} throws ${mv.d1} and ${mv.d2} — lands on ${spT}`;
   await animateMove(mv);
+  if (V.g !== g) return null;
   const res = g.land(mv);
   renderTape();
   await playEvents(res.events);
+  if (V.g !== g) return null;
   renderAll();
   return res;
 }
@@ -1527,8 +1586,10 @@ async function takeRoll(){
 async function humanRoll(){
   if (V.busy || !V.g || V.g.st.over) return;
   Snd.unlock();
+  const gen = V.gen;
   V.busy = true;
   const res = await takeRoll();
+  if (gen !== V.gen) return;
   V.busy = false;
   if (!res){ renderButtons(); return; }
   if (res.needs){
@@ -1546,7 +1607,7 @@ function humanEndTurn(){
 }
 
 function finishTurn(){
-  const g = V.g;
+  const g = V.g; if (!g) return;
   const over = g.endTurn();
   if (over){ store(SAVE_KEY, null); renderAll(); showWin(); return; }
   saveGame();
@@ -1555,20 +1616,24 @@ function finishTurn(){
 }
 
 async function aiTurn(){
-  const g = V.g;
+  const g = V.g, gen = V.gen;
   const pause = {normal:650, fast:250, instant:0}[g.st.speed];
   V.busy = true;
   renderHint(); renderButtons();
   await sleep(pause);
+  if (gen !== V.gen) return;
   AI.preTurnSells(g);
   renderAll();
   const res = await takeRoll();
+  if (gen !== V.gen) return;
   if (res && res.needs){
     await sleep(pause / 2);
+    if (gen !== V.gen) return;
     AI.answer(g, res.needs);
     renderAll();
   }
   await sleep(pause);
+  if (gen !== V.gen) return;
   V.busy = false;
   finishTurn();
 }
@@ -1703,6 +1768,7 @@ function startGame(){
     jobs: V.seats.map((_, i) => jobs[i % jobs.length]),
   });
   V.g.addLog('The market opens. Every investor starts with ' + fmt(CFG.START_CASH) + '.');
+  V.gen++; V.busy = false;
   buildBoard(); buildQuote();
   lastPrices = null;
   $('die1').textContent = '?'; $('die2').textContent = '?';
@@ -1718,12 +1784,22 @@ function resumeGame(saved){
   V.seats = saved.seats || V.seats;
   V.target = saved.target || CFG.WIN;
   V.speed = saved.speed || 'normal';
+  V.gen++; V.busy = false;
   buildBoard(); buildQuote();
   lastPrices = null;
   $('die1').textContent = '?'; $('die2').textContent = '?';
   showScr('game');
   renderAll();
   toast('Game resumed — ' + V.g.cur().name + ' to play', 2600);
+  // a save made while a landing choice was open must reopen that choice,
+  // or the resumed game has no legal action left (roll and end are gated)
+  const pd = V.g.st.pending;
+  if (pd){
+    if (V.g.cur().ai){ AI.answer(V.g, pd); renderAll(); saveGame(); }
+    else if (pd.kind === 'buy') sheetBuy(pd.s);
+    else if (pd.kind === 'exchange') sheetExchange();
+    else if (pd.kind === 'meet') sheetMeeting();
+  }
   runLoop();
 }
 
@@ -1747,9 +1823,12 @@ function wire(){
   });
   $('btnRoll').addEventListener('click', humanRoll);
   $('btnEndTurn').addEventListener('click', humanEndTurn);
-  $('btnLedger').addEventListener('click', () => { if (V.g) sheetLedger(); });
+  $('btnLedger').addEventListener('click', () => { if (V.g && !V.busy) sheetLedger(); });
   $('sheetX').addEventListener('click', closeSheet);
   $('dim').addEventListener('click', closeSheet);
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && $('sheet').classList.contains('on')) closeSheet();
+  });
   $('btnSound').addEventListener('click', () => {
     V.sound = !V.sound;
     $('btnSound').setAttribute('aria-pressed', String(V.sound));
@@ -1770,7 +1849,7 @@ function wire(){
         <div style="display:flex;gap:10px"><button class="btn alt" id="qNo" style="flex:1">Keep Playing</button><button class="btn red" id="qYes" style="flex:1">Abandon</button></div>`;
       b.querySelector('#qNo').addEventListener('click', closeSheet);
       b.querySelector('#qYes').addEventListener('click', () => {
-        store(SAVE_KEY, null); V.g = null; confettiRun = false;
+        store(SAVE_KEY, null); V.g = null; V.gen++; V.busy = false; confettiRun = false;
         closeSheet(); $('win').classList.remove('on'); showScr('splash'); refreshResume();
       });
     });
@@ -1780,7 +1859,7 @@ function wire(){
     startGame();
   });
   $('btnToSplash').addEventListener('click', () => {
-    confettiRun = false; $('win').classList.remove('on'); V.g = null;
+    confettiRun = false; $('win').classList.remove('on'); V.g = null; V.gen++; V.busy = false;
     showScr('splash'); refreshResume();
   });
   window.addEventListener('resize', () => { if ($('win').classList.contains('on')) drawChart(); });
