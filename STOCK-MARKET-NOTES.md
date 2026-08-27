@@ -26,6 +26,15 @@ descriptions) establishes the skeleton implemented here:
 - Share certificates in 1/5/10/20/50/100/500/1000-share denominations (digital version
   just tracks share counts)
 
+Two further mechanics come from firsthand recollections of play:
+
+- **The board moves the market** — spaces are printed with price instructions; landing on a
+  company space moves that stock's pointer by the printed amount (each company has one UP
+  and one DOWN space), and market spaces move every issue at once (owner recollection).
+- **Trades move the pointer** — a rec.games.board reminiscence thread describes the pointer
+  going "up and down in response to buying and selling stock", so every purchase pushes
+  that stock up one notch and every sale pushes it down one.
+
 The complete box-back rules text (the space-by-space board and its dollar amounts) is not
 reachable from an archive we could access, so those numbers are **reconstructed** to be
 period-consistent and are all collected in the `CFG` block at the top of the engine script,
@@ -38,12 +47,14 @@ with `[R]` marks. If you have a physical copy, true them up there:
 | Par value | $100 | documented convention |
 | Split threshold (2-for-1) | $200 | reconstructed |
 | Bankruptcy | $0 → shares void, relists at $100 | reconstructed |
+| Company space moves | ±$10 printed per space | mechanic recalled; amount reconstructed |
+| Market spaces | ±$5 / ±$10 all issues; rally corner +$10 | mechanic recalled; amounts reconstructed |
+| Trade impact | buy +$5 / sell −$5 per transaction | mechanic recalled; amount reconstructed |
 | Dividend space | $5/share on holdings ≥ par | reconstructed |
 | Stockholders' meeting | $10/share, one company of your choice | reconstructed |
 | Annual meeting corner | $5/share all players, lander ×2 | reconstructed |
+| Broker's tip space | buy any one issue | reconstructed |
 | Broker's fee | $200 | reconstructed |
-| Market advances/declines | ±$10 all issues | reconstructed |
-| Ticker / Bull & Bear | one die: even up, odd down, ×$5 | reconstructed |
 | Win target | $100,000 (options: $50k, $25k) | documented |
 
 Known transcriptions of the original rules, for future truing-up (all were blocked from the
@@ -62,8 +73,8 @@ One HTML file, two scripts:
   (buying window / Exchange / meeting / Ledger), ticker-tape header, WebAudio sounds,
   localStorage autosave (`sm68` key) with resume, win screen with net-worth chart.
 
-Balance (30-game AI sims, 3 players): median ~490 table turns to $100k (the box listed the
-original at 180 minutes — it was a long game), ~300 to $50k, ~170 to $25k.
+Balance (30-game AI sims, 3 players): median ~385 table turns to $100k (the box listed the
+original at 180 minutes — it was a long game), ~270 to $50k, ~160 to $25k.
 
 `app/market/index.html` is a verbatim copy for the static-site deploy; regenerate it by
 copying `stock-market.html` after any change.
