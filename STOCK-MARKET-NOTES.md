@@ -19,6 +19,10 @@ descriptions) establishes the skeleton implemented here:
 
 - 8 stocks: F.W. Woolworth, International Shoe, General Mills, Alcoa, Maytag,
   American Motors, Western Publishing, J.I. Case
+- Share certificates in 1/5/10/20/50/100/500/1000-share denominations — trading in the
+  digital version is done in those same lots, and the Ledger shows holdings broken into them
+- Players choose a job at setup (the documented earn-a-salary element; all salaries equal
+  here as the fair default)
 - Two dice, pawns moving around a perimeter track; the center of the board is a
   "quotation board" of 8 price columns with sliding indicators
 - Turns bring dividends, stockholders' meetings, and windows to buy and sell shares

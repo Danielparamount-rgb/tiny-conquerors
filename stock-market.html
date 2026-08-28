@@ -211,7 +211,11 @@ svg{display:block}
 }
 .dice-btn:active{transform:translateY(2px);box-shadow:0 1px 0 var(--ink)}
 .dice-btn:disabled{opacity:.45;transform:none;box-shadow:0 3px 0 var(--ink)}
-.die{width:34px;height:34px;border-radius:7px;background:linear-gradient(145deg,#fffbef,#e8d9b0);border:2px solid var(--ink);display:grid;place-items:center;font:800 19px/1 var(--grot);color:var(--ink);box-shadow:inset -2px -3px 0 rgba(120,90,40,.25)}
+.die{position:relative;width:34px;height:34px;border-radius:7px;background:linear-gradient(135deg,#eccf96,#cfa761 70%,#b98f4b);border:2px solid var(--ink);display:grid;place-items:center;font:800 19px/1 var(--grot);color:var(--ink);box-shadow:inset -2px -3px 0 rgba(90,60,20,.3),inset 2px 2px 0 rgba(255,245,220,.5)}
+.die .pip{position:absolute;width:17%;height:17%;border-radius:50%;background:#382813;transform:translate(-50%,-50%);box-shadow:inset 0 1px 1px rgba(0,0,0,.5)}
+.die.big{width:78px;height:78px;border-radius:15px;border-width:3px}
+#diceFly{position:absolute;inset:0;display:none;align-items:center;justify-content:center;gap:22px;pointer-events:none;z-index:6}
+#diceFly.on{display:flex}
 .die.roll{animation:tumble .45s ease}
 @keyframes tumble{25%{transform:rotate(90deg) scale(.92)}60%{transform:rotate(210deg)}}
 @media (prefers-reduced-motion:reduce){.die.roll{animation:none}}
@@ -273,6 +277,14 @@ svg{display:block}
 #lgTabs .pchip{background:rgba(0,0,0,.12);color:var(--ink);min-height:40px}
 #lgTabs .pchip.cur{background:var(--paper)}
 .lg-total{display:flex;justify-content:space-between;font:700 15px/1.6 var(--mono);border-top:2px solid var(--ink);margin-top:10px;padding-top:8px}
+.lots{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.lot{font:800 10px/1 var(--grot);letter-spacing:.04em;color:var(--ink);background:repeating-linear-gradient(45deg,rgba(122,100,60,.10) 0 3px,transparent 3px 6px),var(--paper);border:1.5px solid var(--ink-soft);border-radius:3px;padding:4px 6px}
+.lot b{font-family:var(--mono)}
+.seat2{display:flex;align-items:center;gap:8px;padding:0 6px 8px 40px;border-bottom:1px solid var(--rule)}
+.seat2 label{font:700 10px/1 var(--grot);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint)}
+.seat2 select{flex:1;min-width:0;width:100%;background:var(--paper);border:1.5px solid var(--rule);border-radius:6px;padding:6px 8px;font-weight:600;font-size:14px;min-height:38px}
+.seat{border-bottom:none}
+.seat-dot{cursor:pointer}
 
 /* ---------------- ticker card (event announce) ---------------- */
 #card{
@@ -326,13 +338,12 @@ svg{display:block}
 /* mobile board sizing: keep the square board from eating the viewport,
    and scale board type UP so labels survive the shrink to ~350px */
 @media (max-width:919px){
+  #main{justify-content:center}
   #boardWrap{max-width:min(96vw,540px);margin:0 auto;width:100%}
   .sp-label{font-size:19px!important}
   .sp-sub{font-size:12px!important}
   .sp-big{font-size:21px!important}
   .ctr-m{font-size:11px}
-  .pawn text{font-size:17px!important}
-  .pawn circle{r:19px}
 }
 .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 </style>
@@ -533,6 +544,7 @@ const JOBS = [
 ];
 
 const PAWN_COLORS = ['#c0392b','#2e5f8f','#c69b3a','#3d7a69','#8e5aa8','#bf6b2a','#37818f','#5b4a3a'];
+const COMP_NAMES = ['Bernard','Harriet','Walt','Dorothy','Gus','Mabel','Chet','Vera'];
 
 /* Board: 40 spaces, movement 0→39 then around again. Corners at
    0, 10, 20, 30. The board drives the quotation board in the
@@ -1092,6 +1104,9 @@ function buildBoard(){
       } else {
         const glyph = sp.t === 'payday' ? '$' : '⇄';
         P.push(`<text x="${gx}" y="${gy+10}" text-anchor="middle" style="font:800 22px Georgia,serif;fill:${light?'#251f17':'#e3bd62'}">${glyph}</text>`);
+        if (sp.t === 'payday'){
+          P.push(`<text x="${gx}" y="${r.y+20}" text-anchor="middle" style="font:800 12px Archivo,sans-serif;letter-spacing:.12em;fill:#251f17">◀ START</text>`);
+        }
       }
     } else {
       const lk = spaceLook(sp);
@@ -1113,9 +1128,13 @@ function buildBoard(){
     P.push(`<rect class="sp-hit" data-i="${i}" tabindex="0" role="button" aria-label="${esc(dT + ' — ' + dB)}" x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="transparent"/>`);
     P.push(`</g>`);
   }
+  // the fold crease every real board earns
+  P.push(`<line x1="${BS/2}" y1="6" x2="${BS/2}" y2="${BS-6}" stroke="rgba(30,22,12,.10)" stroke-width="5"/>`);
+  P.push(`<line x1="${BS/2+3}" y1="6" x2="${BS/2+3}" y2="${BS-6}" stroke="rgba(255,248,225,.16)" stroke-width="1.6"/>`);
   P.push(`<g id="pawnLayer"></g>`);
   P.push(`</svg>`);
-  $('boardWrap').innerHTML = P.join('');
+  $('boardWrap').innerHTML = P.join('') +
+    `<div id="diceFly"><div class="die big" id="fd1"></div><div class="die big" id="fd2"></div></div>`;
   $('boardWrap').querySelectorAll('.sp-hit').forEach(el => {
     const show = () => {
       const [t, b] = describeSpace(+el.dataset.i);
@@ -1141,9 +1160,16 @@ function renderPawns(){
   const layer = document.getElementById('pawnLayer');
   if (!layer || !V.g) return;
   if (!layer.childElementCount){
+    // classic peg pawns: flared base, waisted body, ball head
+    const sc = matchMedia('(max-width:919px)').matches ? 1.45 : 1;
     layer.innerHTML = V.g.st.players.map((p, i) =>
-      `<g class="pawn" id="pawn${i}"><circle r="14" fill="${p.color}" stroke="#251f17" stroke-width="2.5"/>` +
-      `<text y="4.5" text-anchor="middle" style="font:800 12px Archivo,sans-serif;fill:#f7efda">${esc(p.name.trim().charAt(0).toUpperCase() || '?')}</text></g>`).join('');
+      `<g class="pawn" id="pawn${i}"><g transform="scale(${sc})">` +
+      `<ellipse cy="13" rx="10.5" ry="4.5" fill="${p.color}" stroke="#251f17" stroke-width="2"/>` +
+      `<path d="M -7.5 13 Q -3 0 -2.4 -5.5 L 2.4 -5.5 Q 3 0 7.5 13 Z" fill="${p.color}" stroke="#251f17" stroke-width="2" stroke-linejoin="round"/>` +
+      `<circle cy="-10" r="6" fill="${p.color}" stroke="#251f17" stroke-width="2"/>` +
+      `<ellipse cx="-2" cy="-12" rx="1.8" ry="2.4" fill="rgba(255,248,225,.55)"/>` +
+      `<text y="16" text-anchor="middle" style="font:800 7.5px Archivo,sans-serif;fill:#f7efda;paint-order:stroke;stroke:rgba(0,0,0,.35);stroke-width:1.5px">${esc(p.name.trim().charAt(0).toUpperCase() || '?')}</text>` +
+      `</g></g>`).join('');
   }
   V.g.st.players.forEach((p, i) => {
     const [x, y] = pawnXY(i);
@@ -1240,8 +1266,8 @@ function cardMs(){
   if (p.ai){ return {normal:1400, fast:600, instant:0}[V.g.st.speed]; }
   return 1600;
 }
-function showCard(kick, title, body){
-  const ms = cardMs();
+function showCard(kick, title, body, msOverride){
+  const ms = msOverride !== undefined ? msOverride : cardMs();
   if (ms === 0) return Promise.resolve();
   return new Promise(res => {
     $('cardKick').textContent = kick; $('cardTitle').textContent = title; $('cardBody').innerHTML = body;
@@ -1368,10 +1394,13 @@ function dealPanel(box, sIdx, mode, after){
       <div class="deal-name">${s.name}</div>
       <div class="deal-sec">${s.sector} · ${mode === 'buy' ? 'Buying' : 'Selling'}</div>
       <div class="deal-price num">$${price()}<small> / share</small></div>
+      <p style="font:700 10px/1 Archivo,sans-serif;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);text-align:center;margin:12px 0 6px">Share certificates</p>
       <div class="qty-row">
-        <button class="qbtn" data-d="-25">−25</button><button class="qbtn" data-d="-5">−5</button><button class="qbtn" data-d="-1">−1</button>
+        ${[1,5,10,20,50,100,500,1000].map(d => `<button class="qbtn" data-d="${d}">+${d}</button>`).join('')}
+      </div>
+      <div class="qty-row" style="margin-top:2px">
+        <button class="qbtn" data-d="clear">CLEAR</button>
         <span id="qtyVal" class="num">0</span>
-        <button class="qbtn" data-d="1">+1</button><button class="qbtn" data-d="5">+5</button><button class="qbtn" data-d="25">+25</button>
         <button class="qbtn" data-d="max">MAX</button>
       </div>
       <div class="deal-total num" id="dealTotal"></div>
@@ -1396,9 +1425,15 @@ function dealPanel(box, sIdx, mode, after){
     const go = box.querySelector('#dealGo');
     go.textContent = (mode === 'buy' ? 'Buy ' : 'Sell ') + qty + (qty === 1 ? ' share' : ' shares');
     go.disabled = qty < 1;
+    box.querySelectorAll('.qbtn').forEach(b => {
+      const d = +b.dataset.d;
+      if (d > 0) b.disabled = qty + d > maxQ();
+    });
   };
   box.querySelectorAll('.qbtn').forEach(b => b.addEventListener('click', () => {
-    if (b.dataset.d === 'max') qty = maxQ(); else qty += +b.dataset.d;
+    if (b.dataset.d === 'max') qty = maxQ();
+    else if (b.dataset.d === 'clear') qty = 0;
+    else qty += +b.dataset.d;
     upd();
   }));
   box.querySelector('#dealPass').addEventListener('click', () => after(false));
@@ -1496,15 +1531,21 @@ function sheetLedger(){
   const build = b => {
     const p = g.st.players[sel];
     const mine = sel === g.st.turn && !p.ai && !V.busy && !g.st.over;
+    const lots = n => {
+      const out = [];
+      [1000, 500, 100, 50, 20, 10, 5, 1].forEach(d => { while (n >= d){ n -= d; out.push(d); } });
+      return out.map(d => `<span class="lot"><b>${d}</b> SH</span>`).join('');
+    };
     const certs = STOCKS.map((s, i) => {
       if (p.shares[i] < 1) return '';
       const val = p.shares[i] * g.st.prices[i];
       return `<div class="cert">
         <div class="cert-head">
           <span class="mono-chip" style="background:${s.color}">${s.code}</span>
-          <span class="ti"><b style="font:800 13px Archivo,sans-serif">${s.name}</b><br><small style="font:600 10px Archivo,sans-serif;color:var(--ink-faint)">REGISTERED SHARE CERTIFICATE</small></span>
+          <span class="ti"><b style="font:800 13px Archivo,sans-serif">${s.name}</b><br><small style="font:600 10px Archivo,sans-serif;color:var(--ink-faint)">REGISTERED SHARE CERTIFICATES</small></span>
           <span class="cert-shares">${p.shares[i]} sh<br>@ $${g.st.prices[i]}</span>
         </div>
+        <div class="lots">${lots(p.shares[i])}</div>
         <div class="cert-foot">
           <span class="num" style="font-weight:700">${fmt(val)}</span>
           ${mine ? `<button class="btn red" data-s="${i}">Sell</button>` : ''}
@@ -1584,20 +1625,41 @@ async function animateMove(mv){
   renderPawns();
 }
 
+/* classic pip faces on wooden dice */
+const PIPS = {
+  1: [[50,50]],
+  2: [[28,28],[72,72]],
+  3: [[26,26],[50,50],[74,74]],
+  4: [[28,28],[72,28],[28,72],[72,72]],
+  5: [[28,28],[72,28],[50,50],[28,72],[72,72]],
+  6: [[28,26],[72,26],[28,50],[72,50],[28,74],[72,74]],
+};
+function dieFace(el, n){
+  if (!el) return;
+  el.textContent = '';
+  (PIPS[n] || []).forEach(p => {
+    const s = document.createElement('span');
+    s.className = 'pip'; s.style.left = p[0] + '%'; s.style.top = p[1] + '%';
+    el.appendChild(s);
+  });
+}
 async function rollDiceAnim(d1, d2){
   const g = V.g;
-  if ((g.cur().ai && g.st.speed === 'instant') || RM){ $('die1').textContent = d1; $('die2').textContent = d2; return; }
+  if ((g.cur().ai && g.st.speed === 'instant') || RM){ dieFace($('die1'), d1); dieFace($('die2'), d2); return; }
   Snd.dice();
-  const e1 = $('die1'), e2 = $('die2');
-  e1.classList.add('roll'); e2.classList.add('roll');
+  const fly = document.getElementById('diceFly');
+  if (fly) fly.classList.add('on');
+  const dice = [[$('die1'), document.getElementById('fd1')], [$('die2'), document.getElementById('fd2')]];
+  dice.flat().forEach(e => e && e.classList.add('roll'));
   for (let i = 0; i < 6; i++){
-    e1.textContent = 1 + Math.floor(Math.random() * 6);
-    e2.textContent = 1 + Math.floor(Math.random() * 6);
+    dice.forEach(pair => pair.forEach(e => dieFace(e, 1 + Math.floor(Math.random() * 6))));
     await sleep(65);
   }
-  e1.textContent = d1; e2.textContent = d2;
-  e1.classList.remove('roll'); e2.classList.remove('roll');
-  await sleep(180);
+  dice[0].forEach(e => dieFace(e, d1));
+  dice[1].forEach(e => dieFace(e, d2));
+  dice.flat().forEach(e => e && e.classList.remove('roll'));
+  await sleep(340);
+  if (fly) fly.classList.remove('on');
 }
 
 async function takeRoll(){
@@ -1683,7 +1745,13 @@ function runLoop(){
   const g = V.g;
   if (!g || g.st.over) return;
   if (g.cur().ai){ aiTurn(); }
-  else { renderHint(); renderButtons(); }
+  else {
+    renderHint(); renderButtons();
+    // hot-seat ritual: hand the board to the next investor
+    if (g.st.turnCount > 0 && !g.st.pending && g.st.players.filter(p => !p.ai).length > 1){
+      showCard('Pass the Board', g.cur().name, 'Your throw — tap to take the dice.', 60000);
+    }
+  }
 }
 
 /* ================= WIN ================= */
@@ -1775,21 +1843,49 @@ function showWin(){
 }
 
 /* ================= SETUP SCREEN ================= */
+function seatColor(i){ return V.seats[i].color || PAWN_COLORS[i]; }
+function nextCompName(){
+  const used = V.seats.map(s => s.name);
+  return COMP_NAMES.find(n => !used.includes(n)) || 'Computer ' + (V.seats.length + 1);
+}
 function renderSeats(){
+  V.seats.forEach((s, i) => { if (!s.color) s.color = PAWN_COLORS[i]; if (s.job === undefined) s.job = -1; });
   $('seatList').innerHTML = V.seats.map((s, i) => `
     <div class="seat">
-      <span class="seat-dot" style="background:${PAWN_COLORS[i]}"></span>
+      <button class="seat-dot" data-c="${i}" style="background:${s.color}" aria-label="Change pawn color"></button>
       <input type="text" maxlength="14" value="${esc(s.name)}" data-n="${i}" aria-label="Investor name">
       <select data-k="${i}" aria-label="Human or computer">
         <option value="h"${s.ai ? '' : ' selected'}>Human</option>
         <option value="c"${s.ai ? ' selected' : ''}>Computer</option>
       </select>
       ${V.seats.length > 2 ? `<button class="rm" data-r="${i}" aria-label="Remove investor">×</button>` : ''}
+    </div>
+    <div class="seat2">
+      <label for="job${i}">Job</label>
+      <select id="job${i}" data-j="${i}">
+        <option value="-1"${s.job < 0 ? ' selected' : ''}>Deal me one at random</option>
+        ${JOBS.map((j, k) => {
+          const taken = V.seats.some((o, oi) => oi !== i && o.job === k);
+          return `<option value="${k}"${s.job === k ? ' selected' : ''}${taken ? ' disabled' : ''}>${j.t} — ${j.f}${taken ? ' (taken)' : ''}</option>`;
+        }).join('')}
+      </select>
     </div>`).join('');
   $('seatList').querySelectorAll('[data-n]').forEach(el => el.addEventListener('input', () => { V.seats[+el.dataset.n].name = el.value; }));
+  $('seatList').querySelectorAll('[data-c]').forEach(el => el.addEventListener('click', () => {
+    const i = +el.dataset.c;
+    const used = V.seats.map((o, oi) => oi === i ? null : o.color);
+    let idx = PAWN_COLORS.indexOf(V.seats[i].color);
+    for (let step = 0; step < 8; step++){
+      idx = (idx + 1) % 8;
+      if (!used.includes(PAWN_COLORS[idx])){ V.seats[i].color = PAWN_COLORS[idx]; break; }
+    }
+    renderSeats();
+  }));
+  $('seatList').querySelectorAll('[data-j]').forEach(el => el.addEventListener('change', () => { V.seats[+el.dataset.j].job = +el.value; renderSeats(); }));
   $('seatList').querySelectorAll('[data-k]').forEach(el => el.addEventListener('change', () => {
     const i = +el.dataset.k; V.seats[i].ai = el.value === 'c';
-    if (el.value === 'c' && /^Investor \d+$/.test(V.seats[i].name)){ V.seats[i].name = 'Computer ' + (i + 1); renderSeats(); }
+    if (el.value === 'c' && /^Investor \d+$/.test(V.seats[i].name)){ V.seats[i].name = nextCompName(); }
+    renderSeats();
   }));
   $('seatList').querySelectorAll('[data-r]').forEach(el => el.addEventListener('click', () => { V.seats.splice(+el.dataset.r, 1); renderSeats(); }));
   $('btnAddSeat').style.display = V.seats.length >= 8 ? 'none' : '';
@@ -1800,13 +1896,20 @@ function showScr(name){
 }
 
 function startGame(){
-  const jobs = JOBS.map((_, i) => i);
-  for (let i = jobs.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [jobs[i], jobs[j]] = [jobs[j], jobs[i]]; }
+  // honor chosen jobs; deal the rest from what remains
+  const taken = new Set(V.seats.filter(s => s.job >= 0).map(s => s.job));
+  const pool = JOBS.map((_, i) => i).filter(i => !taken.has(i));
+  for (let i = pool.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  const dealt = new Set();
+  const jobFor = s => {
+    if (s.job >= 0 && !dealt.has(s.job)){ dealt.add(s.job); return s.job; }
+    return pool.length ? pool.pop() : Math.floor(Math.random() * JOBS.length);
+  };
   V.g = new Game({
     seed: (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0,
     target: V.target, speed: V.speed,
-    players: V.seats.map((s, i) => ({name: s.name.trim() || 'Investor ' + (i + 1), ai: s.ai, color: PAWN_COLORS[i]})),
-    jobs: V.seats.map((_, i) => jobs[i % jobs.length]),
+    players: V.seats.map((s, i) => ({name: s.name.trim() || 'Investor ' + (i + 1), ai: s.ai, color: s.color || PAWN_COLORS[i]})),
+    jobs: V.seats.map(s => jobFor(s)),
   });
   V.g.addLog('The market opens. Every investor starts with ' + fmt(CFG.START_CASH) + '.');
   V.gen++; V.busy = false;
@@ -1859,7 +1962,11 @@ function wire(){
     catch(e){ store(SAVE_KEY, null); toast('Saved game was from an older edition — starting fresh'); renderSeats(); showScr('setup'); }
   });
   $('btnAddSeat').addEventListener('click', () => {
-    if (V.seats.length < 8){ V.seats.push({name: 'Investor ' + (V.seats.length + 1), ai: true}); V.seats[V.seats.length-1].name = 'Computer ' + V.seats.length; renderSeats(); }
+    if (V.seats.length < 8){
+      const used = V.seats.map(s => s.color);
+      V.seats.push({name: nextCompName(), ai: true, job: -1, color: PAWN_COLORS.find(c => !used.includes(c))});
+      renderSeats();
+    }
   });
   $('btnBackSplash').addEventListener('click', () => showScr('splash'));
   $('btnStart').addEventListener('click', () => {
