@@ -8,6 +8,7 @@
 </head>
 <body>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bevan&family=Archivo:wght@400;600;700;800&family=Courier+Prime:wght@400;700&display=swap">
+<script id="netState" type="application/json">null</script>
 <style>
 /* ============================================================
    STOCK MARKET 1968 — one committed visual world: a lithographed
@@ -287,6 +288,16 @@ svg{display:block}
 .seat2 select{flex:1;min-width:0;width:100%;background:var(--paper);border:1.5px solid var(--rule);border-radius:6px;padding:6px 8px;font-weight:600;font-size:14px;min-height:38px}
 .seat{border-bottom:none}
 .seat-dot{cursor:pointer}
+#lobby{min-height:100vh;min-height:100dvh;display:none;align-items:center;justify-content:center;padding:18px 14px calc(24px + env(safe-area-inset-bottom))}
+#lobby.on{display:flex}
+.lseat{display:flex;align-items:center;gap:10px;padding:10px 6px;border-bottom:1px solid var(--rule)}
+.lseat .who{flex:1;min-width:0}
+.lseat .who b{display:block;font:800 15px/1.3 var(--grot);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lseat .who small{font:600 11px/1.3 var(--grot);color:var(--ink-faint)}
+.lseat .you{font:800 10px/1 var(--grot);letter-spacing:.1em;background:var(--gold);color:var(--ink);border:1.5px solid var(--ink);border-radius:4px;padding:3px 6px}
+#liveBadge{font:800 10px/1 var(--grot);letter-spacing:.18em;color:#fff;background:var(--red);border:1.5px solid rgba(0,0,0,.4);border-radius:4px;padding:5px 8px;align-self:center;animation:livepulse 2.4s infinite}
+@keyframes livepulse{50%{filter:brightness(1.25)}}
+@media (prefers-reduced-motion:reduce){#liveBadge{animation:none}}
 
 /* ---------------- ticker card (event announce) ---------------- */
 #card{
@@ -370,6 +381,11 @@ svg{display:block}
       <button class="btn gold" id="btnResume" style="min-width:230px;display:none">Resume Game</button>
       <button class="btn alt small" id="btnRules0">How to Play</button>
     </div>
+    <div id="onlineCard" style="display:none;margin-top:18px;border-top:1px solid var(--rule);padding-top:14px">
+      <p class="lid-sub" style="margin-bottom:10px">Online — one table, everyone’s phone</p>
+      <button class="btn red" id="btnOnline" style="min-width:230px">Host a Table</button>
+      <p id="onlineHint" class="homage" style="margin-top:10px"></p>
+    </div>
     <p class="homage">An original homage to the 1968 board-game classic. Not affiliated with the original publishers. Company names are historical references.</p>
   </div>
 </div>
@@ -406,11 +422,35 @@ svg{display:block}
   </div>
 </div>
 
+<!-- ============================ ONLINE LOBBY ============================ -->
+<div id="lobby" class="scr">
+  <div class="setup-card card-paper">
+    <h2 class="setup-h">The Table Is Set</h2>
+    <p class="setup-sub" id="lobbySub">Claim a seat — the game starts when the host opens the market</p>
+    <div id="lobbySeats"></div>
+    <div class="setup-row" id="lobbyHostRow" style="display:none">
+      <label for="lobbyTarget">Win at</label>
+      <select id="lobbyTarget">
+        <option value="100000" selected>$100,000 — the classic game</option>
+        <option value="50000">$50,000 — an evening game</option>
+        <option value="25000">$25,000 — a quick flutter</option>
+      </select>
+    </div>
+    <div class="setup-actions">
+      <button class="btn alt small" id="btnLobbyLeave">Back</button>
+      <button class="btn alt small" id="btnLobbyAI" style="display:none">+ Computer</button>
+      <button class="btn" id="btnLobbyStart" style="display:none;min-width:200px">Open the Market</button>
+    </div>
+    <p class="homage" id="lobbyNote" style="text-align:center;margin-top:12px"></p>
+  </div>
+</div>
+
 <!-- ============================ GAME ============================ -->
 <div id="game" class="scr">
   <div id="tape" aria-hidden="true"><span id="tapeInner"></span></div>
   <div id="topbar">
     <div class="t">Stock Market<small>Est. 1968</small></div>
+    <span id="liveBadge" style="display:none">LIVE</span>
     <div class="tools">
       <button class="tool" id="btnSound" aria-label="Sound on or off" aria-pressed="true">&#9836;</button>
       <button class="tool" id="btnMenu" aria-label="Menu">&#9776;</button>
@@ -905,6 +945,9 @@ window.__sim = function(nGames = 10, nPlayers = 3, target = CFG.WIN, seed0 = 123
 </script>
 <script>
 'use strict';
+/* Captured before boot touches the DOM: the page's own source, used
+   by online play to publish new versions of itself with fresh state. */
+const PRISTINE = '<!doctype html>\n' + document.documentElement.outerHTML;
 /* ============================================================
    UI LAYER — renders engine state, animates turns, hosts sheets.
    ============================================================ */
@@ -916,6 +959,7 @@ const SAVE_KEY = 'sm68';
 
 const V = {
   g: null,            // Game instance
+  online: false,      // true when this game lives in the shared artifact
   gen: 0,             // bumped on new/resume/abandon so stale async turns bail out
   seats: [{name:'Investor 1', ai:false}, {name:'The Computer', ai:true}],
   target: CFG.WIN, speed: 'normal',
@@ -929,9 +973,65 @@ const V = {
 function store(k, v){ try{ if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); }catch(e){} }
 function read(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
 function saveGame(){
-  if (!V.g || V.g.st.over) return;
+  if (V.online || !V.g || V.g.st.over) return;   // online tables live in the artifact, not this device
   store(SAVE_KEY, JSON.stringify({st: V.g.st, seats: V.seats, target: V.target, speed: V.speed}));
 }
+
+/* ============================================================
+   NET — online play over the artifact runtime: the page embeds the
+   table state in its own HTML and publishes a new version of itself
+   after each human turn; every open phone reloads to the latest.
+   ============================================================ */
+const NET = {
+  api: null,                 // artifact capability namespace, or null
+  state: null,               // the shared table parsed from #netState
+  token: null,               // this device's identity
+  publishing: false,
+
+  parse(){
+    try{ this.state = JSON.parse($('netState').textContent); }catch(e){ this.state = null; }
+  },
+  init(onReady){
+    this.token = read('sm68-id');
+    if (!this.token){
+      this.token = 'p' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+      store('sm68-id', this.token);
+    }
+    this.parse();
+    if (!(window.claude && typeof window.claude.use === 'function')){ onReady(false); return; }
+    window.claude.use('artifact').then(ns => { this.api = ns || null; onReady(!!this.api); })
+      .catch(() => onReady(false));
+  },
+  buildDoc(state){
+    const json = JSON.stringify(state).replace(/</g, '\\u003c');
+    return PRISTINE.replace(/(<script id="netState"[^>]*>)[\s\S]*?(<\/script>)/,
+      (m, a, b) => a + json + b);
+  },
+  async publish(state, okMsg){
+    if (!this.api){ toast('Online play is not available in this view'); return false; }
+    if (this.publishing) return false;
+    this.publishing = true;
+    try{
+      await this.api.publish(this.buildDoc(state));
+      if (okMsg) toast(okMsg);           // usually unseen — the view reloads to the new version
+      return true;
+    }catch(e){
+      const code = e && (e.code || e.message) || '';
+      if (String(code).includes('conflict')) toast('The table moved first — catching up…');
+      else if (String(code).includes('not_granted') || String(code).includes('not_writer'))
+        toast('You have view-only access — ask the host to share the page with edit permission', 4200);
+      else toast('Could not reach the table — try again', 3000);
+      return false;
+    }finally{
+      this.publishing = false;
+    }
+  },
+  mySeat(){
+    const s = this.state;
+    if (!s || !s.seats) return -1;
+    return s.seats.findIndex(x => x && x.token === this.token);
+  },
+};
 
 /* ================= AUDIO — everything synthesized live ================= */
 const Snd = (() => {
@@ -1238,6 +1338,14 @@ function renderHint(){
   const g = V.g; if (!g) return;
   const p = g.cur();
   if (g.st.over){ $('hint').innerHTML = 'The market has closed.'; return; }
+  if (V.online && myOnlineSeat() !== g.st.turn && !p.ai){
+    $('hint').innerHTML = `<span>Waiting for <b>${esc(p.name)}</b> to play — the board updates when they finish.</span>`;
+    return;
+  }
+  if (V.online && p.ai && onlineDriver() !== myOnlineSeat()){
+    $('hint').innerHTML = `<span><b>${esc(p.name)}</b> plays on ${esc(g.st.players[onlineDriver() >= 0 ? onlineDriver() : 0].name)}'s phone…</span>`;
+    return;
+  }
   if (p.ai){ $('hint').innerHTML = `<span><b>${esc(p.name)}</b> is playing…</span>`; }
   else if (g.st.phase === 'idle'){ $('hint').innerHTML = `<span><b>${esc(p.name)}</b> — your throw. You may sell from the Ledger first.</span>`; }
   else if (g.st.pending){ $('hint').innerHTML = `<span><b>${esc(p.name)}</b> — resolve your landing.</span>`; }
@@ -1245,9 +1353,10 @@ function renderHint(){
 }
 function renderButtons(){
   const g = V.g; if (!g) return;
-  const p = g.cur(), human = !p.ai;
-  $('btnRoll').disabled = !(human && g.st.phase === 'idle' && !V.busy && !g.st.over);
-  $('btnEndTurn').disabled = !(human && g.st.phase === 'done' && !V.busy && !g.st.over);
+  const p = g.cur();
+  const mine = !p.ai && (!V.online || myOnlineSeat() === g.st.turn);
+  $('btnRoll').disabled = !(mine && g.st.phase === 'idle' && !V.busy && !g.st.over);
+  $('btnEndTurn').disabled = !(mine && g.st.phase === 'done' && !V.busy && !g.st.over);
 }
 function renderAll(){ if (!V.g) return; renderPlayers(); renderPawns(); renderQuote(); renderTape(); renderLog(); renderHint(); renderButtons(); }
 
@@ -1333,7 +1442,7 @@ async function playEvents(events){
 
 /* ================= SHEETS ================= */
 let sheetOnClose = null, sheetPrevFocus = null;
-const SCREENS = ['splash', 'setup', 'game'];
+const SCREENS = ['splash', 'setup', 'lobby', 'game'];
 function openSheet(title, build, onClose){
   $('sheetTitle').textContent = title;
   const b = $('sheetBody'); b.innerHTML = ''; build(b);
@@ -1493,7 +1602,8 @@ function sheetLedger(){
   let sel = g.st.turn;
   const build = b => {
     const p = g.st.players[sel];
-    const mine = sel === g.st.turn && !p.ai && !V.busy && !g.st.over;
+    const mine = sel === g.st.turn && !p.ai && !V.busy && !g.st.over &&
+      (!V.online || myOnlineSeat() === g.st.turn);
     const lots = n => {
       const out = [];
       [1000, 500, 100, 50, 20, 10, 5, 1].forEach(d => { while (n >= d){ n -= d; out.push(d); } });
@@ -1642,6 +1752,7 @@ async function takeRoll(){
 
 async function humanRoll(){
   if (V.busy || !V.g || V.g.st.over) return;
+  if (V.online && myOnlineSeat() !== V.g.st.turn) return;
   Snd.unlock();
   const gen = V.gen;
   V.busy = true;
@@ -1666,7 +1777,20 @@ function humanEndTurn(){
 function finishTurn(){
   const g = V.g; if (!g) return;
   const over = g.endTurn();
-  if (over){ store(SAVE_KEY, null); renderAll(); showWin(); return; }
+  if (over){
+    if (V.online){ onlinePublishTurn(); }
+    else store(SAVE_KEY, null);
+    renderAll(); showWin(); return;
+  }
+  if (V.online){
+    // computers keep playing on this device; hand off to the table
+    // (one publish, one reload for every phone) at the next human turn
+    if (g.cur().ai && onlineDriver() === myOnlineSeat()){ renderAll(); runLoop(); return; }
+    renderAll();
+    onlinePublishTurn();
+    renderHint();
+    return;
+  }
   saveGame();
   renderAll();
   runLoop();
@@ -1698,11 +1822,14 @@ async function aiTurn(){
 function runLoop(){
   const g = V.g;
   if (!g || g.st.over) return;
-  if (g.cur().ai){ aiTurn(); }
+  if (g.cur().ai){
+    if (V.online && onlineDriver() !== myOnlineSeat()){ renderHint(); renderButtons(); return; }
+    aiTurn();
+  }
   else {
     renderHint(); renderButtons();
-    // hot-seat ritual: hand the board to the next investor
-    if (g.st.turnCount > 0 && !g.st.pending && g.st.players.filter(p => !p.ai).length > 1){
+    // hot-seat ritual: hand the board to the next investor (local play only)
+    if (!V.online && g.st.turnCount > 0 && !g.st.pending && g.st.players.filter(p => !p.ai).length > 1){
       showCard('Pass the Board', g.cur().name, 'Your throw — tap to take the dice.', 60000);
     }
   }
@@ -1789,6 +1916,16 @@ function showWin(){
     ['Turns played (table)', g.st.turnCount],
   ];
   $('winStats').innerHTML = rows.map(r => `<div class="row"><span>${r[0]}</span><span>${r[1]}</span></div>`).join('');
+  if (V.online){
+    const host = NET.state && NET.state.host === NET.token;
+    $('btnAgain').style.display = host ? '' : 'none';
+    $('btnAgain').textContent = 'Back to the Lobby';
+    $('btnToSplash').textContent = 'Leave the Table';
+  } else {
+    $('btnAgain').style.display = '';
+    $('btnAgain').textContent = 'Play Again';
+    $('btnToSplash').textContent = 'Main Menu';
+  }
   $('win').classList.add('on');
   drawChart();
   confetti();
@@ -1845,7 +1982,7 @@ function renderSeats(){
 }
 
 function showScr(name){
-  ['splash', 'setup', 'game'].forEach(s => $(s).classList.toggle('on', s === name));
+  SCREENS.forEach(s => $(s).classList.toggle('on', s === name));
 }
 
 function startGame(){
@@ -1865,6 +2002,7 @@ function startGame(){
     jobs: V.seats.map(s => jobFor(s)),
   });
   V.g.addLog('The market opens. Every investor starts with ' + fmt(CFG.START_CASH) + '.');
+  V.online = false; $('liveBadge').style.display = 'none';
   V.gen++; V.busy = false;
   buildBoard(); buildQuote();
   lastPrices = null;
@@ -1881,6 +2019,7 @@ function resumeGame(saved){
   V.seats = saved.seats || V.seats;
   V.target = saved.target || CFG.WIN;
   V.speed = saved.speed || 'normal';
+  V.online = false; $('liveBadge').style.display = 'none';
   V.gen++; V.busy = false;
   buildBoard(); buildQuote();
   lastPrices = null;
@@ -1898,6 +2037,190 @@ function resumeGame(saved){
     else if (pd.kind === 'meet') sheetMeeting();
   }
   runLoop();
+}
+
+/* ================= ONLINE TABLE ================= */
+function netSnapshot(extra){
+  const s = NET.state || {};
+  return Object.assign({
+    v: 3, phase: s.phase, host: s.host, target: s.target || CFG.WIN,
+    seats: s.seats || [], game: s.game || null, lastBy: NET.token, note: '',
+  }, extra || {});
+}
+function hostTable(){
+  const st = netSnapshot({phase:'lobby', host: NET.token, seats: [], game: null, note: 'The table is set'});
+  NET.publish(st, 'Table created');
+}
+function routeSplashCard(){
+  const s = NET.state;
+  $('onlineCard').style.display = NET.api ? '' : 'none';
+  if (!NET.api) return;
+  if (!s){
+    $('btnOnline').textContent = 'Host a Table';
+    $('onlineHint').textContent = 'Creates a shared table on this page. Share the page (with edit access) and every player joins from their own phone.';
+  } else if (s.phase === 'lobby'){
+    $('btnOnline').textContent = 'Join the Table';
+    $('onlineHint').textContent = 'A table is waiting for players.';
+  } else {
+    const mine = NET.mySeat() >= 0;
+    $('btnOnline').textContent = mine ? 'Return to the Table' : 'Watch the Table';
+    $('onlineHint').textContent = mine ? 'Your game is in progress.' : 'A game is in progress — you can watch.';
+  }
+}
+function routeOnline(){
+  const s = NET.state;
+  routeSplashCard();
+  if (!NET.api || !s) return false;
+  if (s.phase === 'lobby'){
+    if (NET.mySeat() >= 0 || s.host === NET.token){ enterLobby(); return true; }
+    return false;
+  }
+  if ((s.phase === 'playing' || s.phase === 'over') && NET.mySeat() >= 0){ enterOnlineGame(); return true; }
+  return false;
+}
+function lobbyClaimSheet(slot){
+  const s = NET.state;
+  const usedColors = s.seats.map(x => x.color), usedJobs = s.seats.map(x => x.job);
+  const freeColors = PAWN_COLORS.filter(c => !usedColors.includes(c));
+  let color = freeColors[0] || PAWN_COLORS[slot % 8];
+  openSheet('Take a Seat', b => {
+    b.innerHTML = `
+      <label style="font:700 11px/2 Archivo,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft)">Your name</label>
+      <input id="clName" type="text" maxlength="14" value="" style="width:100%;background:var(--paper);border:2px solid var(--ink);border-radius:6px;padding:10px;font:600 16px Archivo,sans-serif;margin-bottom:12px">
+      <label style="font:700 11px/2 Archivo,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft)">Your pawn</label>
+      <div id="clColors" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">${freeColors.map(c =>
+        `<button class="seat-dot" data-c="${c}" style="width:34px;height:34px;background:${c};${c === color ? 'outline:3px solid var(--gold-hi);outline-offset:2px' : ''}" aria-label="Pawn color"></button>`).join('')}</div>
+      <label for="clJob" style="font:700 11px/2 Archivo,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft)">Job</label>
+      <select id="clJob" style="width:100%;background:var(--paper);border:2px solid var(--ink);border-radius:6px;padding:10px;font-weight:600;margin-bottom:16px">
+        <option value="-1">Deal me one at random</option>
+        ${JOBS.map((j, k) => usedJobs.includes(k) ? '' : `<option value="${k}">${j.t} — ${j.f}</option>`).join('')}
+      </select>
+      <button class="btn" id="clGo" style="width:100%">Sit Down</button>`;
+    b.querySelectorAll('[data-c]').forEach(el => el.addEventListener('click', () => {
+      color = el.dataset.c;
+      b.querySelectorAll('[data-c]').forEach(o => o.style.outline = o === el ? '3px solid var(--gold-hi)' : 'none');
+    }));
+    b.querySelector('#clGo').addEventListener('click', () => {
+      const name = (b.querySelector('#clName').value.trim() || 'Investor').slice(0, 14);
+      const job = +b.querySelector('#clJob').value;
+      const st = netSnapshot({});
+      // re-check the slot is still free at claim time; append otherwise
+      st.seats = st.seats.filter(x => x.token !== NET.token);
+      if (st.seats.length >= 8){ toast('The table is full'); closeSheet(); return; }
+      st.seats.push({name, color, job, ai: false, token: NET.token});
+      st.note = name + ' sat down at the table';
+      closeSheet();
+      NET.publish(st);
+    });
+  });
+}
+function enterLobby(){
+  const s = NET.state;
+  V.online = true; V.g = null;
+  showScr('lobby');
+  const host = s.host === NET.token;
+  const humans = s.seats.filter(x => !x.ai).length;
+  $('lobbyHostRow').style.display = host ? '' : 'none';
+  $('btnLobbyAI').style.display = host && s.seats.length < 8 ? '' : 'none';
+  $('btnLobbyStart').style.display = host ? '' : 'none';
+  $('btnLobbyStart').disabled = !(s.seats.length >= 2 && humans >= 1);
+  if (host && s.target) $('lobbyTarget').value = String(s.target);
+  $('lobbySub').textContent = host
+    ? 'You are the host — share this page with edit access, then open the market'
+    : 'Claim a seat — the host opens the market';
+  $('lobbyNote').textContent = s.note || '';
+  const rows = s.seats.map((x, i) => `
+    <div class="lseat">
+      <span class="seat-dot" style="background:${x.color};cursor:default"></span>
+      <span class="who"><b>${esc(x.name)}${x.ai ? ' ⚙' : ''}</b><small>${x.job >= 0 ? esc(JOBS[x.job].t) : 'Job dealt at random'}${x.token === s.host ? ' · host' : ''}</small></span>
+      ${x.token === NET.token ? '<span class="you">YOU</span><button class="rm" data-un="1" aria-label="Give up seat">×</button>' : ''}
+      ${(s.host === NET.token && x.ai) ? `<button class="rm" data-unai="${i}" aria-label="Remove computer">×</button>` : ''}
+    </div>`).join('');
+  const open = s.seats.length < 8 && NET.mySeat() < 0
+    ? `<div class="lseat"><span class="seat-dot" style="background:transparent;border-style:dashed;cursor:default"></span>
+       <span class="who"><b>Open seat</b><small>Anyone with edit access can sit</small></span>
+       <button class="btn small gold" id="btnClaim">Take a Seat</button></div>` : '';
+  $('lobbySeats').innerHTML = rows + open;
+  const claim = $('lobbySeats').querySelector('#btnClaim');
+  if (claim) claim.addEventListener('click', () => lobbyClaimSheet(s.seats.length));
+  const un = $('lobbySeats').querySelector('[data-un]');
+  if (un) un.addEventListener('click', () => {
+    const st = netSnapshot({});
+    st.seats = st.seats.filter(x => x.token !== NET.token);
+    st.note = 'A seat opened up';
+    NET.publish(st);
+  });
+  $('lobbySeats').querySelectorAll('[data-unai]').forEach(el => el.addEventListener('click', () => {
+    const st = netSnapshot({});
+    st.seats.splice(+el.dataset.unai, 1);
+    NET.publish(st);
+  }));
+}
+function lobbyAddAI(){
+  const st = netSnapshot({});
+  if (st.seats.length >= 8) return;
+  const usedN = st.seats.map(x => x.name), usedC = st.seats.map(x => x.color);
+  st.seats.push({
+    name: COMP_NAMES.find(n => !usedN.includes(n)) || 'Computer',
+    color: PAWN_COLORS.find(c => !usedC.includes(c)) || PAWN_COLORS[st.seats.length % 8],
+    job: -1, ai: true, token: null,
+  });
+  NET.publish(st);
+}
+function lobbyStart(){
+  const s = NET.state;
+  if (s.host !== NET.token) return;
+  const target = +$('lobbyTarget').value || CFG.WIN;
+  const taken = new Set(s.seats.filter(x => x.job >= 0).map(x => x.job));
+  const pool = JOBS.map((_, i) => i).filter(i => !taken.has(i));
+  for (let i = pool.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  const g = new Game({
+    seed: (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0,
+    target, speed: 'fast',
+    players: s.seats.map((x, i) => ({name: x.name, ai: x.ai, color: x.color})),
+    jobs: s.seats.map(x => x.job >= 0 ? x.job : (pool.pop() ?? Math.floor(Math.random() * JOBS.length))),
+  });
+  g.addLog('The market opens. Every investor starts with ' + fmt(CFG.START_CASH) + '.');
+  const st = netSnapshot({phase:'playing', target, game: g.st, note: 'The market is open — first throw: ' + g.st.players[0].name});
+  NET.publish(st);
+}
+/* whose device runs the computers: the next human seat in turn order */
+function onlineDriver(){
+  const g = V.g, s = NET.state;
+  if (!g) return -1;
+  for (let k = 0; k < g.st.players.length; k++){
+    const idx = (g.st.turn + k) % g.st.players.length;
+    if (!g.st.players[idx].ai) return idx;
+  }
+  return -1;
+}
+function myOnlineSeat(){ return V.online ? NET.mySeat() : -1; }
+function enterOnlineGame(){
+  const s = NET.state;
+  V.online = true;
+  V.g = Game.fromSave(JSON.parse(JSON.stringify(s.game)));
+  V.gen++; V.busy = false;
+  buildBoard(); buildQuote();
+  lastPrices = null;
+  dieFace($('die1'), V.g.st.dice[0] || 1); dieFace($('die2'), V.g.st.dice[1] || 1);
+  $('liveBadge').style.display = '';
+  showScr('game');
+  renderAll();
+  if (s.note && s.lastBy !== NET.token) toast(s.note, 3800);
+  if (s.phase === 'over'){ if (!V.g.st.over){ V.g.st.over = true; } showWin(); return; }
+  runLoop();
+}
+async function onlinePublishTurn(){
+  const g = V.g;
+  const note = g.st.log.slice(-2).join(' · ').slice(0, 180) +
+    (g.st.over ? '' : ' — next: ' + g.cur().name);
+  const st = netSnapshot({phase: g.st.over ? 'over' : 'playing', game: g.st, note});
+  const ok = await NET.publish(st);
+  if (!ok && NET.api){
+    // one quiet retry; after that the next tap tries again
+    await sleep(1500);
+    await NET.publish(st);
+  }
 }
 
 /* ================= WIRING ================= */
@@ -1949,6 +2272,19 @@ function wire(){
   $('mLog').addEventListener('click', () => { $('menuPop').classList.remove('on'); $('log').classList.toggle('on'); renderLog(); });
   $('mQuit').addEventListener('click', () => {
     $('menuPop').classList.remove('on');
+    if (V.online){
+      openSheet('Leave the Table?', b => {
+        b.innerHTML = `<p style="font:600 14px/1.6 Archivo,sans-serif;color:var(--ink-soft);text-align:center;margin-bottom:14px">The table keeps playing without you — return any time from the main menu.</p>
+          <div style="display:flex;gap:10px"><button class="btn alt" id="lvNo" style="flex:1">Stay</button><button class="btn red" id="lvYes" style="flex:1">Leave</button></div>`;
+        b.querySelector('#lvNo').addEventListener('click', closeSheet);
+        b.querySelector('#lvYes').addEventListener('click', () => {
+          V.g = null; V.gen++; V.busy = false; V.online = false;
+          $('liveBadge').style.display = 'none';
+          closeSheet(); $('win').classList.remove('on'); showScr('splash'); refreshResume(); routeSplashCard();
+        });
+      });
+      return;
+    }
     openSheet('Abandon Game?', b => {
       b.innerHTML = `<p style="font:600 14px/1.6 Archivo,sans-serif;color:var(--ink-soft);text-align:center;margin-bottom:14px">The saved game will be torn up.</p>
         <div style="display:flex;gap:10px"><button class="btn alt" id="qNo" style="flex:1">Keep Playing</button><button class="btn red" id="qYes" style="flex:1">Abandon</button></div>`;
@@ -1961,12 +2297,30 @@ function wire(){
   });
   $('btnAgain').addEventListener('click', () => {
     confettiRun = false; $('win').classList.remove('on');
+    if (V.online){
+      // host resets the table to its lobby, seats kept
+      NET.publish(netSnapshot({phase:'lobby', game: null, note: 'The host reset the table — new game forming'}));
+      return;
+    }
     startGame();
   });
   $('btnToSplash').addEventListener('click', () => {
     confettiRun = false; $('win').classList.remove('on'); V.g = null; V.gen++; V.busy = false;
-    showScr('splash'); refreshResume();
+    V.online = false; $('liveBadge').style.display = 'none';
+    showScr('splash'); refreshResume(); routeSplashCard();
   });
+  $('btnOnline').addEventListener('click', () => {
+    Snd.unlock();
+    const s = NET.state;
+    if (!s) hostTable();
+    else if (s.phase === 'lobby') enterLobby();
+    else enterOnlineGame();
+  });
+  $('btnLobbyLeave').addEventListener('click', () => {
+    V.online = false; showScr('splash'); routeSplashCard();
+  });
+  $('btnLobbyAI').addEventListener('click', lobbyAddAI);
+  $('btnLobbyStart').addEventListener('click', lobbyStart);
   window.addEventListener('resize', () => { if ($('win').classList.contains('on')) drawChart(); });
 }
 
@@ -1983,6 +2337,8 @@ function boot(){
   $('btnSound').setAttribute('aria-pressed', String(V.sound));
   refreshResume();
   showScr('splash');
+  // the online table lights up when the artifact runtime answers
+  NET.init(ok => { if (ok) routeOnline(); });
 }
 document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', boot) : boot();
 </script>

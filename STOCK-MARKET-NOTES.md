@@ -78,5 +78,17 @@ One HTML file, two scripts:
 Balance (30-game AI sims, 3 players): median ~265 table turns to $100k (the box listed the
 original at 180 minutes — it was a long game), ~185 to $50k, ~130 to $25k.
 
+## Online play
+
+The published claude.ai artifact of this page supports true online multiplayer over the
+artifact runtime's self-publish capability: the page embeds the table state in a
+`#netState` JSON block, and after each human turn the acting phone publishes a new version
+of the page — every open view reloads to it. A lobby lets each device claim a seat (name,
+pawn color, job) identified by a per-device token in localStorage; computer turns are
+played by the next human's device and batched into that one publish; players need edit
+access to the shared page (read-only viewers get a watch-only seat). On any host without
+the artifact runtime (the static-site deploy, a local file), the online card hides itself
+and the game is pass-and-play + computer opponents as before.
+
 `app/market/index.html` is a verbatim copy for the static-site deploy; regenerate it by
 copying `stock-market.html` after any change.
