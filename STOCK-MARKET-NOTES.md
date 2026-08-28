@@ -14,41 +14,17 @@ publishers.
 
 ## What is documented vs. reconstructed
 
-The surviving public record of the game (collector inventories, museum listings, database
-descriptions) establishes the skeleton implemented here:
+The public record (collector inventories, museum listings) establishes the skeleton:
+8 stocks (Woolworth, International Shoe, General Mills, Alcoa, Maytag, American Motors,
+Western Publishing, J.I. Case), two dice, 2–8 players, a sliding stock indicator in the
+board center, dividends and stockholders meetings, first to $100,000. Share certificates
+came in 1/5/10/20/50/100/500/1000-share denominations — trading here uses those same lots,
+and the Ledger shows holdings broken into them.
 
-- 8 stocks: F.W. Woolworth, International Shoe, General Mills, Alcoa, Maytag,
-  American Motors, Western Publishing, J.I. Case
-- Share certificates in 1/5/10/20/50/100/500/1000-share denominations — trading in the
-  digital version is done in those same lots, and the Ledger shows holdings broken into them
-- Players choose a job at setup (the documented earn-a-salary element; all salaries equal
-  here as the fair default)
-- Two dice, pawns moving around a perimeter track; the center of the board is a
-  "quotation board" of 8 price columns with sliding indicators
-- Turns bring dividends, stockholders' meetings, and windows to buy and sell shares
-- 2–8 players; the first investor to reach **$100,000** wins
-- Share certificates in 1/5/10/20/50/100/500/1000-share denominations (digital version
-  just tracks share counts)
-
-The market mechanism follows the owner's firsthand description of the physical game:
-
-- **One ticker, a see-saw market.** A single sliding indicator sits in the middle of the
-  board. Each company's price ladder is printed in its own direction, so when the ticker
-  moves, half the stocks rise and half fall — each by its own printed step per notch.
-- **The board plays the ticker.** MARKET UP/DOWN spaces slide the indicator 1–3 notches;
-  the BULL MARKET corner jumps it 2. Company spaces are buying windows at posted prices.
-- With prices bounded by the printed ladders, there are no splits or bankruptcies — the
-  game is swing-trading: buy an issue deep in its ladder, sell it high on the other side.
-
-The complete box-back rules text (the space-by-space board and its dollar amounts) is not
-reachable from an archive we could access, so those numbers are **reconstructed** to be
-period-consistent and are all collected in the `CFG` block at the top of the engine script,
-with `[R]` marks. If you have a physical copy, true them up there:
-
-| Constant | Value | Status |
-| --- | --- | --- |
-Full-board photographs from the owner then settled nearly everything. The v5 build implements
-the board as photographed:
+Full-board photographs from the owner then settled nearly everything else. The v5 build
+implements the board as photographed; the few remaining gaps (exact cell order per side,
+meeting-row values, notch count) are reconstructed in the printed structure and live in
+the `CFG`/`BOARD` blocks at the top of the engine script for easy truing-up:
 
 | Feature | Value | Source |
 | --- | --- | --- |
@@ -70,8 +46,8 @@ the board as photographed:
 The published claude.ai artifact of this page supports true online multiplayer over the
 artifact runtime's self-publish capability: the page embeds the table state in a
 `#netState` JSON block, and after each human turn the acting phone publishes a new version
-of the page — every open view reloads to it. A lobby lets each device claim a seat (name,
-pawn color, job) identified by a per-device token in localStorage; computer turns are
+of the page — every open view reloads to it. A lobby lets each device claim a seat (name
+and pawn color) identified by a per-device token in localStorage; computer turns are
 played by the next human's device and batched into that one publish; players need edit
 access to the shared page (read-only viewers get a watch-only seat). On any host without
 the artifact runtime (the static-site deploy, a local file), the online card hides itself
