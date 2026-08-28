@@ -47,16 +47,28 @@ with `[R]` marks. If you have a physical copy, true them up there:
 
 | Constant | Value | Status |
 | --- | --- | --- |
+Photographs of the owner's board confirmed several printed features now implemented:
+per-company dividend amounts printed on company spaces ("$2 DIV"/"$3 DIV"), "2 FOR 1" /
+"3 FOR 1" stock-dividend spaces tied to named companies, "SELL ALL [company]" forced-sale
+spaces, "PAY $100 FEE", long teal STOCKHOLDERS MEETING cells, a white board with vivid
+multicolor cells and a teal border, the center quotation grid laid out as horizontal
+company rows with one vertical sliding indicator, and the masthead printed in both
+orientations.
+
+| Constant | Value | Status |
+| --- | --- | --- |
 | Starting cash | $5,000 | reconstructed (period standard) |
 | Salary per lap (Pay Day) | $1,000 | reconstructed |
 | Par value | $100 at ticker mid-scale | documented convention |
 | Ticker scale | 21 notches (0–20), starts at 10 | mechanic recalled; scale reconstructed |
 | Ladder slopes ($/notch) | ALC +9, GMI +7, WLW +5, WPC +3; AMO −9, ISH −7, MAY −5, JIC −3 | mechanic recalled; values reconstructed |
 | Market spaces | ticker ±1/±2/±3 notches; BULL corner +2 | mechanic recalled; amounts reconstructed |
-| Dividend space | $5/share on holdings ≥ par | reconstructed |
+| Company dividends | $2 or $3 a share, printed per company, paid on landing | board photo (amounts visible) |
+| Stock dividends | 2 FOR 1 (GMI, ISH), 3 FOR 1 (JIC) spaces | board photo (placement reconstructed) |
+| Forced sales | SELL ALL ISH, SELL ALL GMI spaces | board photo |
+| Broker's fee | $100 ("PAY $100 FEE") | board photo |
 | Stockholders' meeting | $10/share, one company of your choice | reconstructed |
 | Annual meeting corner | $5/share all players, lander ×2 | reconstructed |
-| Broker's fee | $200 | reconstructed |
 | Win target | $100,000 (options: $50k, $25k) | documented |
 
 Known transcriptions of the original rules, for future truing-up (all were blocked from the
