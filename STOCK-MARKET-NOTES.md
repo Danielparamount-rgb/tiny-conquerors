@@ -30,14 +30,15 @@ descriptions) establishes the skeleton implemented here:
 - Share certificates in 1/5/10/20/50/100/500/1000-share denominations (digital version
   just tracks share counts)
 
-Two further mechanics come from firsthand recollections of play:
+The market mechanism follows the owner's firsthand description of the physical game:
 
-- **The board moves the market** — spaces are printed with price instructions; landing on a
-  company space moves that stock's pointer by the printed amount (each company has one UP
-  and one DOWN space), and market spaces move every issue at once (owner recollection).
-- **Trades move the pointer** — a rec.games.board reminiscence thread describes the pointer
-  going "up and down in response to buying and selling stock", so every purchase pushes
-  that stock up one notch and every sale pushes it down one.
+- **One ticker, a see-saw market.** A single sliding indicator sits in the middle of the
+  board. Each company's price ladder is printed in its own direction, so when the ticker
+  moves, half the stocks rise and half fall — each by its own printed step per notch.
+- **The board plays the ticker.** MARKET UP/DOWN spaces slide the indicator 1–3 notches;
+  the BULL MARKET corner jumps it 2. Company spaces are buying windows at posted prices.
+- With prices bounded by the printed ladders, there are no splits or bankruptcies — the
+  game is swing-trading: buy an issue deep in its ladder, sell it high on the other side.
 
 The complete box-back rules text (the space-by-space board and its dollar amounts) is not
 reachable from an archive we could access, so those numbers are **reconstructed** to be
@@ -48,16 +49,13 @@ with `[R]` marks. If you have a physical copy, true them up there:
 | --- | --- | --- |
 | Starting cash | $5,000 | reconstructed (period standard) |
 | Salary per lap (Pay Day) | $1,000 | reconstructed |
-| Par value | $100 | documented convention |
-| Split threshold (2-for-1) | $200 | reconstructed |
-| Bankruptcy | $0 → shares void, relists at $100 | reconstructed |
-| Company space moves | ±$10 printed per space | mechanic recalled; amount reconstructed |
-| Market spaces | ±$5 / ±$10 all issues; rally corner +$10 | mechanic recalled; amounts reconstructed |
-| Trade impact | buy +$5 / sell −$5 per transaction | mechanic recalled; amount reconstructed |
+| Par value | $100 at ticker mid-scale | documented convention |
+| Ticker scale | 21 notches (0–20), starts at 10 | mechanic recalled; scale reconstructed |
+| Ladder slopes ($/notch) | ALC +9, GMI +7, WLW +5, WPC +3; AMO −9, ISH −7, MAY −5, JIC −3 | mechanic recalled; values reconstructed |
+| Market spaces | ticker ±1/±2/±3 notches; BULL corner +2 | mechanic recalled; amounts reconstructed |
 | Dividend space | $5/share on holdings ≥ par | reconstructed |
 | Stockholders' meeting | $10/share, one company of your choice | reconstructed |
 | Annual meeting corner | $5/share all players, lander ×2 | reconstructed |
-| Broker's tip space | buy any one issue | reconstructed |
 | Broker's fee | $200 | reconstructed |
 | Win target | $100,000 (options: $50k, $25k) | documented |
 
@@ -77,8 +75,8 @@ One HTML file, two scripts:
   (buying window / Exchange / meeting / Ledger), ticker-tape header, WebAudio sounds,
   localStorage autosave (`sm68` key) with resume, win screen with net-worth chart.
 
-Balance (30-game AI sims, 3 players): median ~385 table turns to $100k (the box listed the
-original at 180 minutes — it was a long game), ~270 to $50k, ~160 to $25k.
+Balance (30-game AI sims, 3 players): median ~265 table turns to $100k (the box listed the
+original at 180 minutes — it was a long game), ~185 to $50k, ~130 to $25k.
 
 `app/market/index.html` is a verbatim copy for the static-site deploy; regenerate it by
 copying `stock-market.html` after any change.

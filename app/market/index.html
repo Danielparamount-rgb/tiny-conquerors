@@ -159,6 +159,8 @@ svg{display:block}
 .chip-price{font:700 12px/1 var(--mono);color:var(--ink)}
 .chip-delta{font:700 10px/1 var(--mono);color:var(--ink-faint);min-width:22px}
 .chip-delta.up{color:var(--up)}.chip-delta.dn{color:var(--down)}
+.chip-pol{font-size:8px;margin-left:2px;vertical-align:2px}
+.chip-pol.up{color:var(--up)}.chip-pol.dn{color:var(--down)}
 .chip.split{animation:flash .5s 3}
 @keyframes flash{50%{filter:brightness(1.6)}}
 /* the red slider knobs riding the quotation board in the SVG center */
@@ -507,30 +509,35 @@ svg{display:block}
 const CFG = {
   START_CASH: 5000,     // [R] period-standard opening stake
   SALARY:     1000,     //     pay day, each time around the board
-  PAR:         100,     //     par value, all issues
-  PRICE_MAX:   200,     // [R] top of the quotation board — 2-for-1 split
-  PRICE_MIN:     0,     // [R] bottom — bankruptcy and reorganization
-  IMPACT:        5,     // [R] the pointer answers the trade: every buy moves that
-                        //     stock up one $5 notch, every sale moves it down one
+  PAR:         100,     //     par value, every ladder crosses it mid-scale
+  M_MAX:        20,     // [R] ticker notches: 0 (deep bear) … 20 (full bull)
+  M_START:      10,     //     opening bell — the ticker starts at par
   DIV:           5,     // [R] dividend per share, paid at or above par
   MEET:         10,     // [R] stockholders' meeting, per share of one holding
   ANNUAL:        5,     // [R] annual meeting corner, per eligible share, all players
   FEE:         200,     // [R] broker's fee
-  RALLY:        10,     // [R] market rally corner, every issue up
   WIN:      100000,     //     the classic goal
   MAX_TURNS:  4000,     //     sim safety cap
 };
 
+/* The see-saw market: ONE ticker in the middle reads out all eight
+   prices at once. Each column's ladder is printed in its own
+   direction — positive-slope issues ride WITH the ticker, negative-
+   slope issues run AGAINST it — so every move sends half the board
+   up and half down. Steeper slope = wilder stock ($ per notch). */
 const STOCKS = [
-  {code:'WLW', name:'F.W. Woolworth',      sector:'Five & Dime Stores', color:'#a93226'},
-  {code:'ALC', name:'Alcoa Aluminum',      sector:'Metals & Mining',    color:'#5d7b93'},
-  {code:'GMI', name:'General Mills',       sector:'Foods & Milling',    color:'#2e5f8f'},
-  {code:'MAY', name:'Maytag',              sector:'Home Appliances',    color:'#3d7a69'},
-  {code:'AMO', name:'American Motors',     sector:'Automobiles',        color:'#bf6b2a'},
-  {code:'ISH', name:'International Shoe',  sector:'Footwear',           color:'#77502f'},
-  {code:'WPC', name:'Western Publishing',  sector:'Printing & Books',   color:'#49682f'},
-  {code:'JIC', name:'J.I. Case',           sector:'Farm Machinery',     color:'#9c7c2c'},
+  {code:'WLW', name:'F.W. Woolworth',      sector:'Five & Dime Stores', color:'#a93226', slope:  5},
+  {code:'ALC', name:'Alcoa Aluminum',      sector:'Metals & Mining',    color:'#5d7b93', slope:  9},
+  {code:'GMI', name:'General Mills',       sector:'Foods & Milling',    color:'#2e5f8f', slope:  7},
+  {code:'MAY', name:'Maytag',              sector:'Home Appliances',    color:'#3d7a69', slope: -5},
+  {code:'AMO', name:'American Motors',     sector:'Automobiles',        color:'#bf6b2a', slope: -9},
+  {code:'ISH', name:'International Shoe',  sector:'Footwear',           color:'#77502f', slope: -7},
+  {code:'WPC', name:'Western Publishing',  sector:'Printing & Books',   color:'#49682f', slope:  3},
+  {code:'JIC', name:'J.I. Case',           sector:'Farm Machinery',     color:'#9c7c2c', slope: -3},
 ];
+const priceAt = (i, M) => CFG.PAR + STOCKS[i].slope * (M - CFG.M_START);
+const priceMin = i => Math.min(priceAt(i, 0), priceAt(i, CFG.M_MAX));
+const priceMax = i => Math.max(priceAt(i, 0), priceAt(i, CFG.M_MAX));
 
 const JOBS = [
   {t:'Physician',       f:'House calls at all hours'},
@@ -547,30 +554,30 @@ const PAWN_COLORS = ['#c0392b','#2e5f8f','#c69b3a','#3d7a69','#8e5aa8','#bf6b2a'
 const COMP_NAMES = ['Bernard','Harriet','Walt','Dorothy','Gus','Mabel','Chet','Vera'];
 
 /* Board: 40 spaces, movement 0→39 then around again. Corners at
-   0, 10, 20, 30. The board drives the quotation board in the
-   center: every company space carries a printed price move (each
-   company has one UP $10 and one DOWN $10 space) and doubles as a
-   buying window at the adjusted price; MARKET spaces move every
-   issue at once. Printed all-market drift is +$5 a lap (the rally
-   corner outweighs the declines) — the classic gentle bull lean. */
+   0, 10, 20, 30. The board plays the ticker: MARKET UP/DOWN
+   spaces slide the center indicator 1–3 notches (half the stocks
+   rise, half fall, by their printed slopes), company spaces are
+   buying windows, and the fourth corner is the big BULL MARKET
+   jump. Printed notch total is +1 a lap — near-neutral drift. */
 const BOARD = (() => {
-  const C = (i, d) => ({t:'co', s:i, d});
-  const M = d => ({t:'mkt', d});
+  const C = i => ({t:'co', s:i});
+  const T = d => ({t:'tick', d});
   return [
-    {t:'payday'},                                       // 0
-    C(0,10), M(-5), C(1,10), {t:'div'}, C(2,10),        // 1-5
-    M(5), C(3,10), {t:'fee'}, {t:'meet'},               // 6-9
-    {t:'annual'},                                       // 10
-    C(4,10), M(10), C(5,10), {t:'div'}, C(6,10),        // 11-15
-    {t:'tip'}, C(7,10), M(-10), {t:'div'},              // 16-19
-    {t:'exchange'},                                     // 20
-    C(5,-10), M(-5), C(0,-10), {t:'div'}, C(4,-10),     // 21-25
-    M(5), C(1,-10), {t:'fee'}, {t:'meet'},              // 26-29
-    {t:'rally'},                                        // 30
-    C(7,-10), {t:'tip'}, C(3,-10), {t:'div'}, C(6,-10), // 31-35
-    {t:'div'}, C(2,-10), M(-10), M(5),                  // 36-39
+    {t:'payday'},                                   // 0
+    C(0), T(1), C(1), {t:'div'}, C(2),              // 1-5
+    T(-1), C(3), {t:'fee'}, {t:'meet'},             // 6-9
+    {t:'annual'},                                   // 10
+    C(4), T(2), C(5), T(-2), C(6),                  // 11-15
+    {t:'div'}, C(7), T(-1), T(3),                   // 16-19
+    {t:'exchange'},                                 // 20
+    C(5), T(-1), C(0), T(1), C(4),                  // 21-25
+    T(-3), C(1), {t:'fee'}, {t:'meet'},             // 26-29
+    {t:'bull'},                                     // 30  (ticker up 2)
+    C(7), T(2), C(3), {t:'div'}, C(6),              // 31-35
+    T(-2), C(2), T(-1), T(1),                       // 36-39
   ];
 })();
+const BULL_CORNER = 2;   // notches the BULL MARKET corner adds
 
 /* mulberry32 — tiny seedable RNG so saves and sims replay honestly */
 function makeRng(seed){ let a = seed >>> 0;
@@ -583,12 +590,13 @@ function makeRng(seed){ let a = seed >>> 0;
 class Game {
   constructor(setup){
     this.st = {
-      v: 2,
+      v: 3,
       seed: setup.seed,
       rngN: 0,
       target: setup.target || CFG.WIN,
       speed: setup.speed || 'normal',
-      prices: STOCKS.map(() => CFG.PAR),
+      M: CFG.M_START,
+      prices: STOCKS.map((_, i) => priceAt(i, CFG.M_START)),
       players: setup.players.map((p, i) => ({
         name: p.name, ai: !!p.ai, color: p.color || PAWN_COLORS[i],
         persona: p.ai ? (i % 3) : -1,          // 0 shrewd, 1 bold, 2 cautious
@@ -626,29 +634,21 @@ class Game {
 
   addLog(msg){ this.st.log.push(msg); if (this.st.log.length > 120) this.st.log.shift(); }
 
-  /* ---- price movement with split / bankruptcy handling ----
-     Returns a list of side-events for the UI to announce. */
-  movePrice(i, delta){
-    const ev = [];
+  /* ---- the ticker slides; every ladder reads out a new price ----
+     Returns events for the UI: one 'tick' plus a 'move' per stock. */
+  moveMarket(delta){
     const st = this.st;
-    let p = st.prices[i] + delta;
-    if (p >= CFG.PRICE_MAX){
-      // 2-for-1 split: certificate counts double, price returns to par
-      st.prices[i] = CFG.PAR;
-      st.splits++;
-      st.players.forEach(pl => { if (pl.shares[i] > 0){ pl.shares[i] *= 2; pl.stats.splits++; } });
-      ev.push({kind:'split', s:i});
-      this.addLog(`${STOCKS[i].code} splits 2-for-1 at $${CFG.PRICE_MAX} — back to $${CFG.PAR}`);
-    } else if (p <= CFG.PRICE_MIN){
-      // bankrupt: certificates void, company reorganized at par
-      st.prices[i] = CFG.PAR;
-      st.busts++;
-      st.players.forEach(pl => { if (pl.shares[i] > 0){ pl.shares[i] = 0; pl.stats.busts++; } });
-      ev.push({kind:'bust', s:i});
-      this.addLog(`${STOCKS[i].code} goes bankrupt — shares void, reorganized at $${CFG.PAR}`);
-    } else {
-      st.prices[i] = p;
-      ev.push({kind:'move', s:i, d:delta});
+    const from = st.M;
+    st.M = Math.max(0, Math.min(CFG.M_MAX, st.M + delta));
+    const applied = st.M - from;
+    const ev = [{kind:'tick', d:applied, want:delta, M:st.M}];
+    STOCKS.forEach((s, i) => {
+      const np = priceAt(i, st.M), d = np - st.prices[i];
+      st.prices[i] = np;
+      if (d) ev.push({kind:'move', s:i, d});
+    });
+    if (applied !== delta && applied === 0){
+      this.addLog(`The ticker is pinned at the ${delta > 0 ? 'top' : 'bottom'} of the scale`);
     }
     return ev;
   }
@@ -682,24 +682,16 @@ class Game {
     let needs = null;
     switch (sp.t){
       case 'payday': break; // salary already paid by the pass check above
-      case 'mkt':
-        this.addLog(`The market ${sp.d > 0 ? 'advances' : 'declines'} — every issue ${sp.d > 0 ? 'up' : 'down'} $${Math.abs(sp.d)}`);
-        events.push({kind:'market', d:sp.d});
-        STOCKS.forEach((_, i) => events.push(...this.movePrice(i, sp.d)));
+      case 'tick':
+        this.addLog(`The space reads MARKET ${sp.d > 0 ? 'UP' : 'DOWN'} ${Math.abs(sp.d)} — the ticker slides`);
+        events.push(...this.moveMarket(sp.d));
         break;
-      case 'rally':
-        this.addLog(`Market rally! Every issue up $${CFG.RALLY}`);
-        events.push({kind:'rally', d:CFG.RALLY});
-        STOCKS.forEach((_, i) => events.push(...this.movePrice(i, CFG.RALLY)));
+      case 'bull':
+        this.addLog(`BULL MARKET corner — the ticker jumps up ${BULL_CORNER}`);
+        events.push(...this.moveMarket(BULL_CORNER));
         break;
       case 'co':
-        this.addLog(`${STOCKS[sp.s].code} ${sp.d > 0 ? 'climbs' : 'slips'} $${Math.abs(sp.d)} on the board`);
-        events.push({kind:'coMove', s:sp.s, d:sp.d});
-        events.push(...this.movePrice(sp.s, sp.d));
         needs = {kind:'buy', s:sp.s};
-        break;
-      case 'tip':
-        needs = {kind:'tip'};
         break;
       case 'div': {
         let sum = 0;
@@ -765,7 +757,6 @@ class Game {
         p.shares[i] -= q; p.cash += q * this.st.prices[i];
         events.push({kind:'forcedSale', s:i, q});
         this.addLog(`${p.name} is sold out of ${q} ${STOCKS[i].code} to cover the broker`);
-        events.push(...this.movePrice(i, -CFG.IMPACT));
       }
     }
     const paid = Math.min(p.cash, owed);
@@ -773,10 +764,7 @@ class Game {
     return paid;
   }
 
-  /* ---- player actions ----
-     The pointer answers every trade: a purchase moves that stock UP
-     one notch, a sale moves it DOWN one. Both return the resulting
-     price events (possibly a split or a bankruptcy) — or false. */
+  /* ---- player actions: trades happen at the ticker's posted price ---- */
   buy(s, qty){
     const p = this.cur(), price = this.st.prices[s];
     if (qty < 1 || price <= 0) return false;
@@ -784,15 +772,15 @@ class Game {
     if (cost > p.cash) return false;
     p.cash -= cost; p.shares[s] += qty;
     if (cost > p.stats.bestTrade) p.stats.bestTrade = cost;
-    this.addLog(`${p.name} buys ${qty} ${STOCKS[s].code} at $${price} — the pointer ticks up`);
-    return this.movePrice(s, CFG.IMPACT);
+    this.addLog(`${p.name} buys ${qty} ${STOCKS[s].code} at $${price} — $${cost}`);
+    return true;
   }
   sell(s, qty){
     const p = this.cur(), price = this.st.prices[s];
     if (qty < 1 || p.shares[s] < qty) return false;
     p.shares[s] -= qty; p.cash += qty * price;
-    this.addLog(`${p.name} sells ${qty} ${STOCKS[s].code} at $${price} — the pointer ticks down`);
-    return this.movePrice(s, -CFG.IMPACT);
+    this.addLog(`${p.name} sells ${qty} ${STOCKS[s].code} at $${price} — $${qty * price}`);
+    return true;
   }
   chooseMeeting(s){
     // one payout per landing: only valid while the meeting choice is pending
@@ -832,51 +820,47 @@ class Game {
    ============================================================ */
 const AI = {
   reserve(p){ return [600, 300, 1200][p.persona] || 600; },
-  buyCeil(p){ return [115, 130, 100][p.persona] || 115; },
+  buyBelow(p){ return [.38, .48, .30][p.persona] ?? .38; },   // how deep in the ladder before buying
+  sellAbove(p){ return [.78, .86, .70][p.persona] ?? .78; },  // how high before banking the swing
+  rel(g, i){ return (g.price(i) - priceMin(i)) / (priceMax(i) - priceMin(i)); },
 
   preTurnSells(g){
-    const p = g.cur(), events = [];
+    const p = g.cur();
     STOCKS.forEach((_, i) => {
-      const pr = g.price(i), n = p.shares[i];
-      if (n < 1) return;
-      let r = false;
-      if (pr <= 40){ r = g.sell(i, n); }                                 // bail before bankruptcy
-      else if (p.persona === 2 && pr >= 160){ r = g.sell(i, Math.ceil(n / 2)); } // cautious banks gains
-      if (r) events.push(...r);
+      if (p.shares[i] < 1) return;
+      if (this.rel(g, i) >= this.sellAbove(p)) g.sell(i, p.shares[i]);   // ride the see-saw, cash out high
     });
-    return events;
   },
 
   wantQty(g, s){
-    const p = g.cur(), pr = g.price(s);
-    if (pr > this.buyCeil(p) || pr < 30) return 0;
-    const budget = p.cash - this.reserve(p);
+    const p = g.cur();
+    if (this.rel(g, s) > this.buyBelow(p)) return 0;
+    const budget = p.cash - this.reserve(p), pr = g.price(s);
     if (budget < pr) return 0;
     return Math.floor(budget / pr);
   },
 
   answer(g, needs){
-    const p = g.cur(), events = [];
+    const p = g.cur();
     if (needs.kind === 'buy'){
       const q = this.wantQty(g, needs.s);
-      if (q > 0){ const r = g.buy(needs.s, q); if (r) events.push(...r); }
-    } else if (needs.kind === 'exchange' || needs.kind === 'tip'){
-      // buy the most attractive issue: cheap but clear of the bust zone
+      if (q > 0) g.buy(needs.s, q);
+    } else if (needs.kind === 'exchange'){
+      // deepest discount wins; a steeper ladder has more spring
       let best = -1, bestScore = -1;
-      STOCKS.forEach((_, i) => {
-        const pr = g.price(i);
-        if (pr < 45 || pr > this.buyCeil(p)) return;
-        const score = (this.buyCeil(p) - pr) + (pr >= CFG.PAR ? 6 : 0); // slight taste for dividend payers
+      STOCKS.forEach((s, i) => {
+        const r = this.rel(g, i);
+        if (r > this.buyBelow(p)) return;
+        const score = (this.buyBelow(p) - r) * 10 + Math.abs(s.slope) / 10;
         if (score > bestScore){ bestScore = score; best = i; }
       });
-      if (best >= 0){ const q = this.wantQty(g, best); if (q > 0){ const r = g.buy(best, q); if (r) events.push(...r); } }
+      if (best >= 0){ const q = this.wantQty(g, best); if (q > 0) g.buy(best, q); }
     } else if (needs.kind === 'meet'){
       let best = 0, bestN = -1;
       STOCKS.forEach((_, i) => { if (p.shares[i] > bestN){ bestN = p.shares[i]; best = i; } });
       g.chooseMeeting(best);
     }
     g.resolvePending();
-    return events;
   },
 };
 
@@ -1013,9 +997,8 @@ const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&
 
 function spaceLook(sp){
   switch (sp.t){
-    case 'co':   return {band: STOCKS[sp.s].color, l1: STOCKS[sp.s].code, l2: (sp.d > 0 ? '▲ $' : '▼ $') + Math.abs(sp.d), l2fill: sp.d > 0 ? '#1e6b43' : '#a02c1d'};
-    case 'mkt':  return {band: sp.d > 0 ? '#1e6b43' : '#a02c1d', l1: (sp.d > 0 ? '▲ $' : '▼ $') + Math.abs(sp.d), l2: 'MARKET'};
-    case 'tip':  return {band: '#b8892f', l1: 'TIP', l2: 'BUY ANY'};
+    case 'co':   return {band: STOCKS[sp.s].color, l1: STOCKS[sp.s].code, l2: 'BUY'};
+    case 'tick': return {band: sp.d > 0 ? '#1e6b43' : '#a02c1d', l1: (sp.d > 0 ? '▲ ' : '▼ ') + Math.abs(sp.d), l2: 'MARKET'};
     case 'div':  return {band: '#20573f', l1: 'DIV', l2: 'COLLECT'};
     case 'fee':  return {band: '#6b5327', l1: 'FEE', l2: 'BROKER'};
     case 'meet': return {band: '#7a4a86', l1: 'MEET', l2: 'HOLDERS'};
@@ -1024,14 +1007,16 @@ function spaceLook(sp){
 }
 function describeSpace(i){
   const sp = BOARD[i];
+  const half = d => d > 0
+    ? 'the issues marked ▲ climb and the issues marked ▼ slip'
+    : 'the issues marked ▼ climb and the issues marked ▲ slip';
   switch (sp.t){
     case 'payday':  return ['Pay Day', `Land here or pass it and collect your ${fmt(CFG.SALARY)} salary.`];
     case 'annual':  return ['Annual Meeting', `Every investor collects ${fmt(CFG.ANNUAL)} per share on holdings at or above par — the player who lands here collects double.`];
     case 'exchange':return ['The Exchange', 'Open outcry — buy or sell any issue at today’s prices.'];
-    case 'rally':   return ['Market Rally', `The whole board lights up — every issue rises $${CFG.RALLY}.`];
-    case 'co':      return [`${STOCKS[sp.s].name}`, `${STOCKS[sp.s].code} moves ${sp.d > 0 ? 'UP' : 'DOWN'} $${Math.abs(sp.d)} on the quotation board — then you may buy shares at the new price.`];
-    case 'mkt':     return [sp.d > 0 ? 'Market Advances' : 'Market Declines', `Every issue on the quotation board moves ${sp.d > 0 ? 'up' : 'down'} $${Math.abs(sp.d)}.`];
-    case 'tip':     return ['Broker’s Tip', 'A word from downtown — you may buy shares of any one company.'];
+    case 'bull':    return ['Bull Market', `The ticker jumps UP ${BULL_CORNER} notches — ${half(1)}, each by its printed ladder.`];
+    case 'co':      return [`Buying Window — ${STOCKS[sp.s].name}`, `You may buy any number of ${STOCKS[sp.s].code} shares at the ticker's posted price.`];
+    case 'tick':    return [sp.d > 0 ? `Market Up ${sp.d}` : `Market Down ${Math.abs(sp.d)}`, `The ticker slides ${Math.abs(sp.d)} notch${Math.abs(sp.d) === 1 ? '' : 'es'} ${sp.d > 0 ? 'up' : 'down'} — ${half(sp.d)}.`];
     case 'div':     return ['Dividends', `Collect ${fmt(CFG.DIV)} per share on each of your holdings trading at or above par ($${CFG.PAR}).`];
     case 'fee':     return ['Broker’s Fee', `Pay your broker ${fmt(CFG.FEE)}.`];
     case 'meet':    return ['Stockholders’ Meeting', `Attend the meeting of one company you own and collect ${fmt(CFG.MEET)} per share.`];
@@ -1045,37 +1030,50 @@ function buildBoard(){
   P.push(`<rect x="0" y="0" width="${BS}" height="${BS}" rx="14" fill="#153c2e"/>`);
   P.push(`<rect x="4" y="4" width="${BS-8}" height="${BS-8}" rx="11" fill="none" stroke="#c69b3a" stroke-width="3"/>`);
   P.push(`<rect x="${CO}" y="${CO}" width="${BS-2*CO}" height="${BS-2*CO}" fill="#e9dfbe"/>`);
-  // ---- the quotation board lives in the center, like the real thing ----
+  // ---- the ticker lives in the center: eight printed ladders, one red bar.
+  //      Half the ladders climb with the bar, half run against it. ----
   const cx = BS/2;
-  const QT = {top: 258, bot: 782, x0: 212, colW: 77, knobW: 60, knobH: 26};
+  const QT = {top: 262, bot: 786, x0: 212, colW: 77, barH: 26};
   V.qt = QT;
+  const yOf = m => QT.bot - (m / CFG.M_MAX) * (QT.bot - QT.top);
   P.push(`<g text-anchor="middle">`);
   P.push(`<text class="ctr-t" x="${cx}" y="172" font-size="34">STOCK MARKET</text>`);
-  P.push(`<text class="ctr-s" x="${cx}" y="195">· QUOTATIONS · EST 1968 ·</text>`);
+  P.push(`<text class="ctr-s" x="${cx}" y="195">· THE TICKER · EST 1968 ·</text>`);
   P.push(`</g>`);
-  // grid frame
+  // frame
   P.push(`<rect x="${QT.x0-46}" y="${QT.top-26}" width="${8*QT.colW+74}" height="${QT.bot-QT.top+66}" fill="#f4ecd2" stroke="#251f17" stroke-width="2.5"/>`);
-  // dollar scale lines + labels down both edges, like a real quote board
-  const rx = QT.x0 + 7*QT.colW + 36;
-  for (let v = 0; v <= 200; v += 25){
-    const y = QT.bot - (v / CFG.PRICE_MAX) * (QT.bot - QT.top);
-    const major = v % 50 === 0;
-    P.push(`<line x1="${QT.x0-14}" y1="${y}" x2="${QT.x0 + 7*QT.colW + 14}" y2="${y}" stroke="${v===CFG.PAR?'#20573f':'#c9b98e'}" stroke-width="${v===CFG.PAR?2.2:major?1.2:.7}"/>`);
-    if (major){
-      P.push(`<text x="${QT.x0-38}" y="${y+4}" text-anchor="end" style="font:700 13px 'Courier Prime',monospace;fill:#4c4132">${v}</text>`);
-      P.push(`<text x="${rx}" y="${y+4}" text-anchor="start" style="font:700 13px 'Courier Prime',monospace;fill:#4c4132">${v}</text>`);
-    }
+  // notch rows; PAR row where every ladder crosses $100
+  for (let m = 0; m <= CFG.M_MAX; m++){
+    const y = yOf(m), par = m === CFG.M_START;
+    P.push(`<line x1="${QT.x0-30}" y1="${y}" x2="${QT.x0 + 7*QT.colW + 30}" y2="${y}" stroke="${par?'#20573f':'#c9b98e'}" stroke-width="${par?2:m%5===0?1:.5}"/>`);
   }
-  P.push(`<text x="${QT.x0-38}" y="${QT.bot - (CFG.PAR/CFG.PRICE_MAX)*(QT.bot-QT.top) - 8}" text-anchor="end" style="font:800 9px Archivo,sans-serif;fill:#20573f">PAR</text>`);
-  // company columns: header chip, slot groove, red slider knob
+  P.push(`<text x="${QT.x0-34}" y="${yOf(CFG.M_START)-6}" text-anchor="start" style="font:800 9px Archivo,sans-serif;fill:#20573f">PAR $100</text>`);
+  P.push(`<text x="${cx}" y="${QT.top-8}" text-anchor="middle" style="font:800 11px Archivo,sans-serif;letter-spacing:.3em;fill:#1e6b43">▲ BULL MARKET</text>`);
+  P.push(`<text x="${cx}" y="${QT.bot+18}" text-anchor="middle" style="font:800 11px Archivo,sans-serif;letter-spacing:.3em;fill:#a02c1d">▼ BEAR MARKET</text>`);
+  // printed price ladders — each column in its own direction
   STOCKS.forEach((s, i) => {
     const x = QT.x0 + i * QT.colW;
-    P.push(`<rect x="${x-26}" y="${QT.top-52}" width="52" height="30" rx="4" fill="${s.color}" stroke="#251f17" stroke-width="1.6"/>`);
-    P.push(`<text x="${x}" y="${QT.top-31}" text-anchor="middle" style="font:800 15px Archivo,sans-serif;fill:#f7efda">${s.code}</text>`);
-    P.push(`<line x1="${x}" y1="${QT.top}" x2="${x}" y2="${QT.bot}" stroke="#4c4132" stroke-width="5" stroke-linecap="round" opacity=".35"/>`);
-    P.push(`<g class="qknob" id="qk${i}" transform="translate(${x},${(QT.top+QT.bot)/2})"><rect x="${-QT.knobW/2}" y="${-QT.knobH/2}" width="${QT.knobW}" height="${QT.knobH}" rx="4" fill="url(#knobGrad)" stroke="#5f1109" stroke-width="1.6"/><text id="qkt${i}" y="5" text-anchor="middle" style="font:700 15px 'Courier Prime',monospace;fill:#fff">$${CFG.PAR}</text></g>`);
+    const pol = s.slope > 0;
+    P.push(`<rect x="${x-27}" y="${QT.top-56}" width="54" height="30" rx="4" fill="${s.color}" stroke="#251f17" stroke-width="1.6"/>`);
+    P.push(`<text x="${x-4}" y="${QT.top-35}" text-anchor="middle" style="font:800 14px Archivo,sans-serif;fill:#f7efda">${s.code}</text>`);
+    P.push(`<text x="${x+19}" y="${QT.top-35}" text-anchor="middle" style="font:800 9px Archivo,sans-serif;fill:${pol?'#b9e6c8':'#f6c2b4'}">${pol?'▲':'▼'}</text>`);
+    for (let m = 0; m <= CFG.M_MAX; m++){
+      P.push(`<text x="${x}" y="${yOf(m)+3.4}" text-anchor="middle" style="font:600 9.5px 'Courier Prime',monospace;fill:#7d6f58">${priceAt(i, m)}</text>`);
+    }
   });
-  P.push(`<defs><linearGradient id="knobGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e05a45"/><stop offset=".55" stop-color="#bf3527"/><stop offset="1" stop-color="#8c2318"/></linearGradient></defs>`);
+  // THE ticker: one red bar reading out every column at once
+  P.push(`<defs><linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e05a45"/><stop offset=".55" stop-color="#bf3527"/><stop offset="1" stop-color="#8c2318"/></linearGradient></defs>`);
+  const bx0 = QT.x0 - 40, bx1 = QT.x0 + 7*QT.colW + 40;
+  let bar = `<g class="qknob" id="tickerBar" transform="translate(0,${yOf(CFG.M_START)})">`;
+  bar += `<rect x="${bx0}" y="${-QT.barH/2}" width="${bx1-bx0}" height="${QT.barH}" rx="5" fill="url(#barGrad)" stroke="#5f1109" stroke-width="1.8"/>`;
+  bar += `<path d="M ${bx0-14} 0 l 10 -7 v 14 z" fill="#bf3527" stroke="#5f1109" stroke-width="1.2"/>`;
+  bar += `<path d="M ${bx1+14} 0 l -10 -7 v 14 z" fill="#bf3527" stroke="#5f1109" stroke-width="1.2"/>`;
+  STOCKS.forEach((s, i) => {
+    const x = QT.x0 + i * QT.colW;
+    bar += `<text id="qkt${i}" x="${x}" y="5" text-anchor="middle" style="font:700 15px 'Courier Prime',monospace;fill:#fff">$${CFG.PAR}</text>`;
+  });
+  bar += `</g>`;
+  P.push(bar);
   P.push(`<text class="ctr-m" x="${cx}" y="${QT.bot+52}" text-anchor="middle">Fortunes rise and fall on the throw of the dice</text>`);
 
   for (let i = 0; i < 40; i++){
@@ -1084,15 +1082,15 @@ function buildBoard(){
     P.push(`<g>`);
     P.push(`<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="#efe4c4" stroke="#251f17" stroke-width="2"/>`);
     if (side === 'corner'){
-      const cLook = {payday:'#c69b3a', annual:'#20573f', exchange:'#bf3527', rally:'#1e6b43'}[sp.t];
-      const cTxt  = {payday:['PAY','DAY'], annual:['ANNUAL','MEETING'], exchange:['THE','EXCHANGE'], rally:['MARKET','RALLY']}[sp.t];
+      const cLook = {payday:'#c69b3a', annual:'#20573f', exchange:'#bf3527', bull:'#1e6b43'}[sp.t];
+      const cTxt  = {payday:['PAY','DAY'], annual:['ANNUAL','MEETING'], exchange:['THE','EXCHANGE'], bull:['BULL','MARKET']}[sp.t];
       const light = sp.t === 'payday';
       P.push(`<rect x="${r.x+5}" y="${r.y+5}" width="${r.w-10}" height="${r.h-10}" fill="${cLook}" stroke="#251f17" stroke-width="1.5"/>`);
       P.push(`<text x="${r.x+r.w/2}" y="${r.y+r.h/2-8}" text-anchor="middle" class="sp-big" fill="${light?'#251f17':'#f7efda'}" style="fill:${light?'#251f17':'#f7efda'};font-size:19px">${cTxt[0]}</text>`);
       P.push(`<text x="${r.x+r.w/2}" y="${r.y+r.h/2+16}" text-anchor="middle" class="sp-big" style="fill:${light?'#251f17':'#f7efda'};font-size:19px">${cTxt[1]}</text>`);
       const gx = r.x + r.w/2, gy = r.y + r.h/2 + 38;
-      if (sp.t === 'rally'){
-        P.push(`<text x="${gx}" y="${gy+12}" text-anchor="middle" style="font:800 20px Archivo,sans-serif;fill:#e3bd62">▲ $${CFG.RALLY}</text>`);
+      if (sp.t === 'bull'){
+        P.push(`<text x="${gx}" y="${gy+12}" text-anchor="middle" style="font:800 20px Archivo,sans-serif;fill:#e3bd62">▲ UP ${BULL_CORNER}</text>`);
       } else if (sp.t === 'annual'){
         // a drawn balance scale
         P.push(`<g stroke="#e3bd62" stroke-width="2" fill="none">` +
@@ -1184,22 +1182,21 @@ function buildQuote(){
   $('chips').innerHTML = STOCKS.map((s, i) =>
     `<div class="chip" id="chip${i}">
       <span class="chip-dot" style="background:${s.color}"></span>
-      <span class="chip-code">${s.code}</span>
+      <span class="chip-code">${s.code}<span class="chip-pol ${s.slope > 0 ? 'up' : 'dn'}">${s.slope > 0 ? '▲' : '▼'}</span></span>
       <span class="chip-price num" id="cp${i}"></span>
       <span class="chip-delta num" id="cd${i}"></span>
     </div>`).join('');
   lastPrices = null;
 }
-function knobY(p){
+function barY(M){
   const q = V.qt;
-  return q ? q.bot - (p / CFG.PRICE_MAX) * (q.bot - q.top) : 0;
+  return q ? q.bot - (M / CFG.M_MAX) * (q.bot - q.top) : 0;
 }
 function renderQuote(){
   if (!V.g) return;
-  const q = V.qt;
+  const bar = document.getElementById('tickerBar');
+  if (bar) bar.setAttribute('transform', `translate(0,${barY(V.g.st.M)})`);
   V.g.st.prices.forEach((p, i) => {
-    const k = document.getElementById('qk' + i);
-    if (k && q) k.setAttribute('transform', `translate(${q.x0 + i * q.colW},${knobY(p)})`);
     const kt = document.getElementById('qkt' + i);
     if (kt) kt.textContent = '$' + p;
     const cp = $('cp' + i); if (cp) cp.textContent = '$' + p;
@@ -1289,40 +1286,24 @@ async function playEvents(events){
         Snd.pay();
         await showCard('Pay Day', 'Salary Collected', `<b>${esc(g.cur().name)}</b> collects <b class="num">${fmt(ev.amt)}</b>.`);
         renderPlayers(); break;
-      case 'market':
+      case 'tick': {
+        if (ev.d === 0){
+          Snd.tick();
+          await showCard('Ticker News', 'Pinned at the ' + (ev.want > 0 ? 'Top' : 'Bottom'),
+            'The ticker is already at the end of its scale — prices hold.');
+          break;
+        }
         ev.d > 0 ? Snd.cash() : Snd.down();
-        await showCard('Market News', ev.d > 0 ? 'Market Advances' : 'Market Declines',
-          `The board says so — every issue moves <b class="num">${ev.d > 0 ? '+' : '−'}$${Math.abs(ev.d)}</b>.`);
-        renderQuote(); quoteDirty = false;
-        break;
-      case 'rally':
-        Snd.cash();
-        await showCard('Market Rally', 'The Bulls Are Running',
-          `The whole quotation board jumps <b class="num">+$${ev.d}</b>.`);
-        renderQuote(); quoteDirty = false;
-        break;
-      case 'coMove':
-        ev.d > 0 ? Snd.cash() : Snd.down();
-        await showCard('On the Board', STOCKS[ev.s].name,
-          `The space reads <b class="num">${ev.d > 0 ? '▲ +' : '▼ −'}$${Math.abs(ev.d)}</b> — the ${STOCKS[ev.s].code} pointer moves.`);
-        renderQuote(); quoteDirty = false;
-        break;
-      case 'split': {
-        renderQuote(); quoteDirty = false;
-        Snd.split();
-        [$('chip' + ev.s), document.getElementById('qk' + ev.s)].forEach(el => {
-          if (el){ el.classList.add('split'); setTimeout(() => el.classList.remove('split'), 1600); }
+        const bulls = [], bears = [];
+        STOCKS.forEach((s, i) => {
+          const chg = s.slope * ev.d;
+          (chg > 0 ? bulls : bears).push(`${s.code} ${chg > 0 ? '+' : '−'}$${Math.abs(chg)}`);
         });
-        await showCard('Stock Split!', STOCKS[ev.s].name,
-          `${STOCKS[ev.s].code} hits <b class="num">$${CFG.PRICE_MAX}</b> and splits 2-for-1.<br>Certificates double; the price returns to <b class="num">$${CFG.PAR}</b>.`);
-        renderPlayers(); break;
-      }
-      case 'bust':
+        await showCard('The Ticker Slides', `Market ${ev.d > 0 ? 'Up' : 'Down'} ${Math.abs(ev.d)}`,
+          `<span style="color:var(--up)">▲ ${bulls.join(' · ')}</span><br><span style="color:var(--down)">▼ ${bears.join(' · ')}</span>`);
         renderQuote(); quoteDirty = false;
-        Snd.bust();
-        await showCard('Bankrupt!', STOCKS[ev.s].name,
-          `${STOCKS[ev.s].code} collapses — all certificates are void.<br>The company is reorganized at <b class="num">$${CFG.PAR}</b>.`);
-        renderPlayers(); break;
+        break;
+      }
       case 'dividend':
         if (ev.amt > 0){ Snd.cash(); await showCard('Dividends', 'The Mail Brings Checks', `<b>${esc(g.cur().name)}</b> collects <b class="num">${fmt(ev.amt)}</b> on holdings at or above par.`); }
         else await showCard('Dividends', 'Nothing Today', 'No holdings at or above par — no checks in the mail.');
@@ -1404,9 +1385,6 @@ function dealPanel(box, sIdx, mode, after){
         <button class="qbtn" data-d="max">MAX</button>
       </div>
       <div class="deal-total num" id="dealTotal"></div>
-      <p style="font:600 11px/1.4 Archivo,sans-serif;color:var(--ink-faint);text-align:center;margin:0 0 10px">
-        ${mode === 'buy' ? `Your purchase moves the pointer UP $${CFG.IMPACT}` : `Your sale moves the pointer DOWN $${CFG.IMPACT}`}
-      </p>
       <div class="deal-actions">
         <button class="btn alt" id="dealPass">${mode === 'buy' ? 'Pass' : 'Back'}</button>
         <button class="btn ${mode === 'buy' ? '' : 'red'}" id="dealGo" disabled></button>
@@ -1437,13 +1415,11 @@ function dealPanel(box, sIdx, mode, after){
     upd();
   }));
   box.querySelector('#dealPass').addEventListener('click', () => after(false));
-  box.querySelector('#dealGo').addEventListener('click', async () => {
-    const dealPrice = price();
-    const evts = mode === 'buy' ? g.buy(sIdx, qty) : g.sell(sIdx, qty);
-    if (evts){ (mode === 'buy' ? Snd.cash : Snd.pay)(); toast(`${mode === 'buy' ? 'Bought' : 'Sold'} ${qty} ${s.code} at $${dealPrice} — pointer ${mode === 'buy' ? 'up' : 'down'}`); }
+  box.querySelector('#dealGo').addEventListener('click', () => {
+    const ok = mode === 'buy' ? g.buy(sIdx, qty) : g.sell(sIdx, qty);
+    if (ok){ (mode === 'buy' ? Snd.cash : Snd.pay)(); toast(`${mode === 'buy' ? 'Bought' : 'Sold'} ${qty} ${s.code} at $${price()}`); }
     renderAll(); saveGame();
-    if (evts) await playEvents(evts.filter(e => e.kind === 'split' || e.kind === 'bust'));
-    after(!!evts);
+    after(!!ok);
   });
   upd();
 }
@@ -1466,19 +1442,6 @@ function sheetBuy(sIdx){
     }
   };
   openSheet('Buying Window', build, done);
-}
-function sheetTip(){
-  const done = () => { if (V.g.st.pending){ V.g.resolvePending(); } renderAll(); saveGame(); onActionResolved(); };
-  const buildList = b => {
-    b.innerHTML = `<p style="font:600 12px/1.5 Archivo,sans-serif;color:var(--ink-faint);margin-bottom:8px">A word from a friend downtown — you may buy shares of any <b>one</b> company, this landing only.</p>` +
-      STOCKS.map((_, i) => stockRow(i, `<button class="btn small" data-b="${i}">Buy</button>`)).join('') +
-      `<div style="margin-top:14px;text-align:center"><button class="btn alt" id="tipPass" style="min-width:160px">Pass</button></div>`;
-    b.querySelectorAll('[data-b]').forEach(el => el.addEventListener('click', () => {
-      dealPanel(b, +el.dataset.b, 'buy', ok => { if (ok) closeSheet(); else buildList(b); });
-    }));
-    b.querySelector('#tipPass').addEventListener('click', () => closeSheet());
-  };
-  openSheet('Broker’s Tip', buildList, done);
 }
 function sheetExchange(){
   const done = () => { if (V.g.st.pending){ V.g.resolvePending(); } renderAll(); saveGame(); onActionResolved(); };
@@ -1579,27 +1542,23 @@ function sheetRules(){
         <li>Do what the space says — the board moves the market.</li>
         <li>End your turn.</li>
       </ul>
-      <h3>The Quotation Board</h3>
-      <p>The big board in the middle is the whole game. Two things move its red pointers:</p>
-      <ul>
-        <li><b>Where you land.</b> Company spaces are printed with a move — land on one and that stock climbs or slips by the printed amount. Market spaces move every issue at once.</li>
-        <li><b>What you trade.</b> Every purchase pushes that stock <b>up $${CFG.IMPACT}</b>; every sale pushes it <b>down $${CFG.IMPACT}</b>. Buy quietly; dump carefully.</li>
-      </ul>
+      <h3>The Ticker</h3>
+      <p>The whole market hangs on the one red ticker bar in the middle of the board. Each company's price ladder is printed in its own direction — issues marked <b style="color:var(--up)">▲</b> ride WITH the ticker, issues marked <b style="color:var(--down)">▼</b> run AGAINST it. Every time the ticker slides, <b>half the stocks rise and half fall</b>, each by its own printed step: the wild issues (ALC, AMO) move $9 a notch, the steady ones (WPC, JIC) just $3.</p>
+      <p>Landing on the board is what moves it: <b>MARKET ▲/▼ spaces</b> slide the ticker 1, 2 or 3 notches. Buy an issue near the bottom of its ladder, ride the swing, and sell near the top.</p>
       <h3>The Spaces</h3>
       <ul>
         <li><b>Pay Day</b> — collect your ${fmt(CFG.SALARY)} salary every time around.</li>
-        <li><b>Company spaces</b> — move that stock by the printed ▲/▼ amount, then you may buy any number of its shares at the new price.</li>
-        <li><b>Market ▲/▼</b> — every issue moves by the printed amount.</li>
-        <li><b>Broker's Tip</b> — buy shares of any one company of your choice.</li>
+        <li><b>Market ▲/▼</b> — the ticker slides by the printed notches; half the board rises, half falls.</li>
+        <li><b>Company spaces</b> — a buying window: buy any number of that company's shares at the ticker's posted price.</li>
         <li><b>Dividends</b> — collect ${fmt(CFG.DIV)} a share on holdings at or above par ($${CFG.PAR}).</li>
         <li><b>Stockholders' Meeting</b> — attend one company you own; collect ${fmt(CFG.MEET)} a share.</li>
         <li><b>Annual Meeting</b> (corner) — everyone collects ${fmt(CFG.ANNUAL)} a share on holdings at or above par; the player landing collects double.</li>
         <li><b>The Exchange</b> (corner) — open trading in every issue, buying and selling.</li>
-        <li><b>Market Rally</b> (corner) — every issue jumps $${CFG.RALLY}.</li>
+        <li><b>Bull Market</b> (corner) — the ticker jumps UP ${BULL_CORNER} notches.</li>
         <li><b>Broker's Fee</b> — pay ${fmt(CFG.FEE)}.</li>
       </ul>
-      <h3>Splits &amp; Bankruptcies</h3>
-      <p>A stock reaching <b>$${CFG.PRICE_MAX}</b> splits two-for-one: certificates double and the price returns to $${CFG.PAR}. A stock falling to <b>$0</b> is bankrupt: certificates are void and the company is reorganized at $${CFG.PAR}.</p>
+      <h3>The Ends of the Scale</h3>
+      <p>The ticker stops at the ends of its printed scale — an issue at the bottom of its ladder can only go one way, if you have the nerve and the cash to be holding it when the market turns.</p>
       <p class="fine">An original homage to the 1968 roll-and-move classic: eight blue-chip stocks, a slider quotation board, dividends, meetings and the race to $100,000 follow the original design as documented by collectors; exact dollar amounts on the original box-back are reconstructed where no archive survives. Company names are historical references. Not affiliated with the original publishers.</p>
     </div>`;
   });
@@ -1693,7 +1652,6 @@ async function humanRoll(){
   if (res.needs){
     if (res.needs.kind === 'buy') sheetBuy(res.needs.s);
     else if (res.needs.kind === 'exchange') sheetExchange();
-    else if (res.needs.kind === 'tip') sheetTip();
     else if (res.needs.kind === 'meet') sheetMeeting();
   }
   renderAll();
@@ -1721,19 +1679,15 @@ async function aiTurn(){
   renderHint(); renderButtons();
   await sleep(pause);
   if (gen !== V.gen) return;
-  const sellEvts = AI.preTurnSells(g);
+  AI.preTurnSells(g);
   renderAll();
-  await playEvents(sellEvts.filter(e => e.kind === 'split' || e.kind === 'bust'));
-  if (gen !== V.gen) return;
   const res = await takeRoll();
   if (gen !== V.gen) return;
   if (res && res.needs){
     await sleep(pause / 2);
     if (gen !== V.gen) return;
-    const buyEvts = AI.answer(g, res.needs);
+    AI.answer(g, res.needs);
     renderAll();
-    await playEvents(buyEvts.filter(e => e.kind === 'split' || e.kind === 'bust'));
-    if (gen !== V.gen) return;
   }
   await sleep(pause);
   if (gen !== V.gen) return;
@@ -1829,10 +1783,9 @@ function showWin(){
   const rows = [
     ['Times around the board', w.laps],
     ['Dividends & meetings', fmt(w.stats.divs)],
-    ['Splits ridden', w.stats.splits],
-    ['Bankruptcies survived', w.stats.busts],
     ['Biggest single purchase', fmt(w.stats.bestTrade)],
     ['Broker fees paid', fmt(w.stats.spentFees)],
+    ['Ticker closed at', g.st.M > CFG.M_START ? 'bull, notch ' + g.st.M : g.st.M < CFG.M_START ? 'bear, notch ' + g.st.M : 'par'],
     ['Turns played (table)', g.st.turnCount],
   ];
   $('winStats').innerHTML = rows.map(r => `<div class="row"><span>${r[0]}</span><span>${r[1]}</span></div>`).join('');
@@ -1942,7 +1895,6 @@ function resumeGame(saved){
     if (V.g.cur().ai){ AI.answer(V.g, pd); renderAll(); saveGame(); }
     else if (pd.kind === 'buy') sheetBuy(pd.s);
     else if (pd.kind === 'exchange') sheetExchange();
-    else if (pd.kind === 'tip') sheetTip();
     else if (pd.kind === 'meet') sheetMeeting();
   }
   runLoop();
@@ -1956,7 +1908,7 @@ function wire(){
     Snd.unlock();
     try{
       const sv = JSON.parse(read(SAVE_KEY));
-      if (!sv || !sv.st || sv.st.v !== 2) throw new Error('old save');
+      if (!sv || !sv.st || sv.st.v !== 3) throw new Error('old save');
       resumeGame(sv);
     }
     catch(e){ store(SAVE_KEY, null); toast('Saved game was from an older edition — starting fresh'); renderSeats(); showScr('setup'); }
@@ -2020,7 +1972,7 @@ function wire(){
 
 function refreshResume(){
   let has = false;
-  try{ const s = JSON.parse(read(SAVE_KEY)); has = !!(s && s.st && s.st.v === 2 && !s.st.over); }catch(e){}
+  try{ const s = JSON.parse(read(SAVE_KEY)); has = !!(s && s.st && s.st.v === 3 && !s.st.over); }catch(e){}
   $('btnResume').style.display = has ? '' : 'none';
 }
 
