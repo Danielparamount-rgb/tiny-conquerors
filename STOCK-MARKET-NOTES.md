@@ -116,3 +116,12 @@ a scrollable pill strip under the price chips on phones.
 
 `app/market/index.html` is a verbatim copy for the static-site deploy; regenerate it by
 copying `stock-market.html` after any change.
+
+## Installable app
+
+`/market/` ships as a PWA: `manifest.webmanifest`, original icons (the red slider on its
+quotation track), and a service worker (`sw.js`, cache `sm68-v9` — bump per release) that
+serves the whole game offline, network-first for the page itself so updates land. The
+splash shows an Install button when the browser offers the prompt (Android/desktop Chrome)
+and an Add-to-Home-Screen hint on iPhone. The claude.ai artifact variant is body-only, so
+it carries no manifest and none of the install UI — guarded by a `HAS_MANIFEST` check.

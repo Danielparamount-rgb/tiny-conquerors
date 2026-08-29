@@ -34,8 +34,10 @@ The host redeploys on push to `main`.
 game: 8 blue-chip stocks, a slider quotation board, dividends, stockholders' meetings, and
 the race to $100,000. 2–8 investors (pass-and-play humans and/or computer opponents),
 phone-first, single self-contained file, autosaves locally. Deployable copy lives at
-`app/market/index.html` (served at `/market/` by the static host). Design and provenance
-notes: `STOCK-MARKET-NOTES.md`.
+`app/market/index.html` (served at `/market/` by the static host). Installable as its own
+app — open `/market/` on a phone and use the Install button (Android) or Share → Add to
+Home Screen (iPhone); it runs full-screen with its own icon and works offline. Design and
+provenance notes: `STOCK-MARKET-NOTES.md`.
 
 ## Art and audio
 
