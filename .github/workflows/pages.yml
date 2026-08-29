@@ -1,4 +1,5 @@
-# Publishes app/ as the site root on GitHub Pages:
+# Publishes app/ to the gh-pages branch on every push to main. On a public
+# repo, GitHub enables Pages automatically the first time gh-pages appears:
 #   Tiny Conquerors at /tiny-conquerors/, Stock Market 1968 at /tiny-conquerors/market/
 name: pages
 on:
@@ -6,25 +7,19 @@ on:
     branches: [main]
   workflow_dispatch:
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 concurrency:
   group: pages
   cancel-in-progress: true
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
+      - name: Publish app/ to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          enablement: true
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: app
-      - id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./app
+          force_orphan: true
+          commit_message: 'deploy: publish app/ from'
