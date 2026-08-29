@@ -92,5 +92,13 @@ access to the shared page (read-only viewers get a watch-only seat). On any host
 the artifact runtime (the static-site deploy, a local file), the online card hides itself
 and the game is pass-and-play + computer opponents as before.
 
+A **Table Talk** chat sits under the Ticker Wire: on an online table each message
+publishes immediately (seated players only) and pops up as a toast on every other phone;
+a message typed mid-move on your own device rides along with your turn's publish instead,
+so your own dice are never reloaded out from under you. In local games the chat is a
+saved table-notes strip. A **Holdings** breakdown (cash plus shares and value in every
+issue, tap-through to the company card or Ledger) sits beside the board on desktop and as
+a scrollable pill strip under the price chips on phones.
+
 `app/market/index.html` is a verbatim copy for the static-site deploy; regenerate it by
 copying `stock-market.html` after any change.

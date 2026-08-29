@@ -95,6 +95,12 @@ svg{display:block}
   transition:transform .08s,box-shadow .08s;
 }
 .btn:active{transform:translateY(2px);box-shadow:0 1px 0 var(--ink)}
+@media (hover:hover){
+  .btn:not(:disabled):hover{filter:brightness(1.07);transform:translateY(-1px);
+    box-shadow:0 4px 0 var(--ink),0 9px 18px rgba(10,20,12,.4)}
+  .btn:not(:disabled):active{filter:none;transform:translateY(2px);box-shadow:0 1px 0 var(--ink)}
+  .chip:hover,.frow:hover{filter:brightness(1.05)}
+}
 .btn.alt{background:linear-gradient(180deg,#fbf3de,var(--paper-lo));color:var(--ink)}
 .btn.red{background:linear-gradient(180deg,#d4503f,var(--red));color:var(--paper)}
 .btn.gold{background:linear-gradient(180deg,var(--gold-hi),var(--gold));color:var(--ink)}
@@ -165,13 +171,16 @@ svg{display:block}
 .chip.split{animation:flash .5s 3}
 @keyframes flash{50%{filter:brightness(1.6)}}
 /* the red slider knobs riding the quotation board in the SVG center */
-.qknob{transition:transform .55s cubic-bezier(.34,1.3,.5,1)}
+.qknob{transition:transform .8s cubic-bezier(.3,1.25,.45,1)}
 @media (prefers-reduced-motion:reduce){.qknob{transition:none}}
 .qknob.split rect{animation:flash .5s 3}
 
 /* ---------------- board ---------------- */
 #boardWrap{position:relative}
-#boardWrap svg{width:100%;height:auto;border-radius:10px;box-shadow:var(--shadow)}
+#boardWrap svg{width:100%;height:auto;border-radius:10px;box-shadow:var(--shadow),0 14px 34px rgba(6,14,9,.4);
+  animation:boardIn .55s cubic-bezier(.2,.9,.3,1)}
+@keyframes boardIn{from{opacity:0;transform:translateY(10px) scale(.985)}}
+@media (prefers-reduced-motion:reduce){#boardWrap svg{animation:none}}
 .sp-label{font:800 8.4px/1 var(--grot);letter-spacing:.02em;fill:var(--ink)}
 .sp-sub{font:700 7px/1 var(--grot);fill:var(--ink-soft);letter-spacing:.04em}
 .sp-tick{font:800 9.5px/1 var(--grot);fill:#f7efda}
@@ -201,6 +210,10 @@ svg{display:block}
   background:rgba(0,0,0,.25);border:2px solid transparent;color:#e9dcb6;
 }
 .pchip.cur{background:var(--paper);color:var(--ink);border-color:var(--gold-hi);box-shadow:0 0 0 2px rgba(0,0,0,.3)}
+@media (prefers-reduced-motion:no-preference){
+  .pchip.cur{animation:curGlow 2.6s ease-in-out infinite}
+  @keyframes curGlow{50%{box-shadow:0 0 0 2px rgba(0,0,0,.3),0 0 14px rgba(227,189,98,.6)}}
+}
 .pchip.gain .nw{animation:cashup .9s}
 .pchip.loss .nw{animation:cashdn .9s}
 @keyframes cashup{30%{color:#8fd6a8;transform:scale(1.15)}}
@@ -224,8 +237,14 @@ svg{display:block}
 .die.big{width:78px;height:78px;border-radius:15px;border-width:3px}
 #diceFly{position:absolute;inset:0;display:none;align-items:center;justify-content:center;gap:22px;pointer-events:none;z-index:6}
 #diceFly.on{display:flex}
-.die.roll{animation:tumble .45s ease}
-@keyframes tumble{25%{transform:rotate(90deg) scale(.92)}60%{transform:rotate(210deg)}}
+.dice-btn,#diceFly{perspective:280px}
+.die.roll{animation:tumble .55s cubic-bezier(.3,.7,.4,1)}
+@keyframes tumble{
+  18%{transform:rotate3d(1,1,0,140deg) scale(.88)}
+  48%{transform:rotate3d(-1,1.6,0,290deg) scale(1.03)}
+  78%{transform:rotate3d(.6,-1,0,350deg)}
+  100%{transform:rotate3d(0,0,1,360deg)}
+}
 @media (prefers-reduced-motion:reduce){.die.roll{animation:none}}
 .dock-btns{display:flex;gap:8px}
 .dock-btns .btn{flex:1;min-height:46px;padding:8px 10px;font-size:13px}
@@ -235,7 +254,7 @@ svg{display:block}
 #dim.on{opacity:1;pointer-events:auto}
 #sheet{
   position:fixed;left:0;right:0;bottom:0;z-index:41;max-height:86vh;max-height:86dvh;
-  transform:translateY(105%);transition:transform .26s cubic-bezier(.3,1,.4,1);
+  transform:translateY(105%);transition:transform .32s cubic-bezier(.26,1.12,.4,1);
   display:flex;flex-direction:column;
   border-radius:16px 16px 0 0;border:2px solid var(--ink);border-bottom:none;
   background:linear-gradient(180deg,var(--paper),var(--paper-lo));box-shadow:var(--sheet-shadow);
@@ -316,11 +335,18 @@ svg{display:block}
 
 /* ---------------- ticker card (event announce) ---------------- */
 #card{
-  position:fixed;left:50%;top:38%;z-index:50;transform:translate(-50%,-50%) scale(.7);
+  position:fixed;left:50%;top:38%;z-index:50;transform:translate(-50%,-50%) scale(.72) rotate(-2.5deg);
   width:min(340px,88vw);opacity:0;pointer-events:none;text-align:center;padding:18px 16px;
-  transition:transform .24s cubic-bezier(.3,1.4,.5,1),opacity .2s;
+  overflow:hidden;
+  transition:transform .26s cubic-bezier(.3,1.4,.5,1),opacity .2s;
 }
-#card.on{opacity:1;transform:translate(-50%,-50%) scale(1);pointer-events:auto;cursor:pointer}
+#card.on{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(0deg);pointer-events:auto;cursor:pointer}
+#card::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(115deg,transparent 40%,rgba(255,248,215,.5) 50%,transparent 60%);
+  transform:translateX(-130%)}
+#card.on::after{animation:sheen .8s .12s ease}
+@keyframes sheen{to{transform:translateX(130%)}}
+@media (prefers-reduced-motion:reduce){#card.on::after{animation:none}}
 @media (prefers-reduced-motion:reduce){#card{transition:opacity .2s}}
 #cardKick{font:800 10px/1 var(--grot);letter-spacing:.3em;text-transform:uppercase;color:var(--red);margin-bottom:8px}
 #cardTitle{font-family:var(--serif-slab);font-size:24px;line-height:1.05}
@@ -329,7 +355,7 @@ svg{display:block}
 #cardBody .num{font-weight:700}
 
 /* toast + log */
-#toast{position:fixed;left:50%;bottom:calc(120px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);z-index:60;background:var(--ink);color:var(--paper);font:700 13px/1.3 var(--grot);padding:10px 16px;border-radius:8px;opacity:0;transition:.25s;pointer-events:none;max-width:88vw;text-align:center}
+#toast{position:fixed;left:50%;bottom:calc(120px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);z-index:60;background:var(--ink);color:var(--paper);font:700 13px/1.3 var(--grot);padding:10px 16px;border-radius:8px;opacity:0;transition:opacity .25s,transform .3s cubic-bezier(.3,1.4,.5,1);pointer-events:none;max-width:88vw;text-align:center;box-shadow:0 6px 18px rgba(6,12,8,.45)}
 #toast.on{opacity:1;transform:translateX(-50%)}
 #log{padding:10px 14px;max-height:180px;overflow-y:auto;display:none}
 #log.on{display:block}
@@ -338,10 +364,59 @@ svg{display:block}
 .log-line{font:400 12px/1.55 var(--mono);border-bottom:1px dotted var(--rule);padding:3px 0;color:var(--ink-soft)}
 .log-line b{color:var(--ink)}
 
+/* ---------------- holdings breakdown ---------------- */
+#folio{padding:8px 12px}
+.fo-h{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;
+  font:800 10px/1 var(--grot);letter-spacing:.22em;text-transform:uppercase;color:var(--green);
+  padding:2px 0 6px;text-align:left}
+.fo-h .num{font:700 13px var(--mono);letter-spacing:0;color:var(--ink)}
+.frow{display:flex;align-items:center;gap:8px;width:100%;padding:5px 2px;text-align:left;
+  border-bottom:1px dotted var(--rule);font-family:inherit}
+#folio .frow:last-of-type{border-bottom:none}
+.fdot{width:14px;height:14px;border-radius:4px;border:1.5px solid rgba(0,0,0,.4);flex:none;
+  box-shadow:inset -1.5px -1.5px 0 rgba(0,0,0,.2)}
+.fcode{font:800 12px/1 var(--grot);color:var(--ink);min-width:38px}
+.fsh{flex:1;font:600 11px/1.2 var(--grot);color:var(--ink-faint);white-space:nowrap}
+.fval{font:700 12.5px/1 var(--mono);color:var(--ink);white-space:nowrap}
+.fempty{font:600 11.5px/1.5 var(--grot);color:var(--ink-faint);padding:2px 0}
+@media (max-width:919px){
+  #folio{display:flex;align-items:center;gap:6px;overflow-x:auto;padding:7px 9px;scrollbar-width:none}
+  #folio::-webkit-scrollbar{display:none}
+  .fo-h{flex:none;width:auto;flex-direction:column;align-items:flex-start;gap:3px;padding:0 4px 0 0;letter-spacing:.14em}
+  .frow{flex:none;width:auto;border:1.5px solid var(--rule);border-radius:999px;padding:5px 10px;
+    background:rgba(122,100,60,.07);gap:5px;border-bottom-width:1.5px}
+  #folio .frow:last-of-type{border-bottom:1.5px solid var(--rule)}
+  .fsh{flex:none}
+  .fempty{white-space:nowrap}
+}
+
+/* ---------------- table talk ---------------- */
+#chat{padding:10px 14px}
+#chat h3{font:800 11px/1 var(--grot);letter-spacing:.24em;text-transform:uppercase;color:var(--green);margin-bottom:8px}
+#chatLines{max-height:170px;overflow-y:auto;display:flex;flex-direction:column;gap:5px;
+  margin-bottom:9px;overscroll-behavior:contain}
+.chat-line{display:flex;gap:7px;align-items:baseline;font:400 12.5px/1.45 var(--grot);color:var(--ink-soft)}
+.chat-line .cdot{width:10px;height:10px;border-radius:50%;flex:none;align-self:center;border:1.5px solid rgba(0,0,0,.35)}
+.chat-line b{font:800 12px var(--grot);color:var(--ink);white-space:nowrap}
+.chat-line.me b{color:var(--green)}
+.chat-line.queued{opacity:.55}
+.chat-empty{font:600 11.5px/1.5 var(--grot);color:var(--ink-faint)}
+#chatForm{display:flex;gap:6px}
+#chatInput{flex:1;min-width:0;background:var(--paper);border:2px solid var(--ink);border-radius:6px;
+  padding:9px 10px;font:600 14px var(--grot);color:var(--ink)}
+#chatInput:disabled{border-color:var(--rule);background:var(--paper-lo);color:var(--ink-faint)}
+#chatForm .btn{min-height:44px;padding:8px 14px}
+@media (max-width:919px){#chatLines{max-height:120px}}
+
 /* ---------------- win ---------------- */
 #win{position:fixed;inset:0;z-index:70;display:none;align-items:center;justify-content:center;background:rgba(10,26,18,.86);padding:18px}
 #win.on{display:flex}
-.win-card{width:min(440px,94vw);max-height:92vh;max-height:92dvh;overflow-y:auto;text-align:center;padding:26px 20px}
+.win-card{width:min(440px,94vw);max-height:92vh;max-height:92dvh;overflow-y:auto;text-align:center;padding:26px 20px;
+  animation:winIn .55s cubic-bezier(.25,1.25,.4,1)}
+@keyframes winIn{from{opacity:0;transform:translateY(26px) scale(.86)}}
+.win-stats .row{animation:rowIn .45s both}
+@keyframes rowIn{from{opacity:0;transform:translateX(-8px)}}
+@media (prefers-reduced-motion:reduce){.win-card,.win-stats .row{animation:none}}
 .win-kick{font:800 11px/1 var(--grot);letter-spacing:.3em;color:var(--red);text-transform:uppercase}
 .win-name{font-family:var(--serif-slab);font-size:34px;margin:8px 0 2px}
 .win-sum{font:700 17px/1.4 var(--mono);color:var(--green);margin-bottom:12px}
@@ -478,9 +553,19 @@ svg{display:block}
     </div>
     <div id="colSide">
       <div id="chips" class="card-paper" aria-label="Current prices"></div>
+      <div id="folio" class="card-paper" aria-label="Your cash and holdings"></div>
       <div id="log" class="card-paper">
         <h3>Ticker Wire</h3>
         <div id="logLines"></div>
+      </div>
+      <div id="chat" class="card-paper">
+        <h3>Table Talk</h3>
+        <div id="chatLines" role="log" aria-label="Table chat"></div>
+        <form id="chatForm">
+          <input id="chatInput" type="text" maxlength="140" autocomplete="off"
+                 placeholder="Say something to the table…" aria-label="Chat message">
+          <button class="btn small gold" id="chatSend" type="submit">Send</button>
+        </form>
       </div>
     </div>
   </div>
@@ -1195,6 +1280,8 @@ const V = {
   sound: true,
   cells: [],          // board geometry
   card: {timer:0, resolve:null},
+  chat: [],           // local-table chat (online tables keep theirs in the shared state)
+  chatQueue: [],      // online: lines waiting to ride this device's next publish
 };
 
 /* ---------------- storage (never let a blocked store crash the game) --- */
@@ -1202,7 +1289,7 @@ function store(k, v){ try{ if (v === null) localStorage.removeItem(k); else loca
 function read(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
 function saveGame(){
   if (V.online || !V.g || V.g.st.over) return;   // online tables live in the artifact, not this device
-  store(SAVE_KEY, JSON.stringify({st: V.g.st, seats: V.seats, target: V.target, speed: V.speed}));
+  store(SAVE_KEY, JSON.stringify({st: V.g.st, seats: V.seats, target: V.target, speed: V.speed, chat: V.chat}));
 }
 
 /* ============================================================
@@ -1354,8 +1441,30 @@ function describeSpace(i){
 function buildBoard(){
   const P = [];
   P.push(`<svg viewBox="0 0 ${BS} ${BS}" role="group" aria-label="Game board">`);
-  P.push(`<rect x="0" y="0" width="${BS}" height="${BS}" rx="10" fill="#1f8a80"/>`);
-  P.push(`<rect x="10" y="10" width="${BS-20}" height="${BS-20}" fill="#f7f3e8" stroke="#22211f" stroke-width="2"/>`);
+  P.push(`<defs>
+    <radialGradient id="feltRim" cx="50%" cy="36%" r="90%">
+      <stop offset="0" stop-color="#27a496"/><stop offset=".55" stop-color="#1f8a80"/><stop offset="1" stop-color="#136058"/>
+    </radialGradient>
+    <linearGradient id="stockSheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fbf8ef"/><stop offset=".55" stop-color="#f7f3e8"/><stop offset="1" stop-color="#eee7d0"/>
+    </linearGradient>
+    <pattern id="laid" width="4" height="4" patternUnits="userSpaceOnUse">
+      <path d="M0 3.5h4" stroke="rgba(122,100,60,.09)" stroke-width="1"/>
+    </pattern>
+    <linearGradient id="meetCell" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fffdf6"/><stop offset="1" stop-color="#f4ecd6"/>
+    </linearGradient>
+    <linearGradient id="meetCellHi" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f8e8c4"/><stop offset="1" stop-color="#eed9a8"/>
+    </linearGradient>
+    <filter id="barShadow" x="-15%" y="-60%" width="130%" height="240%">
+      <feDropShadow dx="0" dy="2" stdDeviation="1.6" flood-color="#1a140c" flood-opacity=".35"/>
+    </filter>
+  </defs>`);
+  P.push(`<rect x="0" y="0" width="${BS}" height="${BS}" rx="10" fill="url(#feltRim)"/>`);
+  P.push(`<rect x="6.5" y="6.5" width="${BS-13}" height="${BS-13}" rx="7" fill="none" stroke="rgba(227,189,98,.55)" stroke-width="1.5"/>`);
+  P.push(`<rect x="10" y="10" width="${BS-20}" height="${BS-20}" fill="url(#stockSheen)" stroke="#22211f" stroke-width="2"/>`);
+  P.push(`<rect x="11" y="11" width="${BS-22}" height="${BS-22}" fill="url(#laid)"/>`);
   P.push(`<rect x="${CO}" y="${CO}" width="${BS-2*CO}" height="${BS-2*CO}" fill="#faf7ee"/>`);
   // ---- the printed quotation table: eight vertical columns, four rising
   //      with the indicator, four falling, around a white middle track
@@ -1393,7 +1502,7 @@ function buildBoard(){
   }
   // THE indicator: the black T-marker riding the white middle track, with a
   // soft reading-row highlight so every column's row is easy to pick out
-  let bar = `<g class="qknob" id="tickerBar" transform="translate(0,${yOf(CFG.M_START)})">`;
+  let bar = `<g class="qknob" id="tickerBar" filter="url(#barShadow)" transform="translate(0,${yOf(CFG.M_START)})">`;
   bar += `<rect x="${QT.gx0-10}" y="-8.5" width="${QT.gx1-QT.gx0+20}" height="17" fill="#e9c46a" opacity=".4"/>`;
   bar += `<line x1="${QT.gx0-10}" y1="-8.5" x2="${QT.gx1+10}" y2="-8.5" stroke="#22211f" stroke-width=".9" opacity=".55"/>`;
   bar += `<line x1="${QT.gx0-10}" y1="8.5" x2="${QT.gx1+10}" y2="8.5" stroke="#22211f" stroke-width=".9" opacity=".55"/>`;
@@ -1428,7 +1537,8 @@ function buildBoard(){
                                 : {x: gz.fixed, y: lo, w: MB, h: ML};
         cells.push({cx: rc.x + rc.w/2, cy: rc.y + rc.h/2});
         const ratio = row.cells[k];
-        P.push(`<rect x="${rc.x}" y="${rc.y}" width="${rc.w}" height="${rc.h}" fill="${ratio === 3 ? '#f3dfba' : '#fffdf6'}" stroke="#22211f" stroke-width="1.5"/>`);
+        P.push(`<rect x="${rc.x}" y="${rc.y}" width="${rc.w}" height="${rc.h}" fill="url(#${ratio === 3 ? 'meetCellHi' : 'meetCell'})" stroke="#22211f" stroke-width="1.5"/>`);
+        if (ratio === 3) P.push(`<rect x="${rc.x+3}" y="${rc.y+3}" width="${rc.w-6}" height="${rc.h-6}" fill="none" stroke="rgba(150,110,35,.5)" stroke-width="1"/>`);
         P.push(`<text x="${rc.x+rc.w/2}" y="${rc.y+rc.h/2+1}" text-anchor="middle" style="font:800 11px Archivo,sans-serif;fill:#22211f">${ratio} FOR 1</text>`);
         P.push(`<text x="${rc.x+rc.w/2}" y="${rc.y+rc.h/2+14}" text-anchor="middle" style="font:700 6.6px Archivo,sans-serif;letter-spacing:.06em;fill:#8c2318">${STOCKS[pa].code} · ${STOCKS[pb].code}</text>`);
       }
@@ -1446,6 +1556,8 @@ function buildBoard(){
       const j = JOBS[sp.j];
       const cCol = ['#2a9d8f', '#3a7ca5', '#2456a0', '#c9a227'][sp.j];
       P.push(`<rect x="${r.x+5}" y="${r.y+5}" width="${r.w-10}" height="${r.h-10}" fill="${cCol}" stroke="#22211f" stroke-width="1.5"/>`);
+      P.push(`<path d="M ${r.x+6.5} ${r.y+r.h-6.5} V ${r.y+6.5} H ${r.x+r.w-6.5}" fill="none" stroke="rgba(255,252,240,.3)" stroke-width="1.2"/>`);
+      P.push(`<path d="M ${r.x+r.w-6.5} ${r.y+6.5} V ${r.y+r.h-6.5} H ${r.x+6.5}" fill="none" stroke="rgba(25,16,7,.3)" stroke-width="1.2"/>`);
       const words = j.t.toUpperCase().split(' ');
       words.forEach((w, k) => {
         P.push(`<text x="${r.x+r.w/2}" y="${r.y+28+k*16}" text-anchor="middle" class="sp-big" style="fill:#fff;font-size:${words.length>2?12:14}px">${w}</text>`);
@@ -1456,6 +1568,8 @@ function buildBoard(){
       // solid vivid printed cells, three lines of type
       const lk = spaceLook(sp);
       P.push(`<rect x="${r.x+2.5}" y="${r.y+2.5}" width="${r.w-5}" height="${r.h-5}" fill="${lk.bg}" stroke="#22211f" stroke-width="1.4"/>`);
+      P.push(`<path d="M ${r.x+3.5} ${r.y+r.h-3.5} V ${r.y+3.5} H ${r.x+r.w-3.5}" fill="none" stroke="rgba(255,252,240,.3)" stroke-width="1"/>`);
+      P.push(`<path d="M ${r.x+r.w-3.5} ${r.y+3.5} V ${r.y+r.h-3.5} H ${r.x+3.5}" fill="none" stroke="rgba(25,16,7,.3)" stroke-width="1"/>`);
       const px = r.x + r.w/2, pyMid = r.y + r.h/2;
       const moveCol = /\u25b2/.test(lk.l3 || '') ? '#bff0c6' : '#ffd9cf';
       P.push(`<text x="${px}" y="${pyMid-12}" text-anchor="middle" class="sp-label" style="font-size:12.5px;fill:${lk.fg}">${lk.l1}</text>`);
@@ -1535,6 +1649,7 @@ function renderPawns(){
     const sc = matchMedia('(max-width:919px)').matches ? 1.45 : 1;
     layer.innerHTML = V.g.st.players.map((p, i) =>
       `<g class="pawn" id="pawn${i}"><g transform="scale(${sc})">` +
+      `<ellipse cy="15.5" rx="12.5" ry="3.6" fill="rgba(15,10,5,.3)"/>` +
       `<ellipse cy="13" rx="10.5" ry="4.5" fill="${p.color}" stroke="#251f17" stroke-width="2"/>` +
       `<path d="M -7.5 13 Q -3 0 -2.4 -5.5 L 2.4 -5.5 Q 3 0 7.5 13 Z" fill="${p.color}" stroke="#251f17" stroke-width="2" stroke-linejoin="round"/>` +
       `<circle cy="-10" r="6" fill="${p.color}" stroke="#251f17" stroke-width="2"/>` +
@@ -1647,7 +1762,100 @@ function renderButtons(){
   $('btnRoll').disabled = !(mine && g.st.phase === 'idle' && !V.busy && !g.st.over);
   $('btnEndTurn').disabled = !(mine && g.st.phase === 'done' && !V.busy && !g.st.over);
 }
-function renderAll(){ if (!V.g) return; renderPlayers(); renderPawns(); renderQuote(); renderTape(); renderLog(); renderHint(); renderButtons(); }
+/* ---- the holdings breakdown: your cash and shares in every issue ---- */
+function folioWho(){
+  const g = V.g; if (!g) return 0;
+  if (V.online){ const i = myOnlineSeat(); if (i >= 0) return i; }
+  if (!g.cur().ai) return g.st.turn;
+  const h = g.st.players.findIndex(p => !p.ai);
+  return h >= 0 ? h : g.st.turn;
+}
+function renderFolio(){
+  const g = V.g, box = $('folio');
+  if (!g || !box) return;
+  const pi = folioWho(), p = g.st.players[pi];
+  const held = STOCKS.map((_, i) => i).filter(i => p.shares[i] > 0);
+  box.innerHTML = `
+    <button class="fo-h" data-led="1" aria-label="Open the Ledger">
+      <span>${esc(p.name)} · Holdings</span><span class="num">${fmt(g.netWorth(p))}</span>
+    </button>
+    <button class="frow" data-led="1">
+      <span class="fdot" style="background:linear-gradient(135deg,#b3c9a2 40%,#9db4d6)"></span>
+      <span class="fcode">CASH</span><span class="fsh">on hand</span>
+      <span class="fval">${fmt(p.cash)}</span>
+    </button>` +
+    (held.length ? held.map(i => `
+      <button class="frow" data-co="${i}">
+        <span class="fdot" style="background:${STOCKS[i].color}"></span>
+        <span class="fcode">${STOCKS[i].code}</span>
+        <span class="fsh">${p.shares[i]} sh @ $${g.st.prices[i]}</span>
+        <span class="fval">${fmt(p.shares[i] * g.st.prices[i])}</span>
+      </button>`).join('')
+    : '<div class="fempty">No certificates yet — buy where you land.</div>');
+  box.querySelectorAll('[data-co]').forEach(el => el.addEventListener('click', () => { if (!V.busy) sheetCompany(+el.dataset.co); }));
+  box.querySelectorAll('[data-led]').forEach(el => el.addEventListener('click', () => { if (!V.busy) sheetLedger(); }));
+}
+
+/* ---- table talk: local table notes, or the shared online chat ---- */
+function chatList(){ return V.online ? ((NET.state && NET.state.chat) || []) : V.chat; }
+function chatMe(){
+  if (V.online){
+    const s = NET.state, i = NET.mySeat();
+    return (s && i >= 0 && s.seats[i]) ? {n: s.seats[i].name, c: s.seats[i].color} : null;
+  }
+  if (!V.g) return null;
+  const p = !V.g.cur().ai ? V.g.cur() : V.g.st.players.find(x => !x.ai);
+  return p ? {n: p.name, c: p.color} : null;
+}
+function renderChat(){
+  const box = $('chatLines'); if (!box) return;
+  const me = chatMe();
+  const list = chatList().map(m => ({m, q: false}))
+    .concat(V.online ? V.chatQueue.map(m => ({m, q: true})) : []);
+  box.innerHTML = list.length
+    ? list.slice(-50).map(({m, q}) =>
+        `<div class="chat-line${me && m.n === me.n ? ' me' : ''}${q ? ' queued' : ''}">` +
+        `<span class="cdot" style="background:${esc(m.c || '#8a7d63')}"></span>` +
+        `<b>${esc(m.n)}</b><span>${esc(m.x)}</span></div>`).join('')
+    : '<div class="chat-empty">Table talk shows up here — say hello.</div>';
+  box.scrollTop = box.scrollHeight;
+  const inp = $('chatInput');
+  if (inp){
+    const can = !!me;
+    inp.disabled = !can;
+    inp.placeholder = can ? 'Say something to the table…' : 'Take a seat to join the talk';
+  }
+}
+async function sendChat(){
+  const inp = $('chatInput');
+  const text = (inp.value || '').trim().slice(0, 140);
+  const me = chatMe();
+  if (!text || !me) return;
+  const msg = {n: me.n, c: me.c, x: text, t: Date.now()};
+  inp.value = '';
+  Snd.tick();
+  if (!V.online){
+    V.chat.push(msg); if (V.chat.length > 60) V.chat.shift();
+    renderChat(); saveGame();
+    return;
+  }
+  V.chatQueue.push(msg);
+  renderChat();
+  // mid-move on this device, the message rides along with the turn's own
+  // publish, so this phone never reloads out from under its own dice
+  const midMyMove = V.g && !V.g.st.over && myOnlineSeat() === V.g.st.turn &&
+    (V.g.st.phase !== 'idle' || V.busy);
+  if (midMyMove){ toast('Sends with your turn', 1800); return; }
+  const s = NET.state || {};
+  const st = netSnapshot({
+    chat: (s.chat || []).concat(V.chatQueue).slice(-60),
+    note: me.n + ': ' + text,
+  });
+  const ok = await NET.publish(st);
+  if (!ok) toast('The message didn’t reach the table — it sends with the next turn', 2600);
+}
+
+function renderAll(){ if (!V.g) return; renderPlayers(); renderPawns(); renderQuote(); renderTape(); renderLog(); renderHint(); renderButtons(); renderFolio(); renderChat(); }
 
 /* ================= TOAST + TICKER CARD ================= */
 let toastT = 0;
@@ -2473,6 +2681,7 @@ function startGame(){
   V.g.addLog('The market opens. Everyone starts at work with empty pockets — first to ' + fmt(V.target) + ' wins.');
   V.online = false; $('liveBadge').style.display = 'none';
   V.gen++; V.busy = false;
+  V.chat = []; V.chatQueue = [];
   buildBoard(); buildQuote();
   lastPrices = null;
   $('die1').textContent = '?'; $('die2').textContent = '?';
@@ -2499,6 +2708,7 @@ function resumeGame(saved){
   V.seats = saved.seats || V.seats;
   V.target = saved.target || CFG.WIN;
   V.speed = saved.speed || 'normal';
+  V.chat = saved.chat || []; V.chatQueue = [];
   V.online = false; $('liveBadge').style.display = 'none';
   V.gen++; V.busy = false;
   buildBoard(); buildQuote();
@@ -2523,7 +2733,8 @@ function netSnapshot(extra){
   const s = NET.state || {};
   return Object.assign({
     v: 3, phase: s.phase, host: s.host, target: s.target || CFG.WIN,
-    seats: s.seats || [], game: s.game || null, lastBy: NET.token, note: '',
+    seats: s.seats || [], game: s.game || null, chat: s.chat || [],
+    lastBy: NET.token, note: '',
   }, extra || {});
 }
 function hostTable(){
@@ -2683,7 +2894,9 @@ async function onlinePublishTurn(){
   const g = V.g;
   const note = g.st.log.slice(-2).join(' · ').slice(0, 180) +
     (g.st.over ? '' : ' — next: ' + g.cur().name);
-  const st = netSnapshot({phase: g.st.over ? 'over' : 'playing', game: g.st, note});
+  const s = NET.state || {};
+  const st = netSnapshot({phase: g.st.over ? 'over' : 'playing', game: g.st, note,
+    chat: (s.chat || []).concat(V.chatQueue).slice(-60)});
   const ok = await NET.publish(st);
   if (!ok && NET.api){
     // one quiet retry; after that the next tap tries again
@@ -2721,6 +2934,7 @@ function wire(){
   $('btnRoll').addEventListener('click', humanRoll);
   $('btnEndTurn').addEventListener('click', humanEndTurn);
   $('btnLedger').addEventListener('click', () => { if (V.g && !V.busy) sheetLedger(); });
+  $('chatForm').addEventListener('submit', e => { e.preventDefault(); sendChat(); });
   $('sheetX').addEventListener('click', closeSheet);
   $('dim').addEventListener('click', closeSheet);
   document.addEventListener('keydown', e => {
