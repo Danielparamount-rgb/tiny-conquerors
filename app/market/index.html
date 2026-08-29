@@ -219,8 +219,8 @@ svg{display:block}
 }
 .dice-btn:active{transform:translateY(2px);box-shadow:0 1px 0 var(--ink)}
 .dice-btn:disabled{opacity:.45;transform:none;box-shadow:0 3px 0 var(--ink)}
-.die{position:relative;width:34px;height:34px;border-radius:7px;background:linear-gradient(135deg,#eccf96,#cfa761 70%,#b98f4b);border:2px solid var(--ink);display:grid;place-items:center;font:800 19px/1 var(--grot);color:var(--ink);box-shadow:inset -2px -3px 0 rgba(90,60,20,.3),inset 2px 2px 0 rgba(255,245,220,.5)}
-.die .pip{position:absolute;width:17%;height:17%;border-radius:50%;background:#382813;transform:translate(-50%,-50%);box-shadow:inset 0 1px 1px rgba(0,0,0,.5)}
+.die{position:relative;width:34px;height:34px;border-radius:7px;background:linear-gradient(135deg,#e05a45,#c22e20 65%,#951d12);border:2px solid var(--ink);display:grid;place-items:center;font:800 19px/1 var(--grot);color:#fff;box-shadow:inset -2px -3px 0 rgba(80,10,5,.45),inset 2px 2px 0 rgba(255,200,190,.35)}
+.die .pip{position:absolute;width:17%;height:17%;border-radius:50%;background:#fff;transform:translate(-50%,-50%);box-shadow:inset 0 -1px 1px rgba(0,0,0,.25)}
 .die.big{width:78px;height:78px;border-radius:15px;border-width:3px}
 #diceFly{position:absolute;inset:0;display:none;align-items:center;justify-content:center;gap:22px;pointer-events:none;z-index:6}
 #diceFly.on{display:flex}
@@ -286,8 +286,18 @@ svg{display:block}
 #lgTabs .pchip.cur{background:var(--paper)}
 .lg-total{display:flex;justify-content:space-between;font:700 15px/1.6 var(--mono);border-top:2px solid var(--ink);margin-top:10px;padding-top:8px}
 .lots{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
-.lot{font:800 10px/1 var(--grot);letter-spacing:.04em;color:var(--ink);background:repeating-linear-gradient(45deg,rgba(122,100,60,.10) 0 3px,transparent 3px 6px),var(--paper);border:1.5px solid var(--ink-soft);border-radius:3px;padding:4px 6px}
+.lot{font:800 10px/1 var(--grot);letter-spacing:.04em;color:#fff;border:1.5px solid rgba(0,0,0,.4);border-radius:3px;padding:4px 6px;text-shadow:0 1px 1px rgba(0,0,0,.3)}
+.lot.dk{color:#3a332a;text-shadow:none}
 .lot b{font-family:var(--mono)}
+.billrow{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 2px}
+.bill{font:800 9px/1 var(--grot);letter-spacing:.05em;color:#3a332a;padding:5px 8px;border-radius:2px;border:1.2px solid rgba(0,0,0,.3);box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.5)}
+.cashfx{position:fixed;z-index:65;display:flex;align-items:center;gap:5px;font:800 15px/1 var(--mono);pointer-events:none;animation:cashfly 1.15s ease-out forwards;text-shadow:0 1px 2px rgba(0,0,0,.5)}
+.cashfx.gain{color:#8fd6a8}.cashfx.loss{color:#f0907d}
+.cashfx .mini{width:16px;height:9px;border-radius:1.5px;border:1px solid rgba(0,0,0,.35);box-shadow:inset 0 0 0 1px rgba(255,255,255,.5)}
+@keyframes cashfly{0%{opacity:0;transform:translateY(10px) scale(.9)}18%{opacity:1;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(-40px)}}
+@media (prefers-reduced-motion:reduce){.cashfx{animation:none;display:none}}
+.chip{cursor:pointer}
+.chip:active{filter:brightness(1.08)}
 .seat2{display:flex;align-items:center;gap:8px;padding:0 6px 8px 40px;border-bottom:1px solid var(--rule)}
 .seat2 label{font:700 10px/1 var(--grot);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint)}
 .seat2 select{flex:1;min-width:0;width:100%;background:var(--paper);border:1.5px solid var(--rule);border-radius:6px;padding:6px 8px;font-weight:600;font-size:14px;min-height:38px}
@@ -984,6 +994,42 @@ const fmt = n => '$' + Math.round(n).toLocaleString('en-US');
 const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const buzz = ms => { try{ if (navigator.vibrate) navigator.vibrate(ms); }catch(e){} };
+
+/* the printed money and certificates, colored like the real parts */
+const BILLS = [20000, 10000, 5000, 1000, 500, 100, 50, 20, 10, 5, 1];
+const BILL_COLORS = {1:'#b3c9a2', 5:'#ecc0c6', 10:'#e8a3af', 20:'#9db4d6', 50:'#e59d7c',
+  100:'#9db4d6', 500:'#ecc0c6', 1000:'#b3c9a2', 5000:'#a8bdd9', 10000:'#e59d7c', 20000:'#aab6c2'};
+const LOT_COLORS = {1:'#e8862d', 5:'#43892f', 10:'#d94f33', 20:'#2456a0', 50:'#c73a63',
+  100:'#2a9d8f', 500:'#c96a1e', 1000:'#d9b13b'};
+function billChips(amount, cap){
+  const out = [];
+  let n = Math.max(0, Math.round(amount));
+  for (const d of BILLS){
+    while (n >= d && out.length < (cap || 14)){
+      n -= d;
+      out.push(`<span class="bill" style="background:${BILL_COLORS[d]}">$${d.toLocaleString('en-US')}</span>`);
+    }
+    if (out.length >= (cap || 14)) break;
+  }
+  if (n > 0 && out.length >= (cap || 14)) out.push(`<span class="bill" style="background:var(--paper-lo)">…</span>`);
+  return out.join('');
+}
+/* a little flight of bills whenever money changes hands */
+function cashFx(amt){
+  if (RM || !amt) return;
+  const chips = document.querySelectorAll('#players .pchip');
+  const el = chips[V.g ? V.g.st.turn : 0];
+  const r = el ? el.getBoundingClientRect() : {left: innerWidth / 2 - 40, top: innerHeight - 150, width: 80};
+  const d = document.createElement('div');
+  d.className = 'cashfx ' + (amt > 0 ? 'gain' : 'loss');
+  let minis = '', n = Math.abs(amt);
+  for (const b of BILLS){ if (n >= b && minis.length < 200){ minis += `<span class="mini" style="background:${BILL_COLORS[b]}"></span>`; n -= b; if ((minis.match(/mini/g) || []).length >= 3) break; } }
+  d.innerHTML = minis + `<span>${amt > 0 ? '+' : '−'}${fmt(Math.abs(amt))}</span>`;
+  d.style.left = Math.max(8, Math.min(innerWidth - 140, r.left + r.width / 2 - 50)) + 'px';
+  d.style.top = (r.top - 30) + 'px';
+  document.body.appendChild(d);
+  setTimeout(() => d.remove(), 1300);
+}
 const SAVE_KEY = 'sm68';
 
 const V = {
@@ -1180,7 +1226,7 @@ function buildBoard(){
   // columns: company header chips and every printed value of the ladder
   STOCKS.forEach((s, i) => {
     const x = QT.xs[i];
-    P.push(`<rect x="${x-QT.colW/2+3}" y="${QT.y0-10}" width="${QT.colW-6}" height="${QT.y1-QT.y0+20}" fill="${s.color}" opacity=".13"/>`);
+    P.push(`<rect x="${x-QT.colW/2+3}" y="${QT.y0-10}" width="${QT.colW-6}" height="${QT.y1-QT.y0+20}" fill="${s.color}" opacity=".3"/>`);
     P.push(`<rect x="${x-QT.colW/2+3}" y="${QT.y0-60}" width="${QT.colW-6}" height="44" fill="${s.color}" stroke="#22211f" stroke-width="1.4"/>`);
     P.push(`<text x="${x}" y="${QT.y0-41}" text-anchor="middle" style="font:800 14px Archivo,sans-serif;fill:#fff">${s.code} ${s.rise?'▲':'▼'}</text>`);
     P.push(`<text x="${x}" y="${QT.y0-26}" text-anchor="middle" style="font:800 8px Archivo,sans-serif;fill:#fff;opacity:.94">$${s.div} DIV</text>`);
@@ -1193,16 +1239,18 @@ function buildBoard(){
   for (let m = 0; m <= CFG.M_MAX; m += 5){
     P.push(`<line x1="${QT.gx0-4}" y1="${yOf(m)}" x2="${QT.gx1+4}" y2="${yOf(m)}" stroke="#22211f" opacity="${m===CFG.M_START?.45:.12}" stroke-width="${m===CFG.M_START?1.6:.8}"/>`);
   }
-  // THE indicator: one bar across every column, sliding UP and DOWN
-  P.push(`<defs><linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b3a38"/><stop offset=".5" stop-color="#22211f"/><stop offset="1" stop-color="#3b3a38"/></linearGradient></defs>`);
+  // THE indicator: the black T-marker riding the white middle track, with a
+  // soft reading-row highlight so every column's row is easy to pick out
   let bar = `<g class="qknob" id="tickerBar" transform="translate(0,${yOf(CFG.M_START)})">`;
-  bar += `<rect x="${QT.gx0-14}" y="-9" width="${QT.gx1-QT.gx0+28}" height="18" rx="5" fill="url(#barGrad)" stroke="#8c2318" stroke-width="2"/>`;
-  bar += `<path d="M ${QT.gx0-26} 0 l 10 -8 v 16 z" fill="#bf3527" stroke="#5f1109" stroke-width="1.2"/>`;
-  bar += `<path d="M ${QT.gx1+26} 0 l -10 -8 v 16 z" fill="#bf3527" stroke="#5f1109" stroke-width="1.2"/>`;
-  bar += `<rect x="${cx-16}" y="-13" width="32" height="26" rx="4" fill="#bf3527" stroke="#5f1109" stroke-width="1.4"/>`;
+  bar += `<rect x="${QT.gx0-10}" y="-8.5" width="${QT.gx1-QT.gx0+20}" height="17" fill="#e9c46a" opacity=".4"/>`;
+  bar += `<line x1="${QT.gx0-10}" y1="-8.5" x2="${QT.gx1+10}" y2="-8.5" stroke="#22211f" stroke-width=".9" opacity=".55"/>`;
+  bar += `<line x1="${QT.gx0-10}" y1="8.5" x2="${QT.gx1+10}" y2="8.5" stroke="#22211f" stroke-width=".9" opacity=".55"/>`;
+  bar += `<rect x="${cx-8}" y="-27" width="16" height="54" rx="3.5" fill="#22211f"/>`;
+  bar += `<rect x="${cx-27}" y="-7.5" width="54" height="15" rx="3" fill="#22211f"/>`;
+  bar += `<circle cx="${cx}" cy="0" r="3.2" fill="#bf3527"/>`;
   STOCKS.forEach((s, i) => {
-    bar += `<rect x="${QT.xs[i]-17}" y="-11" width="34" height="22" rx="3" fill="#bf3527" opacity=".95"/>`;
-    bar += `<text id="qkt${i}" x="${QT.xs[i]}" y="4.5" text-anchor="middle" style="font:700 12.5px 'Courier Prime',monospace;fill:#fff">${priceAt(i, CFG.M_START)}</text>`;
+    bar += `<rect x="${QT.xs[i]-17}" y="-9.5" width="34" height="19" rx="3" fill="#fffdf6" stroke="#22211f" stroke-width="1.1"/>`;
+    bar += `<text id="qkt${i}" x="${QT.xs[i]}" y="4.2" text-anchor="middle" style="font:800 12px 'Courier Prime',monospace;fill:#22211f">${priceAt(i, CFG.M_START)}</text>`;
   });
   bar += `</g>`;
   P.push(bar);
@@ -1299,12 +1347,13 @@ function renderPawns(){
 let lastPrices = null;
 function buildQuote(){
   $('chips').innerHTML = STOCKS.map((s, i) =>
-    `<div class="chip" id="chip${i}">
+    `<button class="chip" id="chip${i}" aria-label="${esc(s.name)} — company card">
       <span class="chip-dot" style="background:${s.color}"></span>
       <span class="chip-code">${s.code}<span class="chip-pol ${s.rise ? 'up' : 'dn'}">${s.rise ? '▲' : '▼'}</span></span>
       <span class="chip-price num" id="cp${i}"></span>
       <span class="chip-delta num" id="cd${i}"></span>
-    </div>`).join('');
+    </button>`).join('');
+  $('chips').querySelectorAll('.chip').forEach((el, i) => el.addEventListener('click', () => sheetCompany(i)));
   lastPrices = null;
 }
 function barYOf(M){
@@ -1450,7 +1499,7 @@ async function playEvents(events){
         break;
       }
       case 'salary':
-        Snd.pay();
+        Snd.pay(); cashFx(ev.amt);
         await showCard('Salary!', JOBS[ev.job].t,
           `The throw hits ${JOBS[ev.job].nums.join(' or ')} — <b>${esc(g.cur().name)}</b> collects <b class="num">${fmt(ev.amt)}</b>.`);
         renderPlayers(); break;
@@ -1458,7 +1507,7 @@ async function playEvents(events){
         toast(`${ev.total % 2 === 0 ? 'Even' : 'Odd'} throw — heading ${ev.dir > 0 ? 'clockwise' : 'counterclockwise'}`, 2200);
         break;
       case 'startFee':
-        Snd.fee();
+        Snd.fee(); cashFx(-ev.amt);
         toast(`START — paid the ${fmt(CFG.START_FEE)} fee`, 2200);
         renderPlayers(); break;
       case 'atStart':
@@ -1470,7 +1519,7 @@ async function playEvents(events){
           `From now on, any throw of <b>${JOBS[ev.j].nums.join(' or ')}</b> pays <b>${esc(g.cur().name)}</b> a <b class="num">${fmt(JOBS[ev.j].pay)}</b> salary.`);
         renderPlayers(); break;
       case 'payps':
-        Snd.fee();
+        Snd.fee(); cashFx(-ev.amt);
         await showCard('Pay Broker Fee', ev.owned ? `$${CFG.BROKER_PS} on every share` : 'Nothing to Collect',
           ev.owned ? `<b>${esc(g.cur().name)}</b> holds ${ev.owned} shares — the broker takes <b class="num">${fmt(ev.amt)}</b>.` : 'No shares held — the broker goes home empty-handed.');
         renderPlayers(); break;
@@ -1484,13 +1533,13 @@ async function playEvents(events){
         renderPlayers(); break;
       }
       case 'codiv':
-        Snd.cash();
+        Snd.cash(); cashFx(ev.amt);
         await showCard('Dividend Paid', STOCKS[ev.s].name,
           `${STOCKS[ev.s].code} pays its printed <b class="num">$${STOCKS[ev.s].div}</b> a share — <b>${esc(g.cur().name)}</b> collects <b class="num">${fmt(ev.amt)}</b>.`);
         renderPlayers(); break;
       case 'sellall':
         if (ev.n > 0){
-          Snd.down();
+          Snd.down(); cashFx(ev.amt);
           await showCard('Sell All ' + STOCKS[ev.s].code, 'Forced Out at the Floor',
             `<b>${esc(g.cur().name)}</b>'s ${ev.n} shares go at the printed <b class="num">$${ev.floor}</b> — <b class="num">${fmt(ev.amt)}</b> in cash.`);
         } else {
@@ -1554,7 +1603,7 @@ function dealPanel(box, sIdx, mode, after, limitQ){
       <div class="deal-price num">$${price()}<small> / share</small></div>
       <p style="font:700 10px/1 Archivo,sans-serif;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);text-align:center;margin:12px 0 6px">Share certificates</p>
       <div class="qty-row">
-        ${[1,5,10,20,50,100,500,1000].map(d => `<button class="qbtn" data-d="${d}">+${d}</button>`).join('')}
+        ${[1,5,10,20,50,100,500,1000].map(d => `<button class="qbtn" data-d="${d}" style="border-bottom:5px solid ${LOT_COLORS[d]}">+${d}</button>`).join('')}
       </div>
       <div class="qty-row" style="margin-top:2px">
         <button class="qbtn" data-d="clear">CLEAR</button>
@@ -1593,8 +1642,13 @@ function dealPanel(box, sIdx, mode, after, limitQ){
   }));
   box.querySelector('#dealPass').addEventListener('click', () => after(false));
   box.querySelector('#dealGo').addEventListener('click', () => {
+    const dealPrice = price(), total = qty * dealPrice;
     const ok = mode === 'buy' ? g.buy(sIdx, qty) : g.sell(sIdx, qty);
-    if (ok){ (mode === 'buy' ? Snd.cash : Snd.pay)(); toast(`${mode === 'buy' ? 'Bought' : 'Sold'} ${qty} ${s.code} at $${price()}`); }
+    if (ok){
+      (mode === 'buy' ? Snd.cash : Snd.pay)();
+      cashFx(mode === 'buy' ? -total : total);
+      toast(`${mode === 'buy' ? 'Bought' : 'Sold'} ${qty} ${s.code} at $${dealPrice}`);
+    }
     renderAll(); saveGame();
     after(!!ok);
   });
@@ -1602,6 +1656,30 @@ function dealPanel(box, sIdx, mode, after, limitQ){
 }
 
 /* the three landing sheets */
+/* the company identification card — tap a price chip to see it */
+function sheetCompany(i){
+  const s = STOCKS[i], g = V.g;
+  openSheet(s.name, b => {
+    const p = g ? g.cur() : null;
+    const held = p ? p.shares[i] : 0;
+    const price = g ? g.st.prices[i] : priceAt(i, CFG.M_START);
+    const rows = [
+      ['Today’s price', '$' + price],
+      ['Printed range', '$' + s.lo + ' – $' + s.hi],
+      ['Rides the indicator', s.rise ? '▲ climbs toward UP' : '▼ climbs toward DOWN'],
+      ['Dividend', '$' + s.div + ' a share, paid on its spaces'],
+      ['Forced-sale floor', '$' + s.lo + ' a share'],
+      p ? ['Your holding', held + ' sh · ' + fmt(held * price)] : null,
+    ].filter(Boolean);
+    b.innerHTML = `
+      <div style="background:${s.color};border:2px solid #22211f;border-radius:10px;color:#fff;text-align:center;padding:22px 14px;margin-bottom:14px;box-shadow:inset 0 0 0 5px ${s.color},inset 0 0 0 6.5px rgba(255,255,255,.65)">
+        <div style="width:48px;height:48px;margin:0 auto 10px;border:2.5px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font:800 22px Georgia,serif">${s.code[0]}</div>
+        <div style="font:800 21px Archivo,sans-serif;letter-spacing:.06em">${s.name.toUpperCase()}</div>
+        <div style="font:700 10px Archivo,sans-serif;letter-spacing:.24em;opacity:.92;margin-top:5px">${s.sector.toUpperCase()}</div>
+      </div>` +
+      rows.map(r => `<div class="trow"><span class="ti"><b>${r[0]}</b></span><span class="pr num">${r[1]}</span></div>`).join('');
+  });
+}
 function sheetBuy(sIdx, limit){
   const g = V.g;
   const done = () => { if (g.st.pending){ g.resolvePending(); } renderAll(); saveGame(); onActionResolved(); };
@@ -1632,7 +1710,7 @@ function sheetLedger(){
     const lots = n => {
       const out = [];
       [1000, 500, 100, 50, 20, 10, 5, 1].forEach(d => { while (n >= d){ n -= d; out.push(d); } });
-      return out.map(d => `<span class="lot"><b>${d}</b> SH</span>`).join('');
+      return out.map(d => `<span class="lot${d === 1000 ? ' dk' : ''}" style="background:${LOT_COLORS[d]}"><b>${d}</b> SH</span>`).join('');
     };
     const certs = STOCKS.map((s, i) => {
       if (p.shares[i] < 1) return '';
@@ -1655,6 +1733,7 @@ function sheetLedger(){
         `<button class="pchip${i === sel ? ' cur' : ''}" data-t="${i}" style="border-color:${i === sel ? 'var(--ink)' : 'transparent'}"><span class="dot" style="background:${pl.color}"></span><span class="nm">${esc(pl.name)}</span></button>`).join('')}
       </div>
       <div class="trow"><span class="ti"><b>Cash on hand</b><small>${p.job >= 0 ? esc(JOBS[p.job].t) + ' — ' + JOBS[p.job].nums.join(' or ') + ' pays ' + fmt(JOBS[p.job].pay) : 'No occupation yet — land on a corner'}</small></span><span class="pr num">${fmt(p.cash)}</span></div>
+      <div class="billrow">${billChips(p.cash)}</div>
       ${certs || '<p style="font:600 13px/2 Archivo,sans-serif;color:var(--ink-faint);text-align:center;padding:12px 0">No certificates held.</p>'}
       <div class="lg-total"><span>NET WORTH</span><span>${fmt(g.netWorth(p))}</span></div>`;
     b.querySelectorAll('[data-t]').forEach(el => el.addEventListener('click', () => { sel = +el.dataset.t; build(b); }));
