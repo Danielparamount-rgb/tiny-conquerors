@@ -52,6 +52,20 @@ photographs could not resolve.
   the target ($100,000 printed; the game offers $50,000 and $25,000 tables as the rules
   invite players to agree on other amounts).
 
+## Table variants (setup options)
+
+The printed rules invite the table to set its own terms, and the game offers two:
+
+- **House-rules opening** — skips the working start entirely: every investor is dealt
+  $1,000 and one share of every issue, standing on a START square (spread across the four
+  sides), and the first throw plays immediately. Going broke still sends you back to work
+  the classic way. Simulated house games run roughly half the length of classic ones.
+- **Timed sitting** — no dollar target; after 20 full rounds the richest investor at the
+  bell wins (the printed WINNING paragraph's "play for a specified time" variant).
+
+Both are available in local setup and to the online host in the lobby, and both survive
+save/resume.
+
 ## Documented vs. reconstructed
 
 | Feature | Value | Source |

@@ -490,11 +490,19 @@ svg{display:block}
       <button class="btn alt small" id="btnAddSeat">+ Add Investor</button>
     </div>
     <div class="setup-row">
+      <label for="optOpen">Opening</label>
+      <select id="optOpen">
+        <option value="classic" selected>Classic — work for your first $1,000</option>
+        <option value="house">House rules — $1,000 + 1 share of each</option>
+      </select>
+    </div>
+    <div class="setup-row">
       <label for="optTarget">Win at</label>
       <select id="optTarget">
         <option value="100000">$100,000 — the classic marathon</option>
         <option value="50000" selected>$50,000 — the family game</option>
         <option value="25000">$25,000 — a quick flutter</option>
+        <option value="timed20">Timed — 20 rounds, richest wins</option>
       </select>
     </div>
     <div class="setup-row">
@@ -524,6 +532,14 @@ svg{display:block}
         <option value="100000">$100,000 — the classic marathon</option>
         <option value="50000" selected>$50,000 — the family game</option>
         <option value="25000">$25,000 — a quick flutter</option>
+        <option value="timed20">Timed — 20 rounds, richest wins</option>
+      </select>
+    </div>
+    <div class="setup-row" id="lobbyHostRow2" style="display:none">
+      <label for="lobbyOpen">Opening</label>
+      <select id="lobbyOpen">
+        <option value="classic" selected>Classic — work for your first $1,000</option>
+        <option value="house">House rules — $1,000 + 1 share of each</option>
       </select>
     </div>
     <div class="setup-actions">
@@ -773,24 +789,27 @@ function makeRng(seed){ let a = seed >>> 0;
 
 class Game {
   constructor(setup){
+    const house = !!setup.house;          // house-rules opening: skip the working start
     this.st = {
       v: 6,
+      house,
+      rounds: setup.rounds || 0,           // timed sitting: richest after N rounds wins
       seed: setup.seed,
       rngN: 0,
-      target: setup.target || CFG.WIN,
+      target: setup.target === 0 ? 0 : (setup.target || CFG.WIN),
       speed: setup.speed || 'normal',
       M: CFG.M_START,
       prices: STOCKS.map((_, i) => priceAt(i, CFG.M_START)),
       players: setup.players.map((p, i) => ({
         name: p.name, ai: !!p.ai, color: p.color || PAWN_COLORS[i],
         persona: p.ai ? (i % 3) : -1,
-        mode: 'work',                       // work | market | meeting
-        job: i % 4,                          // occupation while at work
-        cash: 0,                             // everyone begins with nothing
-        pos: CORNER_CELLS[i % 4],
+        mode: house ? 'market' : 'work',     // work | market | meeting
+        job: i % 4,                          // occupation while at work (and if broke)
+        cash: house ? CFG.WORK_STAKE : 0,
+        pos: house ? START_CELLS[i % 4] : CORNER_CELLS[i % 4],
         meet: null,                          // {row, idx, dir, stock} while in a meeting
-        entering: false,                     // placed on a START square this turn
-        shares: STOCKS.map(() => 0),
+        entering: house,                     // placed on a START square this turn
+        shares: STOCKS.map(() => house ? 1 : 0),
         stats: {earned:0, spentFees:0, divs:0, meetShares:0, bestTrade:0, broke:0},
         nwHist: [0],
       })),
@@ -824,6 +843,7 @@ class Game {
   checkWin(){
     const st = this.st, p = this.cur();
     if (st.over) return true;
+    if (!st.target) return false;          // timed sitting: the bell decides, not a target
     if (this.netWorth(p) >= st.target){
       st.over = true; st.winner = st.turn;
       this.addLog(`${p.name} comes to the table worth $${this.netWorth(p).toLocaleString('en-US')} — the game is won!`);
@@ -1121,6 +1141,14 @@ class Game {
     st.players.forEach(pl => pl.nwHist.push(this.netWorth(pl)));
     st.turn = (st.turn + 1) % st.players.length;
     st.phase = 'idle';
+    // timed sitting: after the last throw of the final round, the richest wins
+    if (st.rounds && st.turnCount >= st.rounds * st.players.length){
+      let best = 0;
+      st.players.forEach((p, i) => { if (this.netWorth(p) > this.netWorth(st.players[best])) best = i; });
+      st.over = true; st.winner = best;
+      this.addLog(`Time is called after ${st.rounds} rounds — ${st.players[best].name} is the richest at $${this.netWorth(st.players[best]).toLocaleString('en-US')}.`);
+      return true;
+    }
     return false;
   }
 }
@@ -1182,12 +1210,12 @@ const AI = {
 /* ============================================================
    Headless simulator: window.__sim(games, players) → stats.
    ============================================================ */
-window.__sim = function(nGames = 10, nPlayers = 3, target = CFG.WIN, seed0 = 12345){
+window.__sim = function(nGames = 10, nPlayers = 3, target = CFG.WIN, seed0 = 12345, opts = {}){
   const out = {games: [], capped: 0};
   for (let gi = 0; gi < nGames; gi++){
     const g = new Game({
       seed: seed0 + gi * 7919,
-      target,
+      target, house: !!opts.house, rounds: opts.rounds || 0,
       players: Array.from({length: nPlayers}, (_, i) => ({name: 'AI' + (i + 1), ai: true})),
     });
     let guard = CFG.MAX_TURNS;
@@ -1275,7 +1303,7 @@ const V = {
   online: false,      // true when this game lives in the shared artifact
   gen: 0,             // bumped on new/resume/abandon so stale async turns bail out
   seats: [{name:'Investor 1', ai:false}, {name:'The Computer', ai:true}],
-  target: CFG.WIN, speed: 'normal',
+  target: CFG.WIN, speed: 'normal', house: false, rounds: 0,
   busy: false,        // an animation or AI turn is running
   sound: true,
   cells: [],          // board geometry
@@ -1754,6 +1782,10 @@ function renderHint(){
   }
   else if (g.st.pending){ $('hint').innerHTML = `<span><b>${esc(p.name)}</b> — resolve your landing.</span>`; }
   else { $('hint').innerHTML = `<span><b>${esc(p.name)}</b> — end your turn when ready.</span>`; }
+  if (g.st.rounds && !g.st.over){
+    const rd = Math.min(g.st.rounds, Math.floor(g.st.turnCount / g.st.players.length) + 1);
+    $('hint').innerHTML = `<span style="opacity:.8">R${rd}/${g.st.rounds}</span> · ` + $('hint').innerHTML;
+  }
 }
 function renderButtons(){
   const g = V.g; if (!g) return;
@@ -2104,6 +2136,31 @@ function sheetCompany(i){
         <div style="font:800 21px Archivo,sans-serif;letter-spacing:.06em">${s.name.toUpperCase()}</div>
         <div style="font:700 10px Archivo,sans-serif;letter-spacing:.24em;opacity:.92;margin-top:5px">${s.sector.toUpperCase()}</div>
       </div>` +
+      (() => {
+        // the printed column in miniature: its range, the START row, today's tab
+        const H = 128, W = 78, y0 = 12, y1 = H - 12;
+        const yM = m => y1 - (m / CFG.M_MAX) * (y1 - y0);
+        const cur = g ? g.st.M : CFG.M_START;
+        return `<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          <svg viewBox="0 0 ${W} ${H}" style="width:70px;height:${H}px;flex:none" aria-hidden="true">
+            <rect x="22" y="${y0 - 6}" width="28" height="${y1 - y0 + 12}" rx="4" fill="${s.color}" opacity=".16"/>
+            <line x1="36" y1="${y0}" x2="36" y2="${y1}" stroke="#4c4132" stroke-width="1.4"/>
+            ${[0, 10, 20, 30, 40, 50].map(m => `<line x1="30" y1="${yM(m)}" x2="42" y2="${yM(m)}" stroke="#4c4132" opacity=".55"/>`).join('')}
+            <line x1="25" y1="${yM(CFG.M_START)}" x2="47" y2="${yM(CFG.M_START)}" stroke="#c73a63" stroke-width="1.4"/>
+            <text x="52" y="${(s.rise ? y0 : y1) + 3}" style="font:700 9.5px 'Courier Prime',monospace;fill:#251f17">$${s.hi}</text>
+            <text x="52" y="${(s.rise ? y1 : y0) + 3}" style="font:700 9.5px 'Courier Prime',monospace;fill:#251f17">$${s.lo}</text>
+            <g transform="translate(0,${yM(cur)})">
+              <rect x="18" y="-8" width="36" height="16" rx="3" fill="#bf3527"/>
+              <text x="36" y="4" text-anchor="middle" style="font:800 9.5px 'Courier Prime',monospace;fill:#fff">$${price}</text>
+            </g>
+          </svg>
+          <div style="flex:1;font:600 11.5px/1.6 Archivo,sans-serif;color:var(--ink-faint)">
+            The printed column: ${s.code} runs $${s.lo}–$${s.hi}, climbing as the indicator
+            ${s.rise ? 'rises toward UP' : 'falls toward DOWN'}. The red tab is today's row;
+            the pink line is the START row.
+          </div>
+        </div>`;
+      })() +
       rows.map(r => `<div class="trow"><span class="ti"><b>${r[0]}</b></span><span class="pr num">${r[1]}</span></div>`).join('');
   });
 }
@@ -2317,6 +2374,12 @@ function sheetRules(){
         <li>Inside, the rest of your throw carries you along the FOR-1 cells. Where you stop pays that many <b>additional shares per share held</b> — hold 5 and stop on 3 FOR 1, collect 15 more.</li>
         <li>You keep moving the same direction, leave through the far end onto the paired stock's entrance, and follow its arrow from there. At a meeting you may sell, never buy.</li>
       </ul>
+      <h3>Table Variants</h3>
+      <ul>
+        <li><b>House-rules opening</b> — skip the working start: every investor begins with ${fmt(CFG.WORK_STAKE)} and one share of every issue, standing on a START square. Going broke still sends you back to work the classic way.</li>
+        <li><b>Timed sitting</b> — the printed rules invite the table to set its own finish: play 20 rounds and the richest investor at the bell wins.</li>
+        <li><b>Other targets</b> — $100,000 is the printed goal; the $50,000 and $25,000 tables make shorter evenings.</li>
+      </ul>
       <h3>Going Broke</h3>
       <p>Can't cover a bill even after forced sales? Everything returns to the bank and you go back to work — earn your ${fmt(CFG.WORK_STAKE)} again and re-enter the market.</p>
       <p class="fine">An original homage to the 1968 board-game classic, implemented from the rules printed inside the box lid (owner's transcription, rewritten here in our own words) and from photographs of the board. Square order, arrow directions and meeting-row values are reconstructed where the photographs could not be read. Company names are historical references. Not affiliated with the original publishers.</p>
@@ -2462,6 +2525,11 @@ function humanEndTurn(){
 function finishTurn(){
   const g = V.g; if (!g) return;
   g.endTurn();
+  if (g.st.over){   // a timed sitting calls time at the end of the final round
+    if (V.online){ onlinePublishTurn(); }
+    else store(SAVE_KEY, null);
+    renderAll(); showWin(); return;
+  }
   if (V.online){
     // computers keep playing on this device; hand off to the table
     // (one publish, one reload for every phone) at the next human turn
@@ -2536,15 +2604,16 @@ function drawChart(){
   x.fillStyle = '#f2e9cd'; x.fillRect(0, 0, W, H);
   const hists = g.st.players.map(p => p.nwHist);
   const maxLen = Math.max(...hists.map(h => h.length));
-  const maxV = Math.max(g.st.target, ...hists.flat());
+  const maxV = Math.max(g.st.target || 0, 1, ...hists.flat());
   const px = (i) => 8 + (W - 16) * (maxLen < 2 ? 1 : i / (maxLen - 1));
   const py = (v) => H - 8 - (H - 20) * (v / maxV);
-  // target rule
-  x.strokeStyle = 'rgba(37,31,23,.35)'; x.setLineDash([4, 4]); x.lineWidth = 1;
-  x.beginPath(); x.moveTo(8, py(g.st.target)); x.lineTo(W - 8, py(g.st.target)); x.stroke();
-  x.setLineDash([]);
-  x.fillStyle = 'rgba(37,31,23,.6)'; x.font = '600 9px Archivo,sans-serif';
-  x.fillText(fmt(g.st.target), 10, py(g.st.target) - 3);
+  if (g.st.target){
+    x.strokeStyle = 'rgba(37,31,23,.35)'; x.setLineDash([4, 4]); x.lineWidth = 1;
+    x.beginPath(); x.moveTo(8, py(g.st.target)); x.lineTo(W - 8, py(g.st.target)); x.stroke();
+    x.setLineDash([]);
+    x.fillStyle = 'rgba(37,31,23,.6)'; x.font = '600 9px Archivo,sans-serif';
+    x.fillText(fmt(g.st.target), 10, py(g.st.target) - 3);
+  }
   // shade a light color toward ink so every line reads on cream
   const shade = (hex, f = .78) => {
     const n = parseInt(hex.slice(1), 16);
@@ -2643,10 +2712,6 @@ function renderSeats(){
         <option value="c"${s.ai ? ' selected' : ''}>Computer</option>
       </select>
       ${V.seats.length > 2 ? `<button class="rm" data-r="${i}" aria-label="Remove investor">×</button>` : ''}
-    </div>
-    <div class="seat2">
-      <label>Work</label>
-      <span style="font:600 12px/1.4 Archivo,sans-serif;color:var(--ink-faint)">Everyone starts at work — pick an occupation on your first turn</span>
     </div>`).join('');
   $('seatList').querySelectorAll('[data-n]').forEach(el => el.addEventListener('input', () => { V.seats[+el.dataset.n].name = el.value; }));
   $('seatList').querySelectorAll('[data-c]').forEach(el => el.addEventListener('click', () => {
@@ -2675,10 +2740,13 @@ function showScr(name){
 function startGame(){
   V.g = new Game({
     seed: (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0,
-    target: V.target, speed: V.speed,
+    target: V.target, speed: V.speed, house: V.house, rounds: V.rounds,
     players: V.seats.map((s, i) => ({name: s.name.trim() || 'Investor ' + (i + 1), ai: s.ai, color: s.color || PAWN_COLORS[i]})),
   });
-  V.g.addLog('The market opens. Everyone starts at work with empty pockets — first to ' + fmt(V.target) + ' wins.');
+  const goal = V.rounds ? 'richest after ' + V.rounds + ' rounds wins' : 'first to ' + fmt(V.target) + ' wins';
+  V.g.addLog(V.house
+    ? 'The market opens under house rules — everyone starts with ' + fmt(CFG.WORK_STAKE) + ' and one share of each issue; ' + goal + '.'
+    : 'The market opens. Everyone starts at work with empty pockets — ' + goal + '.');
   V.online = false; $('liveBadge').style.display = 'none';
   V.gen++; V.busy = false;
   V.chat = []; V.chatQueue = [];
@@ -2692,8 +2760,11 @@ function startGame(){
   if (!read('sm68-coach')){
     store('sm68-coach', '1');
     (async () => {
-      await showCard('How It Works · 1 of 3', 'Work, Then Invest',
-        'Everyone starts at work. Salaries pay on anyone’s throw of your numbers — bank $1,000 and you must enter the market.', 5200);
+      await showCard('How It Works · 1 of 3',
+        V.g && V.g.st.house ? 'Straight to the Floor' : 'Work, Then Invest',
+        V.g && V.g.st.house
+          ? 'House rules: everyone holds $1,000 and one share of every issue, standing on a START square. Your first throw — odd or even — picks your direction.'
+          : 'Everyone starts at work. Salaries pay on anyone’s throw of your numbers — bank $1,000 and you must enter the market.', 5200);
       await showCard('How It Works · 2 of 3', 'One Indicator Rules All',
         'The strip in the middle sets every price. When it slides, the ▲ stocks and the ▼ stocks move opposite ways — and it bounces off the ends.', 5200);
       await showCard('How It Works · 3 of 3', 'First to ' + fmt(V.g ? V.g.st.target : CFG.WIN),
@@ -2708,6 +2779,7 @@ function resumeGame(saved){
   V.seats = saved.seats || V.seats;
   V.target = saved.target || CFG.WIN;
   V.speed = saved.speed || 'normal';
+  V.house = !!saved.st.house; V.rounds = saved.st.rounds || 0;
   V.chat = saved.chat || []; V.chatQueue = [];
   V.online = false; $('liveBadge').style.display = 'none';
   V.gen++; V.busy = false;
@@ -2805,6 +2877,7 @@ function enterLobby(){
   const host = s.host === NET.token;
   const humans = s.seats.filter(x => !x.ai).length;
   $('lobbyHostRow').style.display = host ? '' : 'none';
+  $('lobbyHostRow2').style.display = host ? '' : 'none';
   $('btnLobbyAI').style.display = host && s.seats.length < 8 ? '' : 'none';
   $('btnLobbyStart').style.display = host ? '' : 'none';
   $('btnLobbyStart').disabled = !(s.seats.length >= 2 && humans >= 1);
@@ -2854,13 +2927,19 @@ function lobbyAddAI(){
 function lobbyStart(){
   const s = NET.state;
   if (s.host !== NET.token) return;
-  const target = +$('lobbyTarget').value || CFG.WIN;
+  const tv = $('lobbyTarget').value;
+  const rounds = tv === 'timed20' ? 20 : 0;
+  const target = rounds ? 0 : (+tv || CFG.WIN);
+  const house = $('lobbyOpen').value === 'house';
   const g = new Game({
     seed: (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0,
-    target, speed: 'fast',
+    target, rounds, house, speed: 'fast',
     players: s.seats.map(x => ({name: x.name, ai: x.ai, color: x.color})),
   });
-  g.addLog('The market opens. Everyone starts at work with empty pockets — first to ' + fmt(target) + ' wins.');
+  const goal = rounds ? 'richest after ' + rounds + ' rounds wins' : 'first to ' + fmt(target) + ' wins';
+  g.addLog(house
+    ? 'The market opens under house rules — everyone starts with ' + fmt(CFG.WORK_STAKE) + ' and one share of each issue; ' + goal + '.'
+    : 'The market opens. Everyone starts at work with empty pockets — ' + goal + '.');
   const st = netSnapshot({phase:'playing', target, game: g.st, note: 'The market is open — first throw: ' + g.st.players[0].name});
   NET.publish(st);
 }
@@ -2907,7 +2986,7 @@ async function onlinePublishTurn(){
 
 /* ================= WIRING ================= */
 function wire(){
-  $('btnNew').addEventListener('click', () => { Snd.unlock(); renderSeats(); showScr('setup'); });
+  $('btnNew').addEventListener('click', () => { Snd.unlock(); renderSeats(); restoreOpts(); showScr('setup'); });
   $('btnRules0').addEventListener('click', sheetRules);
   $('btnResume').addEventListener('click', () => {
     Snd.unlock();
@@ -2927,8 +3006,12 @@ function wire(){
   });
   $('btnBackSplash').addEventListener('click', () => showScr('splash'));
   $('btnStart').addEventListener('click', () => {
-    V.target = +$('optTarget').value;
+    const tv = $('optTarget').value;
+    V.rounds = tv === 'timed20' ? 20 : 0;
+    V.target = V.rounds ? 0 : +tv;
     V.speed = $('optSpeed').value;
+    V.house = $('optOpen').value === 'house';
+    storeOpts();
     startGame();
   });
   $('btnRoll').addEventListener('click', humanRoll);
@@ -3005,6 +3088,19 @@ function wire(){
   $('btnLobbyAI').addEventListener('click', lobbyAddAI);
   $('btnLobbyStart').addEventListener('click', lobbyStart);
   window.addEventListener('resize', () => { if ($('win').classList.contains('on')) drawChart(); });
+}
+
+function storeOpts(){
+  store('sm68-opts', JSON.stringify({t: $('optTarget').value, s: $('optSpeed').value, o: $('optOpen').value}));
+}
+function restoreOpts(){
+  try{
+    const o = JSON.parse(read('sm68-opts') || 'null');
+    if (!o) return;
+    if (o.t && [...$('optTarget').options].some(x => x.value === o.t)) $('optTarget').value = o.t;
+    if (o.s && [...$('optSpeed').options].some(x => x.value === o.s)) $('optSpeed').value = o.s;
+    if (o.o && [...$('optOpen').options].some(x => x.value === o.o)) $('optOpen').value = o.o;
+  }catch(e){}
 }
 
 function refreshResume(){
