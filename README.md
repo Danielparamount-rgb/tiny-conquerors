@@ -4,7 +4,8 @@ A pocket-sized age of kings — an original browser RTS inspired by Age of Empir
 Isometric, playable on phone (touch) and desktop (mouse + hotkeys). Single self-contained HTML file,
 no external assets, no build step.
 
-**Play:** deployed as a static site (see `app/`). Installable as a PWA — "Add to Home Screen" and it
+**Play:** <https://danielparamount-rgb.github.io/tiny-conquerors/> — deployed from `app/` by the
+`pages` workflow on every push to `main`. Installable as a PWA — "Add to Home Screen" and it
 runs offline.
 
 ## Layout
@@ -26,7 +27,7 @@ pwsh build-app.ps1          # regenerate app/index.html
 git add -A && git commit -m "..." && git push
 ```
 
-The host redeploys on push to `main`.
+GitHub Pages redeploys on push to `main` (the `pages` workflow).
 
 ## Also in this repo: Stock Market 1968
 
@@ -34,7 +35,7 @@ The host redeploys on push to `main`.
 game: 8 blue-chip stocks, a slider quotation board, dividends, stockholders' meetings, and
 the race to $100,000. 2–8 investors (pass-and-play humans and/or computer opponents),
 phone-first, single self-contained file, autosaves locally. Deployable copy lives at
-`app/market/index.html` (served at `/market/` by the static host). Installable as its own
+`app/market/index.html` (served at <https://danielparamount-rgb.github.io/tiny-conquerors/market/>). Installable as its own
 app — open `/market/` on a phone and use the Install button (Android) or Share → Add to
 Home Screen (iPhone); it runs full-screen with its own icon and works offline. Design and
 provenance notes: `STOCK-MARKET-NOTES.md`.
