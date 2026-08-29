@@ -409,7 +409,7 @@ svg{display:block}
 <div id="setup" class="scr">
   <div class="setup-card card-paper">
     <h2 class="setup-h">Seat the Investors</h2>
-    <p class="setup-sub">Every investor starts with $5,000 and a salary</p>
+    <p class="setup-sub">Everyone starts at work with empty pockets — bank $1,000, then play the market</p>
     <div id="seatList"></div>
     <div style="text-align:center;margin-top:10px">
       <button class="btn alt small" id="btnAddSeat">+ Add Investor</button>
@@ -552,26 +552,31 @@ svg{display:block}
    ENGINE — pure game logic, no DOM. The UI (below) and the
    headless simulator (window.__sim) both drive this.
 
-   v5: rebuilt against photographs of the printed board. The
-   price table, space set, fees, dividends, job salaries and
-   sell-all floors are read straight off the board; anything the
-   photos don't settle (exact cell order per side, meeting-row
-   values) is reconstructed in the printed structure.
+   v6: implemented from the rules printed inside the box lid
+   (owner's transcription), in my own words. Everyone starts at
+   work for $0; salaries pay on every throw; $1,000 sends you to
+   the market; every square carries a direction arrow; the
+   indicator bounces at the ends of the table; voluntary selling
+   happens only before your throw; forced sales go at the floor;
+   stockholders meetings are true detour tracks; going broke
+   sends you back to work; you win at your own turn to roll.
+   Square order, arrows and meeting-row values are reconstructed
+   in the printed structure where photos could not be read.
    ============================================================ */
 
 const CFG = {
-  START_CASH: 5000,     // [R] opening stake
-  START_FEE:   100,     //     printed: START — PAY $100 FEE (every crossing)
-  BROKER_PS:    10,     //     printed: PAY BROKER FEE $10 PER SHARE
-  M_MAX:        50,     //     indicator positions 0 (DOWN) … 50 (UP)
-  M_START:      25,     //     printed START row, mid-scale
-  WIN:      100000,     //     the classic goal
-  MAX_TURNS:  6000,     //     sim safety cap
+  WORK_STAKE:  1000,    // earned this much? next turn you play the market
+  START_FEE:    100,    // printed: START — PAY $100 FEE (on landing)
+  BROKER_PS:     10,    // printed: PAY BROKER FEE $10 PER SHARE
+  M_MAX:         50,    // indicator positions 0 (DOWN) … 50 (UP)
+  M_START:       25,    // printed START row, mid-scale
+  WIN:       100000,    // the printed goal (players may agree on another)
+  MAX_TURNS:  10000,    // sim safety cap
 };
 
 /* The see-saw, exactly as printed: four issues climb as the
    indicator rises, their mirror partners fall. Ranges, dividends
-   and sell-all floors are the printed values. */
+   and floors are the printed values. */
 const STOCKS = [
   {code:'ALC', name:'Alcoa',               sector:'Aluminum',           color:'#3a7ca5', lo:30, hi:230, rise:true,  div:4},
   {code:'AMO', name:'American Motors',     sector:'Automobiles',        color:'#e8862d', lo:10, hi:110, rise:true,  div:3},
@@ -589,9 +594,8 @@ const priceAt = (i, M) => {
 const priceMin = i => STOCKS[i].lo;
 const priceMax = i => STOCKS[i].hi;
 
-/* The corner occupations: your job pays its salary whenever YOUR
-   throw totals one of its numbers — the rarer the throw, the
-   richer the job. Printed on the corners. */
+/* The four corner occupations. A salary pays to every player still
+   at work whose numbers match the throw — no matter whose throw. */
 const JOBS = [
   {t:'Deep Sea Diver', nums:[3, 11], pay:300},
   {t:'Doctor',         nums:[4, 10], pay:200},
@@ -599,9 +603,10 @@ const JOBS = [
   {t:'Prospector',     nums:[2, 12], pay:400},
 ];
 
-/* Inner stockholders-meeting rows — one per side, each serving a
-   mirror pair. Cells read 1 FOR 1 / 2 FOR 1 / 3 FOR 1; the first
-   half applies to the first company of the pair. */
+/* Stockholders meeting rows — one per side, each running between
+   the two entrance squares of a mirror pair. Landing on N FOR 1
+   pays N additional shares for every share held of the meeting's
+   stock (own 5, land 3 FOR 1, receive 15 more). */
 const MEET_ROWS = [
   {pair:[2, 5], cells:[1, 2, 3, 2, 2, 3, 2, 1]},   // J.I. Case ↔ Maytag
   {pair:[0, 7], cells:[1, 2, 3, 2, 2, 3, 2, 1]},   // Alcoa ↔ Woolworth
@@ -609,52 +614,66 @@ const MEET_ROWS = [
   {pair:[1, 6], cells:[1, 2, 3, 2, 2, 3, 2, 1]},   // Am. Motors ↔ Western Publ.
 ];
 
-/* Board: 56 cells — four job corners, and 13 cells a side:
-   PAY $10/share (±20) · SELL ALL · four company cells · START ·
-   four company cells · SELL ALL · PAY $10/share (∓20).
-   Company cells print a dividend, a market move, sometimes a
-   one-share purchase limit, sometimes a STOCKHOLDERS ENTER wedge. */
+/* Board: 56 squares — four occupation corners and 13 a side.
+   Every square carries a printed indicator move and a direction
+   arrow (+1 clockwise, −1 counter); START squares instead branch
+   on the throw (odd one way, even the other). Entrance squares
+   carry enter:{row, end}. Arrow layout is reconstructed. */
 const BOARD = (() => {
-  const co = (code, d, opts) => {
+  const co = (code, d, arrow, opts) => {
     const s = STOCKS.findIndex(x => x.code === code);
-    return Object.assign({t:'co', s, d}, opts || {});
+    return Object.assign({t:'co', s, d, arrow}, opts || {});
   };
-  const sell = code => { const s = STOCKS.findIndex(x => x.code === code); return {t:'sellall', s}; };
-  const pay = d => ({t:'payps', d});
+  const sell = (code, d, arrow) => {
+    const s = STOCKS.findIndex(x => x.code === code);
+    return {t:'sellall', s, d, arrow};
+  };
+  const pay = (d, arrow) => ({t:'payps', d, arrow});
   const B = [];
-  const side = (job, cells) => { B.push({t:'job', j:job}); cells.forEach(c => B.push(c)); };
-  side(0, [ // Deep Sea Diver corner, then the first side
-    pay(20), sell('MAY'),
-    co('WPC', -4), co('WLW', 3), co('ISH', -2, {enter:0}), co('JIC', 1),
+  const side = (job, cells) => { B.push({t:'job', j:job, arrow:1}); cells.forEach(c => B.push(c)); };
+  side(0, [ // Deep Sea Diver corner, then side one (J.I. Case ↔ Maytag row)
+    pay(20, 1), sell('MAY', 5, 1),
+    co('JIC', 1, 1, {enter:{row:0, end:0}}),
+    co('WPC', -4, -1), co('WLW', 3, 1), co('ISH', -2, 1),
     {t:'start'},
-    co('MAY', 1), co('GMI', -2, {enter:0}), co('ALC', 3, {limit:1}), co('AMO', -4),
-    sell('WLW'), pay(-20),
+    co('GMI', 2, 1), co('ALC', -3, 1, {limit:1}), co('AMO', 4, -1),
+    co('MAY', -1, 1, {enter:{row:0, end:1}}),
+    sell('WLW', -5, 1), pay(-20, 1),
   ]);
-  side(1, [ // Doctor
-    pay(20), sell('ALC'),
-    co('MAY', -5), co('GMI', 4), co('ALC', -3, {enter:1}), co('AMO', 2),
+  side(1, [ // Doctor corner, then side two (Alcoa ↔ Woolworth row)
+    pay(20, 1), sell('GMI', 5, 1),
+    co('ALC', 4, 1, {enter:{row:1, end:0}}),
+    co('MAY', -5, 1), co('AMO', 2, -1), co('JIC', -3, 1),
     {t:'start'},
-    co('WPC', -2), co('WLW', 3, {enter:1, limit:1}), co('ISH', -4), co('JIC', 5),
-    sell('GMI'), pay(-20),
+    co('WPC', -2, 1), co('ISH', 3, 1), co('GMI', -4, -1),
+    co('WLW', 5, 1, {enter:{row:1, end:1}}),
+    sell('ALC', -5, 1), pay(-20, 1),
   ]);
-  side(2, [ // Policeman
-    pay(20), sell('ISH'),
-    co('JIC', -1), co('ISH', 2), co('MAY', -3, {enter:2}), co('GMI', 4),
+  side(2, [ // Policeman corner, then side three (Gen. Mills ↔ Int. Shoe row)
+    pay(20, 1), sell('ISH', 5, -1),
+    co('GMI', 4, 1, {enter:{row:2, end:0}}),
+    co('JIC', -1, 1), co('MAY', -3, 1), co('WLW', 2, -1),
     {t:'start'},
-    co('ALC', -4, {limit:1}), co('AMO', 3), co('WPC', -2, {enter:2}), co('WLW', 1),
-    sell('AMO'), pay(-20),
+    co('ALC', -4, 1, {limit:1}), co('AMO', 3, 1), co('WPC', -2, -1),
+    co('ISH', 1, 1, {enter:{row:2, end:1}}),
+    sell('AMO', -5, 1), pay(-20, 1),
   ]);
-  side(3, [ // Prospector
-    pay(20), sell('JIC'),
-    co('AMO', 5), co('ALC', -4), co('WLW', 3, {enter:3, limit:1}), co('WPC', -2),
+  side(3, [ // Prospector corner, then side four (Am. Motors ↔ Western Publ. row)
+    pay(20, 1), sell('JIC', 5, 1),
+    co('AMO', 5, 1, {enter:{row:3, end:0}}),
+    co('ALC', -4, -1), co('WLW', 3, 1, {limit:1}), co('GMI', -2, 1),
     {t:'start'},
-    co('GMI', 2), co('ISH', -3, {enter:3}), co('MAY', 4), co('JIC', -1),
-    sell('WPC'), pay(-20),
+    co('ISH', 2, 1), co('MAY', -4, 1), co('JIC', -1, -1),
+    co('WPC', 1, 1, {enter:{row:3, end:1}}),
+    sell('WPC', -5, 1), pay(-20, 1),
   ]);
   return B;
 })();
 const N_CELLS = BOARD.length;                                    // 56
 const START_CELLS = BOARD.map((c, i) => c.t === 'start' ? i : -1).filter(i => i >= 0);
+const CORNER_CELLS = BOARD.map((c, i) => c.t === 'job' ? i : -1).filter(i => i >= 0);
+const ENTRANCE_OF = {};   // stock index -> board index of its meeting entrance
+BOARD.forEach((c, i) => { if (c.enter) ENTRANCE_OF[MEET_ROWS[c.enter.row].pair[c.enter.end]] = i; });
 
 const PAWN_COLORS = ['#c0392b','#2e5f8f','#c69b3a','#3d7a69','#8e5aa8','#bf6b2a','#37818f','#5b4a3a'];
 const COMP_NAMES = ['Bernard','Harriet','Walt','Dorothy','Gus','Mabel','Chet','Vera'];
@@ -670,7 +689,7 @@ function makeRng(seed){ let a = seed >>> 0;
 class Game {
   constructor(setup){
     this.st = {
-      v: 5,
+      v: 6,
       seed: setup.seed,
       rngN: 0,
       target: setup.target || CFG.WIN,
@@ -679,20 +698,21 @@ class Game {
       prices: STOCKS.map((_, i) => priceAt(i, CFG.M_START)),
       players: setup.players.map((p, i) => ({
         name: p.name, ai: !!p.ai, color: p.color || PAWN_COLORS[i],
-        persona: p.ai ? (i % 3) : -1,          // 0 shrewd, 1 bold, 2 cautious
-        job: -1,                                // no occupation until you land one
-        cash: CFG.START_CASH,
-        pos: START_CELLS[i % START_CELLS.length],
-        dir: 1, reDir: true,                    // odd/even decides at the START cell
-        laps: 0,
+        persona: p.ai ? (i % 3) : -1,
+        mode: 'work',                       // work | market | meeting
+        job: i % 4,                          // occupation while at work
+        cash: 0,                             // everyone begins with nothing
+        pos: CORNER_CELLS[i % 4],
+        meet: null,                          // {row, idx, dir, stock} while in a meeting
+        entering: false,                     // placed on a START square this turn
         shares: STOCKS.map(() => 0),
-        stats: {earned:0, spentFees:0, divs:0, splits:0, busts:0, bestTrade:0},
-        nwHist: [CFG.START_CASH],
+        stats: {earned:0, spentFees:0, divs:0, meetShares:0, bestTrade:0, broke:0},
+        nwHist: [0],
       })),
-      turn: 0, phase: 'idle',       // idle → rolled → done
-      pending: null,                 // choice awaiting input {kind:'buy', s, limit}
+      turn: 0, phase: 'idle',                // idle → moving → done
+      pending: null,                          // landing choices {kind:'buy', s, limit, bought, canEnter}
+      mv: null,                               // in-flight movement
       dice: [0,0], turnCount: 0,
-      splits: 0, busts: 0,
       log: [], over: false, winner: -1,
     };
     this._rng = makeRng(this.st.seed);
@@ -713,30 +733,58 @@ class Game {
   cur(){ return this.st.players[this.st.turn]; }
   price(i){ return this.st.prices[i]; }
   netWorth(p){ return p.cash + p.shares.reduce((a, n, i) => a + n * this.st.prices[i], 0); }
-
   addLog(msg){ this.st.log.push(msg); if (this.st.log.length > 120) this.st.log.shift(); }
 
-  /* the indicator slides; every printed column reads out anew */
+  /* the win is judged at your own turn to roll: cash plus stock at board prices */
+  checkWin(){
+    const st = this.st, p = this.cur();
+    if (st.over) return true;
+    if (this.netWorth(p) >= st.target){
+      st.over = true; st.winner = st.turn;
+      this.addLog(`${p.name} comes to the table worth $${this.netWorth(p).toLocaleString('en-US')} — the game is won!`);
+      return true;
+    }
+    return false;
+  }
+
+  /* ---- pre-roll choices ---- */
+  setJob(j){
+    const p = this.cur();
+    if (p.mode !== 'work' || this.st.phase !== 'idle') return false;
+    p.job = j; p.pos = CORNER_CELLS[j];
+    this.addLog(`${p.name} takes up work as a ${JOBS[j].t}`);
+    return true;
+  }
+  mustEnter(){ const p = this.cur(); return p.mode === 'work' && p.cash >= CFG.WORK_STAKE; }
+  enterMarket(startIdx){
+    const p = this.cur();
+    if (p.mode !== 'work' || this.st.phase !== 'idle') return false;
+    if (!START_CELLS.includes(startIdx)) return false;
+    p.mode = 'market'; p.pos = startIdx; p.entering = true;   // no fee to start
+    this.addLog(`${p.name} leaves work with $${p.cash.toLocaleString('en-US')} and steps up to a START square`);
+    return true;
+  }
+
+  /* the indicator slides — and BOUNCES off the ends of the table */
   moveMarket(delta){
     const st = this.st;
     const from = st.M;
-    st.M = Math.max(0, Math.min(CFG.M_MAX, st.M + delta));
-    const applied = st.M - from;
-    const ev = [{kind:'tick', d:applied, want:delta, M:st.M}];
+    let pos = st.M + delta;
+    let guard = 8;
+    while ((pos < 0 || pos > CFG.M_MAX) && guard-- > 0){
+      pos = pos < 0 ? -pos : 2 * CFG.M_MAX - pos;
+    }
+    st.M = Math.max(0, Math.min(CFG.M_MAX, pos));
+    const ev = [{kind:'tick', d:st.M - from, want:delta, M:st.M, bounced:(from + delta !== st.M)}];
     STOCKS.forEach((s, i) => {
       const np = priceAt(i, st.M), d = np - st.prices[i];
       st.prices[i] = np;
       if (d) ev.push({kind:'move', s:i, d});
     });
-    if (applied === 0 && delta !== 0){
-      this.addLog(`The indicator is pinned at ${delta > 0 ? 'UP' : 'DOWN'} — prices hold`);
-    }
     return ev;
   }
 
-  /* ---- turn flow. roll() also settles what the throw itself pays:
-     your job's salary on its numbers, direction at a START cell,
-     and the $100 fee for every START you land on or pass. ---- */
+  /* ---- the throw: salaries for the workers, then movement ---- */
   roll(){
     const st = this.st, p = this.cur();
     if (st.phase !== 'idle' || st.over) return null;
@@ -744,159 +792,248 @@ class Game {
     st.dice = [d1, d2];
     const total = d1 + d2;
     const events = [];
-    if (p.job >= 0 && JOBS[p.job].nums.includes(total)){
-      p.cash += JOBS[p.job].pay; p.stats.earned += JOBS[p.job].pay;
-      events.push({kind:'salary', job:p.job, amt:JOBS[p.job].pay});
-      this.addLog(`${p.name} the ${JOBS[p.job].t} throws ${total} — salary ${'$' + JOBS[p.job].pay}`);
-    }
-    if (p.reDir){
-      p.dir = total % 2 === 0 ? 1 : -1;
-      p.reDir = false;
-      events.push({kind:'direction', dir:p.dir, total});
-      this.addLog(`${p.name} throws ${total} (${total % 2 === 0 ? 'even' : 'odd'}) and heads ${p.dir > 0 ? 'clockwise' : 'counterclockwise'}`);
-    }
-    const from = p.pos;
-    const path = [];
-    let pos = from;
-    for (let k = 0; k < total; k++){
-      pos = (pos + p.dir + N_CELLS) % N_CELLS;
-      path.push(pos);
-      if (BOARD[pos].t === 'start'){
-        const paid = this.forcePay(p, CFG.START_FEE, events);
-        p.stats.spentFees += paid; p.laps++;
-        events.push({kind:'startFee', amt:paid});
-        this.addLog(`${p.name} passes START — pays the $${CFG.START_FEE} fee`);
+    const paid = [];
+    st.players.forEach((pl, i) => {
+      if (pl.mode === 'work' && JOBS[pl.job].nums.includes(total)){
+        pl.cash += JOBS[pl.job].pay; pl.stats.earned += JOBS[pl.job].pay;
+        paid.push({i, amt: JOBS[pl.job].pay, job: pl.job});
+        this.addLog(`The throw of ${total} pays ${pl.name} the ${JOBS[pl.job].t} $${JOBS[pl.job].pay}`);
       }
+    });
+    if (paid.length) events.push({kind:'salary', paid, total});
+    if (p.mode === 'work'){
+      // a worker's turn is just the throw
+      st.phase = 'done';
+      return {d1, d2, total, events, worker:true};
     }
-    st.phase = 'rolled';
-    return {d1, d2, total, from, to:pos, path, events};
+    // direction: leaving a START square (or entering the market on one)
+    // branches on the throw — odd one way, even the other. Everywhere
+    // else, follow the arrow of the square being left.
+    let dir;
+    if (p.mode === 'meeting'){
+      dir = p.meet.dir;
+    } else if (BOARD[p.pos].t === 'start'){
+      dir = total % 2 === 0 ? 1 : -1;
+      events.push({kind:'direction', dir, total});
+      this.addLog(`${p.name} throws ${total} (${total % 2 === 0 ? 'even' : 'odd'}) and follows the ${dir > 0 ? 'clockwise' : 'counterclockwise'} arrow`);
+    } else {
+      dir = BOARD[p.pos].arrow || 1;
+    }
+    p.entering = false;
+    st.mv = {left: total, dir, path: []};
+    st.phase = 'moving';
+    return {d1, d2, total, events};
   }
 
-  land(moveInfo){
+  /* advance the piece step by step. Returns:
+     {ask:'detour', s, row}  — passing a meeting entrance you own; answer via decideDetour()
+     {done, events, needs}   — movement finished and the landing resolved */
+  advance(){
+    const st = this.st, p = this.cur(), mv = st.mv;
+    if (!mv) return null;
+    while (mv.left > 0){
+      if (p.mode === 'meeting'){
+        const row = MEET_ROWS[p.meet.row];
+        const next = p.meet.idx + p.meet.dir;
+        if (next < 0 || next >= row.cells.length){
+          // out the far end, onto the paired stock's entrance square
+          const exitStock = row.pair[p.meet.dir > 0 ? 1 : 0];
+          p.mode = 'market'; p.pos = ENTRANCE_OF[exitStock]; p.meet = null;
+          mv.dir = BOARD[p.pos].arrow || 1;   // follow the arrow at the exit
+          mv.exited = true;                   // this entrance opens only on a later turn
+          mv.left--;
+          mv.path.push({kind:'outer', i:p.pos});
+          continue;
+        }
+        p.meet.idx = next;
+        mv.left--;
+        mv.path.push({kind:'meet', row:p.meet.row, idx:next});
+        continue;
+      }
+      const next = (p.pos + mv.dir + N_CELLS) % N_CELLS;
+      p.pos = next;
+      mv.left--;
+      mv.path.push({kind:'outer', i:next});
+      const sq = BOARD[next];
+      // moving PAST an entrance you hold shares in: the detour is yours to take
+      if (mv.left > 0 && sq.enter !== undefined && p.shares[sq.s] > 0 && !mv.noDetour){
+        mv.awaiting = {s: sq.s, row: sq.enter.row, end: sq.enter.end};
+        return {ask:'detour', s: sq.s, row: sq.enter.row};
+      }
+      mv.noDetour = false;
+    }
+    return this.finishMove();
+  }
+  decideDetour(enter){
+    const st = this.st, p = this.cur(), mv = st.mv;
+    if (!mv || !mv.awaiting) return null;
+    const a = mv.awaiting;
+    mv.awaiting = null;
+    if (enter){
+      p.mode = 'meeting';
+      p.meet = {row: a.row, idx: a.end === 0 ? -1 : MEET_ROWS[a.row].cells.length,
+                dir: a.end === 0 ? 1 : -1, stock: a.s};
+      this.addLog(`${p.name} turns in at the ${STOCKS[a.s].code} stockholders meeting`);
+    } else {
+      mv.noDetour = true;    // step past this entrance without asking again
+      // put the flag back down after the entrance square is behind us
+    }
+    return this.advance();
+  }
+
+  finishMove(){
     const st = this.st, p = this.cur();
-    p.pos = moveInfo.to;
+    const path = st.mv ? st.mv.path : [];
+    const exited = st.mv ? !!st.mv.exited : false;
+    st.mv = null;
     const events = [];
-    const sp = BOARD[p.pos];
     let needs = null;
-    switch (sp.t){
-      case 'start':
-        p.reDir = true;   // the printed ODD | EVEN halves — next throw picks your way
-        events.push({kind:'atStart'});
+    if (p.mode === 'meeting'){
+      // landing on a meeting cell: the stock dividend pays in shares
+      const row = MEET_ROWS[p.meet.row];
+      const ratio = row.cells[p.meet.idx];
+      const held = p.shares[p.meet.stock];
+      const gain = ratio * held;
+      if (gain > 0){
+        p.shares[p.meet.stock] += gain;
+        p.stats.meetShares += gain;
+        this.addLog(`${STOCKS[p.meet.stock].code} declares ${ratio} FOR 1 — ${p.name}'s ${held} shares earn ${gain} more`);
+      }
+      events.push({kind:'meetdiv', s:p.meet.stock, ratio, held, gain});
+      st.phase = 'done';
+      st.pending = null;
+      return {done:true, path, events, needs:null};
+    }
+    const sq = BOARD[p.pos];
+    // every square moves the indicator by its printed amount
+    if (sq.d) events.push(...this.moveMarket(sq.d));
+    switch (sq.t){
+      case 'start': {
+        const paid = this.payOrBroke(p, CFG.START_FEE, events);
+        p.stats.spentFees += paid;
+        events.push({kind:'startFee', amt:paid});
+        this.addLog(`${p.name} lands on START and pays the $${CFG.START_FEE} fee`);
         break;
-      case 'job':
-        p.job = sp.j;
-        events.push({kind:'jobTaken', j:sp.j});
-        this.addLog(`${p.name} takes work as a ${JOBS[sp.j].t} — ${JOBS[sp.j].nums.join(' or ')} pays $${JOBS[sp.j].pay}`);
-        break;
+      }
       case 'payps': {
         const owned = p.shares.reduce((a, n) => a + n, 0);
         const owed = owned * CFG.BROKER_PS;
-        const paid = owed ? this.forcePay(p, owed, events) : 0;
+        const paid = owed ? this.payOrBroke(p, owed, events) : 0;
         p.stats.spentFees += paid;
         events.push({kind:'payps', owned, amt:paid});
-        this.addLog(owned ? `${p.name} pays the broker $${paid} — $${CFG.BROKER_PS} on each of ${owned} shares` : `${p.name} holds no shares — the broker gets nothing`);
-        events.push(...this.moveMarket(sp.d));
+        this.addLog(owned ? `${p.name} pays the broker $${paid} — $${CFG.BROKER_PS} on each of ${owned} shares` : `${p.name} holds no shares — the broker collects nothing`);
         break;
       }
       case 'sellall': {
-        const n = p.shares[sp.s], floor = STOCKS[sp.s].lo;
+        const n = p.shares[sq.s], floor = STOCKS[sq.s].lo;
         if (n > 0){
           const amt = n * floor;
-          p.cash += amt; p.shares[sp.s] = 0;
-          this.addLog(`SELL ALL ${STOCKS[sp.s].code} at $${floor} — ${p.name} dumps ${n} shares for $${amt}`);
-          events.push({kind:'sellall', s:sp.s, n, amt, floor});
+          p.cash += amt; p.shares[sq.s] = 0;
+          this.addLog(`SELL ALL ${STOCKS[sq.s].code} at $${floor} — ${p.name} is forced out of ${n} shares for $${amt}`);
+          events.push({kind:'sellall', s:sq.s, n, amt, floor});
         } else {
-          events.push({kind:'sellall', s:sp.s, n:0, amt:0, floor});
+          events.push({kind:'sellall', s:sq.s, n:0, amt:0, floor});
         }
         break;
       }
       case 'co': {
-        if (p.shares[sp.s] > 0){
-          const amt = p.shares[sp.s] * STOCKS[sp.s].div;
+        if (p.shares[sq.s] > 0){
+          const amt = p.shares[sq.s] * STOCKS[sq.s].div;
           p.cash += amt; p.stats.divs += amt;
-          events.push({kind:'codiv', s:sp.s, amt});
-          this.addLog(`${STOCKS[sp.s].code} pays its $${STOCKS[sp.s].div} dividend — ${p.name} collects $${amt}`);
+          events.push({kind:'codiv', s:sq.s, amt});
+          this.addLog(`${STOCKS[sq.s].code} pays its $${STOCKS[sq.s].div} dividend — ${p.name} collects $${amt}`);
         }
-        events.push(...this.moveMarket(sp.d));
-        if (sp.enter !== undefined){
-          // the black wedge: straight into the stockholders meeting row
-          const row = MEET_ROWS[sp.enter];
-          const throwM = this.die() + this.die();
-          const idx = (throwM - 2) % row.cells.length;
-          const coIdx = row.pair[idx < row.cells.length / 2 ? 0 : 1];
-          const ratio = row.cells[idx];
-          const had = p.shares[coIdx];
-          if (ratio > 1 && had > 0){
-            p.shares[coIdx] = had * ratio;
-            p.stats.splits++; st.splits++;
-            this.addLog(`Stockholders meeting: ${STOCKS[coIdx].code} declares ${ratio} FOR 1 — ${had} shares become ${had * ratio}`);
-          } else {
-            this.addLog(`Stockholders meeting: ${STOCKS[coIdx].code} votes ${ratio} FOR 1 — nothing doing`);
-          }
-          events.push({kind:'meeting', row:sp.enter, throwM, s:coIdx, ratio, had});
-        }
-        needs = {kind:'buy', s:sp.s, limit: sp.limit || 0};
+        const isEntrance = sq.enter !== undefined;
+        // an exit landing is still a company landing, but the fresh entrance
+        // opens only on a later turn — never straight back inside
+        needs = {kind:'buy', s:sq.s,
+                 limit: (sq.limit || isEntrance) ? 1 : 0,
+                 bought: 0,
+                 canEnter: (isEntrance && !exited) ? sq.enter : null};
         break;
       }
+      case 'job':
+        events.push({kind:'visit', j:sq.j});
+        break;
     }
     st.pending = needs;
-    if (!needs) st.phase = 'done';
-    return {space:sp, events, needs};
+    st.phase = needs ? 'moving' : 'done';   // landing choices still open
+    if (needs) st.phase = 'landed';
+    return {done:true, path, events, needs};
   }
 
-  /* pay what is owed, force-selling holdings if cash runs short */
-  forcePay(p, owed, events){
+  /* pay a bill; shortfalls force floor-price sales; still short = broke */
+  payOrBroke(p, owed, events){
     if (p.cash < owed){
       const order = STOCKS.map((_, i) => i)
         .filter(i => p.shares[i] > 0)
-        .sort((a, b) => p.shares[b] * this.st.prices[b] - p.shares[a] * this.st.prices[a]);
+        .sort((a, b) => p.shares[b] * STOCKS[b].lo - p.shares[a] * STOCKS[a].lo);
       for (const i of order){
         if (p.cash >= owed) break;
-        const price = Math.max(1, this.st.prices[i]);
-        const q = Math.min(p.shares[i], Math.ceil((owed - p.cash) / price));
-        p.shares[i] -= q; p.cash += q * this.st.prices[i];
-        events.push({kind:'forcedSale', s:i, q});
-        this.addLog(`${p.name} is sold out of ${q} ${STOCKS[i].code} to cover the bill`);
+        const floor = STOCKS[i].lo;
+        const q = Math.min(p.shares[i], Math.ceil((owed - p.cash) / floor));
+        p.shares[i] -= q; p.cash += q * floor;
+        events.push({kind:'forcedSale', s:i, q, floor});
+        this.addLog(`${p.name} is sold out of ${q} ${STOCKS[i].code} at the $${floor} floor to cover the bill`);
       }
     }
-    const paid = Math.min(p.cash, owed);
-    p.cash -= paid;
-    return paid;
+    if (p.cash < owed){
+      // broke: everything goes back to the bank; back to work
+      const j = p.job >= 0 ? p.job : 0;
+      p.cash = 0; p.shares = STOCKS.map(() => 0);
+      p.mode = 'work'; p.meet = null; p.pos = CORNER_CELLS[j];
+      p.stats.broke++;
+      events.push({kind:'broke', j});
+      this.addLog(`${p.name} is broke — everything returns to the bank and it's back to work as a ${JOBS[j].t}`);
+      return 0;
+    }
+    p.cash -= owed;
+    return owed;
   }
 
-  /* ---- trades happen at the indicator's posted price ---- */
+  /* ---- landing choices ---- */
   buy(s, qty){
-    const p = this.cur(), price = this.st.prices[s];
-    if (qty < 1 || price <= 0) return false;
-    const cost = qty * price;
-    if (cost > p.cash) return false;
-    p.cash -= cost; p.shares[s] += qty;
-    if (cost > p.stats.bestTrade) p.stats.bestTrade = cost;
-    this.addLog(`${p.name} buys ${qty} ${STOCKS[s].code} at $${price} — $${cost}`);
+    const st = this.st, p = this.cur(), pend = st.pending;
+    if (!pend || pend.kind !== 'buy' || pend.s !== s) return false;
+    if (pend.limit && pend.bought + qty > pend.limit) return false;
+    const price = st.prices[s];
+    if (qty < 1 || qty * price > p.cash) return false;
+    p.cash -= qty * price; p.shares[s] += qty;
+    pend.bought += qty;
+    if (qty * price > p.stats.bestTrade) p.stats.bestTrade = qty * price;
+    this.addLog(`${p.name} buys ${qty} ${STOCKS[s].code} at $${price} — $${qty * price}`);
     return true;
   }
+  enterMeeting(){
+    const st = this.st, p = this.cur(), pend = st.pending;
+    if (!pend || !pend.canEnter || p.shares[pend.s] < 1) return false;
+    const e = pend.canEnter;
+    p.mode = 'meeting';
+    p.meet = {row: e.row, idx: e.end === 0 ? -1 : MEET_ROWS[e.row].cells.length,
+              dir: e.end === 0 ? 1 : -1, stock: pend.s};
+    this.addLog(`${p.name} steps into the ${STOCKS[pend.s].code} stockholders meeting`);
+    st.pending = null; st.phase = 'done';
+    return true;
+  }
+  resolvePending(){ this.st.pending = null; this.st.phase = 'done'; }
+
+  /* voluntary sales happen only before your throw, at board prices */
   sell(s, qty){
-    const p = this.cur(), price = this.st.prices[s];
+    const st = this.st, p = this.cur();
+    if (st.phase !== 'idle' || st.over) return false;
+    const price = st.prices[s];
     if (qty < 1 || p.shares[s] < qty) return false;
     p.shares[s] -= qty; p.cash += qty * price;
     this.addLog(`${p.name} sells ${qty} ${STOCKS[s].code} at $${price} — $${qty * price}`);
     return true;
   }
-  resolvePending(){ this.st.pending = null; this.st.phase = 'done'; }
 
   endTurn(){
     const st = this.st;
     if (st.over) return true;
-    st.pending = null;
+    st.pending = null; st.mv = null;
     st.turnCount++;
     st.players.forEach(pl => pl.nwHist.push(this.netWorth(pl)));
-    let best = -1, bestNW = -1;
-    st.players.forEach((pl, i) => { const nw = this.netWorth(pl); if (nw > bestNW){ bestNW = nw; best = i; } });
-    if (bestNW >= st.target){
-      st.over = true; st.winner = best;
-      this.addLog(`${st.players[best].name} reaches $${bestNW.toLocaleString('en-US')} — the market closes!`);
-      return true;
-    }
     st.turn = (st.turn + 1) % st.players.length;
     st.phase = 'idle';
     return false;
@@ -904,17 +1041,24 @@ class Game {
 }
 
 /* ============================================================
-   AI — plays the see-saw: buy deep in a printed column, bank the
-   swing near the top. Personas: 0 shrewd, 1 bold, 2 cautious.
+   AI — works its stake, then plays the see-saw: buy deep in a
+   printed column, bank the swing near the top before the throw.
    ============================================================ */
 const AI = {
-  reserve(p){ return [500, 250, 900][p.persona] || 500; },
-  buyBelow(p){ return [.38, .48, .30][p.persona] ?? .38; },
-  sellAbove(p){ return [.78, .86, .70][p.persona] ?? .78; },
+  reserve(p){ return [400, 200, 700][p.persona] || 400; },
+  buyBelow(p){ return [.4, .5, .32][p.persona] ?? .4; },
+  sellAbove(p){ return [.78, .86, .7][p.persona] ?? .78; },
   rel(g, i){ return (g.price(i) - priceMin(i)) / (priceMax(i) - priceMin(i)); },
 
-  preTurnSells(g){
+  preRoll(g){
     const p = g.cur();
+    if (p.mode === 'work'){
+      if (g.mustEnter() || p.cash >= CFG.WORK_STAKE){
+        g.enterMarket(START_CELLS[Math.floor(g.rand() * START_CELLS.length)]);
+      }
+      return;
+    }
+    if (g.st.phase !== 'idle') return;
     STOCKS.forEach((_, i) => {
       if (p.shares[i] < 1) return;
       if (this.rel(g, i) >= this.sellAbove(p)) g.sell(i, p.shares[i]);
@@ -925,18 +1069,26 @@ const AI = {
     const p = g.cur();
     const r = this.rel(g, s);
     if (r > this.buyBelow(p)) return 0;
-    // at a dead bottom the only way is up — back the truck up
-    const reserve = r <= .08 ? 100 : this.reserve(p);
+    const reserve = r <= .08 ? 50 : this.reserve(p);
     const budget = p.cash - reserve, pr = g.price(s);
     if (budget < pr) return 0;
     const q = Math.floor(budget / pr);
     return limit ? Math.min(q, limit) : q;
   },
 
-  answer(g, needs){
+  answerDetour(g, s){ return g.cur().shares[s] > 0; },   // the rules call it usually worthwhile
+
+  answerLanding(g, needs){
+    const p = g.cur();
     if (needs.kind === 'buy'){
-      const q = this.wantQty(g, needs.s, needs.limit);
-      if (q > 0) g.buy(needs.s, q);
+      if (needs.canEnter){
+        // an entrance: one share is cheap admission to the meeting
+        if (p.cash > g.price(needs.s) + 100 && needs.bought < 1) g.buy(needs.s, 1);
+        if (p.shares[needs.s] > 0){ g.enterMeeting(); return; }
+      } else {
+        const q = this.wantQty(g, needs.s, needs.limit);
+        if (q > 0) g.buy(needs.s, q);
+      }
     }
     g.resolvePending();
   },
@@ -955,28 +1107,29 @@ window.__sim = function(nGames = 10, nPlayers = 3, target = CFG.WIN, seed0 = 123
     });
     let guard = CFG.MAX_TURNS;
     while (!g.st.over && guard-- > 0){
-      AI.preTurnSells(g);
+      if (g.checkWin()) break;
+      AI.preRoll(g);
       const mv = g.roll();
-      const res = g.land(mv);
-      if (res.needs) AI.answer(g, res.needs);
+      if (!mv.worker){
+        let r = g.advance();
+        while (r && r.ask === 'detour') r = g.decideDetour(AI.answerDetour(g, r.s));
+        if (r && r.needs) AI.answerLanding(g, r.needs);
+      }
       g.endTurn();
     }
     if (!g.st.over) out.capped++;
     const w = g.st.winner;
     out.games.push({
       turns: g.st.turnCount,
-      lapsOfWinner: w >= 0 ? g.st.players[w].laps : -1,
       winnerNW: w >= 0 ? g.netWorth(g.st.players[w]) : -1,
-      splits: g.st.splits, busts: g.st.busts,
+      broke: g.st.players.reduce((a, p) => a + p.stats.broke, 0),
       prices: g.st.prices.slice(),
     });
   }
   const done = out.games.filter(x => x.winnerNW > 0);
   const med = a => { const s = a.slice().sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : -1; };
   out.medianTurns = med(done.map(x => x.turns));
-  out.medianLaps = med(done.map(x => x.lapsOfWinner));
-  out.medianSplits = med(done.map(x => x.splits));
-  out.medianBusts = med(done.map(x => x.busts));
+  out.medianBroke = med(done.map(x => x.broke));
   return out;
 };
 
@@ -1183,15 +1336,14 @@ function spaceLook(sp){
 function describeSpace(i){
   const sp = BOARD[i];
   switch (sp.t){
-    case 'job':     return [JOBS[sp.j].t, `Take this job — from now on, any throw of ${JOBS[sp.j].nums.join(' or ')} pays you a ${fmt(JOBS[sp.j].pay)} salary.`];
-    case 'start':   return ['Start', `Pay the ${fmt(CFG.START_FEE)} fee every time you land here or pass. Land exactly, and your next throw's odd or even decides which way you go.`];
+    case 'job':     return [JOBS[sp.j].t, `The ${JOBS[sp.j].t}'s corner. While you work here, every throw of ${JOBS[sp.j].nums.join(' or ')} — by anyone at the table — pays you ${fmt(JOBS[sp.j].pay)}. Bank ${fmt(CFG.WORK_STAKE)} and you must go play the market.`];
+    case 'start':   return ['Start', `Enter the market here, free. Land on it later and you pay a ${fmt(CFG.START_FEE)} fee. Leaving a START square, your throw picks the direction — odd one way, even the other.`];
     case 'payps':   return ['Pay Broker Fee', `$${CFG.BROKER_PS} for every share you hold — then the indicator swings ${sp.d > 0 ? 'UP' : 'DOWN'} 20.`];
-    case 'sellall': return [`Sell All ${STOCKS[sp.s].code}`, `Forced out — your entire ${STOCKS[sp.s].name} holding is sold at the printed floor of $${STOCKS[sp.s].lo} a share.`];
+    case 'sellall': return [`Sell All ${STOCKS[sp.s].code}`, `Forced out — your entire ${STOCKS[sp.s].name} holding is sold at the very lowest board price, $${STOCKS[sp.s].lo} a share.`];
     case 'co': {
-      let body = `${STOCKS[sp.s].code} pays its printed $${STOCKS[sp.s].div}-a-share dividend, the indicator moves ${sp.d > 0 ? 'UP' : 'DOWN'} ${Math.abs(sp.d)}, and the buying window opens${sp.limit ? ' (purchase limit: one share)' : ''}.`;
+      let body = `${STOCKS[sp.s].code} pays holders its printed $${STOCKS[sp.s].div}-a-share dividend, the indicator moves ${sp.d > 0 ? 'UP' : 'DOWN'} ${Math.abs(sp.d)}, and you may buy ${(sp.limit || sp.enter) ? 'exactly one share' : 'any amount'} at the new price.`;
       if (sp.enter !== undefined){
-        const r = MEET_ROWS[sp.enter];
-        body += ` The black wedge sends you into the ${STOCKS[r.pair[0]].code}/${STOCKS[r.pair[1]].code} stockholders meeting — the dice pick a 1, 2 or 3 FOR 1 cell.`;
+        body += ` The black wedge is the ${STOCKS[sp.s].code} stockholders meeting entrance — land here to step in, or turn in as you pass whenever you hold at least one share.`;
       }
       return [STOCKS[sp.s].name, body];
     }
@@ -1209,13 +1361,13 @@ function buildBoard(){
   //      with the indicator, four falling, around a white middle track
   //      marked UP / START / DOWN. One red bar reads them all at once. ----
   const cx = BS/2;
-  const QT = {y0: 198, y1: 812, gx0: 150, gx1: 850, midW: 92, colW: 76};
+  const QT = {y0: 246, y1: 758, gx0: 192, gx1: 808, midW: 88, colW: 66};
   QT.xs = STOCKS.map((_, i) => i < 4 ? QT.gx0 + i * QT.colW + QT.colW/2
                                      : cx + QT.midW/2 + (i - 4) * QT.colW + QT.colW/2);
   V.qt = QT;
   const yOf = m => QT.y1 - (m / CFG.M_MAX) * (QT.y1 - QT.y0);
   // masthead printed both ways round, like a table game
-  P.push(`<text class="ctr-t" x="${cx}" y="868" font-size="32" text-anchor="middle">STOCK MARKET</text>`);
+  P.push(`<text class="ctr-t" x="${cx}" y="806" font-size="22" text-anchor="middle">STOCK MARKET</text>`);
   // table frame
   P.push(`<rect x="${QT.gx0-10}" y="${QT.y0-64}" width="${QT.gx1-QT.gx0+20}" height="${QT.y1-QT.y0+84}" fill="#fffdf6" stroke="#22211f" stroke-width="2.5"/>`);
   // the white middle track: UP at the top, DOWN at the bottom, START mid-scale
@@ -1255,6 +1407,35 @@ function buildBoard(){
   bar += `</g>`;
   P.push(bar);
 
+  // ---- stockholders meeting rows: one detour track per side, running
+  //      between the two black-wedge entrances of a mirror pair ----
+  V.mcells = [];
+  {
+    const MB = 56, ML = 52.5;   // band thickness, cell length
+    const geo = [
+      {o:'h', fixed: BS - CO - 8 - MB, from: 710, dir: -1},   // bottom side
+      {o:'v', fixed: CO + 8,           from: 710, dir: -1},   // left side
+      {o:'h', fixed: CO + 8,           from: 290, dir:  1},   // top side
+      {o:'v', fixed: BS - CO - 8 - MB, from: 290, dir:  1},   // right side
+    ];
+    MEET_ROWS.forEach((row, ri) => {
+      const gz = geo[ri], cells = [];
+      const [pa, pb] = row.pair;
+      for (let k = 0; k < row.cells.length; k++){
+        const a = gz.from + gz.dir * (k + 1) * ML, b = gz.from + gz.dir * k * ML;
+        const lo = Math.min(a, b);
+        const rc = gz.o === 'h' ? {x: lo, y: gz.fixed, w: ML, h: MB}
+                                : {x: gz.fixed, y: lo, w: MB, h: ML};
+        cells.push({cx: rc.x + rc.w/2, cy: rc.y + rc.h/2});
+        const ratio = row.cells[k];
+        P.push(`<rect x="${rc.x}" y="${rc.y}" width="${rc.w}" height="${rc.h}" fill="${ratio === 3 ? '#f3dfba' : '#fffdf6'}" stroke="#22211f" stroke-width="1.5"/>`);
+        P.push(`<text x="${rc.x+rc.w/2}" y="${rc.y+rc.h/2+1}" text-anchor="middle" style="font:800 11px Archivo,sans-serif;fill:#22211f">${ratio} FOR 1</text>`);
+        P.push(`<text x="${rc.x+rc.w/2}" y="${rc.y+rc.h/2+14}" text-anchor="middle" style="font:700 6.6px Archivo,sans-serif;letter-spacing:.06em;fill:#8c2318">${STOCKS[pa].code} · ${STOCKS[pb].code}</text>`);
+      }
+      V.mcells.push(cells);
+    });
+  }
+
   for (let i = 0; i < N_CELLS; i++){
     const r = cellRect(i); V.cells[i] = {...r, cx: r.x + r.w/2, cy: r.y + r.h/2};
     const sp = BOARD[i], side = SIDE(i);
@@ -1288,6 +1469,22 @@ function buildBoard(){
         else                        P.push(`<path d="M ${r.x+3} ${r.y+8} v ${r.h-16} l 11 -${(r.h-16)/2} z" fill="#22211f"/>`);
       }
       if (sp.limit) P.push(`<text x="${px}" y="${pyMid+30}" text-anchor="middle" style="font:800 6.6px Archivo,sans-serif;fill:${lk.fg};opacity:.85">LIMIT 1 SHARE</text>`);
+      // the printed direction arrow: which way you leave this square
+      const tan = side === 'bottom' ? [-1, 0] : side === 'left' ? [0, -1] : side === 'top' ? [1, 0] : [0, 1];
+      if (sp.t === 'start'){
+        // START branches on the throw: odd one way, even the other
+        const axp = px + (side === 'left' ? -(r.w/2-13) : side === 'right' ? (r.w/2-13) : 0);
+        const ayp = pyMid + (side === 'bottom' ? (r.h/2-13) : side === 'top' ? -(r.h/2-13) : 0);
+        [1, -1].forEach(sgn => {
+          P.push(`<path d="M ${axp + tan[0]*sgn*17} ${ayp + tan[1]*sgn*17} L ${axp + tan[0]*sgn*6 - tan[1]*5.5} ${ayp + tan[1]*sgn*6 - tan[0]*5.5} L ${axp + tan[0]*sgn*6 + tan[1]*5.5} ${ayp + tan[1]*sgn*6 + tan[0]*5.5} Z" fill="#fff" opacity=".95"/>`);
+        });
+      } else if (sp.arrow){
+        const dx = tan[0] * sp.arrow, dy = tan[1] * sp.arrow;
+        const ax = px + (side === 'left' ? -(r.w/2-13) : side === 'right' ? (r.w/2-13) : 0);
+        const ay = pyMid + (side === 'bottom' ? (r.h/2-13) : side === 'top' ? -(r.h/2-13) : 0);
+        P.push(`<line x1="${ax - dx*10}" y1="${ay - dy*10}" x2="${ax - dx*1}" y2="${ay - dy*1}" stroke="${lk.fg}" stroke-width="3.2" opacity=".92"/>`);
+        P.push(`<path d="M ${ax + dx*9} ${ay + dy*9} L ${ax - dx*2 - dy*5.5} ${ay - dy*2 - dx*5.5} L ${ax - dx*2 + dy*5.5} ${ay - dy*2 + dx*5.5} Z" fill="${lk.fg}" opacity=".92"/>`);
+      }
     }
     const [dT, dB] = describeSpace(i);
     P.push(`<rect class="sp-hit" data-i="${i}" tabindex="0" role="button" aria-label="${esc(dT + ' \u2014 ' + dB)}" x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="transparent"/>`);
@@ -1313,12 +1510,21 @@ function buildBoard(){
 }
 
 const FAN = [[0,0],[16,-10],[-16,-10],[16,12],[-16,12],[0,-20],[0,22],[30,0]];
+function pawnSpot(p){
+  if (p.mode === 'meeting' && p.meet){
+    const row = V.mcells[p.meet.row] || [];
+    const idx = Math.max(0, Math.min(row.length - 1, p.meet.idx));
+    return {key: 'm' + p.meet.row + ':' + idx, c: row[idx]};
+  }
+  return {key: 'o' + p.pos, c: V.cells[p.pos]};
+}
 function pawnXY(pIdx){
-  const g = V.g; const pos = g.st.players[pIdx].pos;
-  const here = g.st.players.map((p, i) => p.pos === pos ? i : -1).filter(i => i >= 0);
+  const ps = V.g.st.players;
+  const mine = pawnSpot(ps[pIdx]);
+  const here = ps.map((p, i) => pawnSpot(p).key === mine.key ? i : -1).filter(i => i >= 0);
   const slot = here.indexOf(pIdx);
-  const c = V.cells[pos];
   const f = FAN[slot % FAN.length];
+  const c = mine.c || {cx: BS/2, cy: BS/2};
   return [c.cx + f[0], c.cy + f[1]];
 }
 function renderPawns(){
@@ -1396,7 +1602,8 @@ function renderTape(){
   const g = V.g; if (!g) return;
   const parts = STOCKS.map((s, i) => {
     const p = g.st.prices[i];
-    const cls = p > CFG.PAR ? 'u' : p < CFG.PAR ? 'd' : 'n';
+    const par = priceAt(i, CFG.M_START);
+    const cls = p > par ? 'u' : p < par ? 'd' : 'n';
     return `${s.code} <span class="${cls}">$${p}</span>`;
   });
   const news = g.st.log.slice(-2).map(l => `<span class="n">☞ ${esc(l).toUpperCase()}</span>`);
@@ -1419,9 +1626,19 @@ function renderHint(){
     return;
   }
   if (p.ai){ $('hint').innerHTML = `<span><b>${esc(p.name)}</b> is playing…</span>`; }
-  else if (g.st.phase === 'idle'){ $('hint').innerHTML = `<span><b>${esc(p.name)}</b> — your throw. You may sell from the Ledger first.</span>`; }
+  else if (g.st.phase === 'idle'){
+    if (p.mode === 'work'){
+      $('hint').innerHTML = g.mustEnter()
+        ? `<span><b>${esc(p.name)}</b> — you've banked ${fmt(p.cash)}. To the market: pick a START square.</span>`
+        : `<span><b>${esc(p.name)}</b> — at work as a ${esc(JOBS[p.job].t)} (${JOBS[p.job].nums.join(' or ')} pays ${fmt(JOBS[p.job].pay)}). Your throw.</span>`;
+    } else if (p.mode === 'meeting'){
+      $('hint').innerHTML = `<span><b>${esc(p.name)}</b> — inside the ${STOCKS[p.meet.stock].code} meeting. Throw to move on through.</span>`;
+    } else {
+      $('hint').innerHTML = `<span><b>${esc(p.name)}</b> — your throw. Selling? Only now, from the Ledger, before you throw.</span>`;
+    }
+  }
   else if (g.st.pending){ $('hint').innerHTML = `<span><b>${esc(p.name)}</b> — resolve your landing.</span>`; }
-  else { $('hint').innerHTML = `<span><b>${esc(p.name)}</b> — trade from the Ledger, then end your turn.</span>`; }
+  else { $('hint').innerHTML = `<span><b>${esc(p.name)}</b> — end your turn when ready.</span>`; }
 }
 function renderButtons(){
   const g = V.g; if (!g) return;
@@ -1473,16 +1690,12 @@ async function playEvents(events){
   for (const ev of events){
     switch (ev.kind){
       case 'move': quoteDirty = true; Snd.tick(); break;
-      case 'salary':
-        Snd.pay();
-        await showCard('Pay Day', 'Salary Collected', `<b>${esc(g.cur().name)}</b> collects <b class="num">${fmt(ev.amt)}</b>.`);
-        renderPlayers(); break;
       case 'tick': {
         if (ev.d === 0){
           if (ev.want !== 0){
             Snd.tick();
-            await showCard('Indicator News', 'Pinned at ' + (ev.want > 0 ? 'UP' : 'DOWN'),
-              'The indicator is already at the end of the table — prices hold.');
+            await showCard('The Indicator', 'Bounces Right Back',
+              'It rebounds off the end of the table and settles where it started — prices hold.');
           }
           break;
         }
@@ -1493,61 +1706,66 @@ async function playEvents(events){
           if (chg > 0) bulls.push(`${s.code} +$${chg}`);
           else if (chg < 0) bears.push(`${s.code} −$${-chg}`);
         });
-        await showCard('The Indicator Slides', `${ev.d > 0 ? 'UP' : 'DOWN'} ${Math.abs(ev.d)}`,
+        await showCard(ev.bounced ? 'Off the End of the Table' : 'The Indicator Slides',
+          `${ev.d > 0 ? 'UP' : 'DOWN'} ${Math.abs(ev.d)}${ev.bounced ? ' — bounced' : ''}`,
           `<span style="color:var(--up)">▲ ${bulls.join(' · ') || '—'}</span><br><span style="color:var(--down)">▼ ${bears.join(' · ') || '—'}</span>`);
         renderQuote(); quoteDirty = false;
         break;
       }
-      case 'salary':
-        Snd.pay(); cashFx(ev.amt);
-        await showCard('Salary!', JOBS[ev.job].t,
-          `The throw hits ${JOBS[ev.job].nums.join(' or ')} — <b>${esc(g.cur().name)}</b> collects <b class="num">${fmt(ev.amt)}</b>.`);
+      case 'salary': {
+        Snd.pay();
+        const mePaid = ev.paid.find(x => x.i === g.st.turn);
+        if (mePaid) cashFx(mePaid.amt);
+        const lines = ev.paid.map(x =>
+          `<b>${esc(g.st.players[x.i].name)}</b> the ${JOBS[x.job].t} collects <b class="num">${fmt(x.amt)}</b>`);
+        await showCard('Pay Day', `The Throw of ${ev.total} Pays`, lines.join('<br>') + '.');
         renderPlayers(); break;
+      }
       case 'direction':
-        toast(`${ev.total % 2 === 0 ? 'Even' : 'Odd'} throw — heading ${ev.dir > 0 ? 'clockwise' : 'counterclockwise'}`, 2200);
+        toast(`${ev.total % 2 === 0 ? 'Even' : 'Odd'} throw — following the ${ev.dir > 0 ? 'even' : 'odd'} arrow off START`, 2200);
         break;
       case 'startFee':
         Snd.fee(); cashFx(-ev.amt);
-        toast(`START — paid the ${fmt(CFG.START_FEE)} fee`, 2200);
-        renderPlayers(); break;
-      case 'atStart':
-        await showCard('Start', 'Odd or Even?', 'Your next throw decides which way you go — odd one way, even the other.');
-        break;
-      case 'jobTaken':
-        Snd.gavel();
-        await showCard('New Occupation', JOBS[ev.j].t,
-          `From now on, any throw of <b>${JOBS[ev.j].nums.join(' or ')}</b> pays <b>${esc(g.cur().name)}</b> a <b class="num">${fmt(JOBS[ev.j].pay)}</b> salary.`);
+        toast(`Landed on START — the ${fmt(CFG.START_FEE)} fee`, 2200);
         renderPlayers(); break;
       case 'payps':
         Snd.fee(); cashFx(-ev.amt);
         await showCard('Pay Broker Fee', ev.owned ? `$${CFG.BROKER_PS} on every share` : 'Nothing to Collect',
           ev.owned ? `<b>${esc(g.cur().name)}</b> holds ${ev.owned} shares — the broker takes <b class="num">${fmt(ev.amt)}</b>.` : 'No shares held — the broker goes home empty-handed.');
         renderPlayers(); break;
-      case 'meeting': {
-        Snd.gavel();
-        const body = ev.ratio > 1 && ev.had > 0
-          ? `The dice land on <b>${STOCKS[ev.s].code} ${ev.ratio} FOR 1</b> — <b>${esc(g.cur().name)}</b>'s ${ev.had} certificates become <b class="num">${ev.had * ev.ratio}</b>!`
-          : `The dice land on ${STOCKS[ev.s].code} ${ev.ratio} FOR 1 — ${ev.had > 0 ? 'a 1 FOR 1 changes nothing' : 'no certificates held'}.`;
-        await showCard('Stockholders Meeting', 'Through the Black Wedge', body);
-        if (ev.ratio > 1 && ev.had > 0) Snd.split();
-        renderPlayers(); break;
-      }
       case 'codiv':
         Snd.cash(); cashFx(ev.amt);
         await showCard('Dividend Paid', STOCKS[ev.s].name,
           `${STOCKS[ev.s].code} pays its printed <b class="num">$${STOCKS[ev.s].div}</b> a share — <b>${esc(g.cur().name)}</b> collects <b class="num">${fmt(ev.amt)}</b>.`);
         renderPlayers(); break;
+      case 'meetdiv': {
+        Snd.gavel();
+        const body = ev.gain > 0
+          ? `<b>${STOCKS[ev.s].code} declares ${ev.ratio} FOR 1</b> — ${ev.held} held share${ev.held === 1 ? '' : 's'} earn <b class="num">${ev.gain}</b> more!`
+          : `${STOCKS[ev.s].code} declares ${ev.ratio} FOR 1 — but with no shares held, there is nothing to collect.`;
+        await showCard('Stockholders Meeting', `${ev.ratio} FOR 1`, body);
+        if (ev.gain > 0) Snd.split();
+        renderPlayers(); break;
+      }
       case 'sellall':
         if (ev.n > 0){
           Snd.down(); cashFx(ev.amt);
           await showCard('Sell All ' + STOCKS[ev.s].code, 'Forced Out at the Floor',
-            `<b>${esc(g.cur().name)}</b>'s ${ev.n} shares go at the printed <b class="num">$${ev.floor}</b> — <b class="num">${fmt(ev.amt)}</b> in cash.`);
+            `<b>${esc(g.cur().name)}</b>'s ${ev.n} shares go at the very lowest board price, <b class="num">$${ev.floor}</b> — <b class="num">${fmt(ev.amt)}</b> in cash.`);
         } else {
           await showCard('Sell All ' + STOCKS[ev.s].code, 'Nothing to Sell', 'No ' + STOCKS[ev.s].name + ' certificates held.');
         }
         renderPlayers(); break;
       case 'forcedSale':
-        toast(`Forced sale: ${ev.q} ${STOCKS[ev.s].code} to cover the bill`, 2600);
+        toast(`Forced sale: ${ev.q} ${STOCKS[ev.s].code} at the $${ev.floor} floor to cover the bill`, 2600);
+        break;
+      case 'broke':
+        Snd.bust();
+        await showCard('Broke!', 'Back to Work',
+          `<b>${esc(g.cur().name)}</b> can't cover the bill — stock and money return to the bank, and it's back to work as a <b>${JOBS[ev.j].t}</b>.`);
+        renderAll(); break;
+      case 'visit':
+        toast(`Just visiting the ${JOBS[ev.j].t}'s corner`, 2000);
         break;
     }
   }
@@ -1577,7 +1795,8 @@ function closeSheet(){
 
 function stockRow(i, right){
   const s = STOCKS[i], p = V.g.st.prices[i];
-  const rel = p > CFG.PAR ? `<span class="up">▲ above par</span>` : p < CFG.PAR ? `<span class="dn">▼ below par</span>` : 'at par';
+  const par = priceAt(i, CFG.M_START);
+  const rel = p > par ? `<span class="up">▲ above start</span>` : p < par ? `<span class="dn">▼ below start</span>` : 'on the start row';
   return `<div class="trow">
     <span class="mono-chip" style="background:${s.color}">${s.code}</span>
     <span class="ti"><b>${s.name}</b><small>${s.sector}</small></span>
@@ -1683,20 +1902,126 @@ function sheetCompany(i){
 function sheetBuy(sIdx, limit){
   const g = V.g;
   const done = () => { if (g.st.pending){ g.resolvePending(); } renderAll(); saveGame(); onActionResolved(); };
-  const build = b => {
+  openSheet(limit ? 'Buying Window — Limit 1 Share' : 'Buying Window', b => {
     dealPanel(b, sIdx, 'buy', () => closeSheet(), limit);
-    const held = STOCKS.map((_, i) => i).filter(i => g.cur().shares[i] > 0);
-    if (held.length){
-      const div = document.createElement('div');
-      div.innerHTML = `<p style="font:600 12px/1.5 Archivo,sans-serif;color:var(--ink-faint);margin:10px 0 4px">Need cash? Sell a holding, then keep buying:</p>` +
-        held.map(i => stockRow(i, `<button class="btn small red" data-sx="${i}">Sell</button>`)).join('');
-      b.appendChild(div);
-      div.querySelectorAll('[data-sx]').forEach(el => el.addEventListener('click', () => {
-        dealPanel(b, +el.dataset.sx, 'sell', () => build(b));
-      }));
-    }
+    const note = document.createElement('p');
+    note.style.cssText = 'font:600 12px/1.5 Archivo,sans-serif;color:var(--ink-faint);text-align:center;margin-top:8px';
+    note.textContent = 'Buying happens only here, the moment you land. Selling waits for the top of your own turn.';
+    b.appendChild(note);
+  }, done);
+}
+
+/* landing on a meeting entrance: buy exactly one share, then step in or stay out */
+function sheetEntrance(needs){
+  const g = V.g, s = STOCKS[needs.s];
+  const done = () => { if (g.st.pending){ g.resolvePending(); } renderAll(); saveGame(); onActionResolved(); };
+  const build = b => {
+    const p = g.cur();
+    const price = g.st.prices[needs.s];
+    const canBuy = g.st.pending && g.st.pending.bought < 1 && p.cash >= price;
+    const canIn = p.shares[needs.s] > 0;
+    b.innerHTML = `
+      ${stockRow(needs.s, '')}
+      <p style="font:600 13px/1.6 Archivo,sans-serif;color:var(--ink-soft);margin:10px 0 14px">
+        This is the <b>${s.code} stockholders meeting entrance</b>. Landing here, you may buy
+        <b>exactly one share</b> — and holding at least one ${s.code} share lets you step inside.
+        Your next throw carries you along the 1, 2 and 3 FOR 1 cells: where you stop pays that
+        many <b>additional shares</b> for every share you hold.
+      </p>
+      <div style="display:grid;gap:10px">
+        <button class="btn" id="entBuy" ${canBuy ? '' : 'disabled'}>Buy 1 Share — $${price}</button>
+        <button class="btn gold" id="entIn" ${canIn ? '' : 'disabled'}>Step Into the Meeting</button>
+        <button class="btn alt" id="entOut">Stay Outside</button>
+      </div>
+      <p style="font:600 11px/1.5 Archivo,sans-serif;color:var(--ink-faint);text-align:center;margin-top:10px">
+        You hold ${p.shares[needs.s]} ${s.code} · Cash ${fmt(p.cash)}
+      </p>`;
+    b.querySelector('#entBuy').addEventListener('click', () => {
+      const pr = g.st.prices[needs.s];
+      if (g.buy(needs.s, 1)){ Snd.cash(); cashFx(-pr); renderPlayers(); saveGame(); }
+      build(b);
+    });
+    b.querySelector('#entIn').addEventListener('click', () => {
+      if (g.enterMeeting()){ Snd.gavel(); }
+      closeSheet();
+    });
+    b.querySelector('#entOut').addEventListener('click', closeSheet);
   };
-  openSheet(limit ? 'Buying Window — Limit 1 Share' : 'Buying Window', build, done);
+  openSheet(s.code + ' Meeting Entrance', build, done);
+}
+
+/* passing an entrance mid-throw while holding shares: turn in, or keep going? */
+function askDetour(sIdx){
+  return new Promise(res => {
+    const s = STOCKS[sIdx];
+    let answered = false;
+    const answer = v => { if (!answered){ answered = true; res(v); } };
+    openSheet('Turn In at the Meeting?', b => {
+      const held = V.g.cur().shares[sIdx];
+      b.innerHTML = `
+        ${stockRow(sIdx, '')}
+        <p style="font:600 13px/1.6 Archivo,sans-serif;color:var(--ink-soft);margin:10px 0 14px">
+          Your piece is passing the <b>${s.code} stockholders meeting</b> entrance, and you hold
+          ${held} share${held === 1 ? '' : 's'} — you may detour through. The rest of this throw
+          carries you across the FOR-1 cells; where you stop pays that many
+          <b>additional shares</b> for every share you hold.
+        </p>
+        <div style="display:grid;gap:10px">
+          <button class="btn gold" id="dtYes">Turn In</button>
+          <button class="btn alt" id="dtNo">Pass It By</button>
+        </div>`;
+      b.querySelector('#dtYes').addEventListener('click', () => { answer(true); closeSheet(); });
+      b.querySelector('#dtNo').addEventListener('click', () => { answer(false); closeSheet(); });
+    }, () => answer(false));
+  });
+}
+
+/* the four corner occupations — choose where you work */
+function sheetJobs(){
+  const g = V.g;
+  openSheet('Choose Your Occupation', b => {
+    b.innerHTML = `<p style="font:600 13px/1.6 Archivo,sans-serif;color:var(--ink-soft);margin-bottom:12px">
+      Everyone starts out working. Whenever <b>anyone's</b> throw totals your numbers, you collect
+      your salary — the rarer the numbers, the richer the pay. Bank ${fmt(CFG.WORK_STAKE)} and you
+      must go play the market.</p>` +
+      JOBS.map((j, i) => `
+        <button class="btn alt" data-j="${i}" style="width:100%;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <span>${j.t}</span><span class="num" style="white-space:nowrap">${j.nums.join(' or ')} → ${fmt(j.pay)}</span>
+        </button>`).join('');
+    b.querySelectorAll('[data-j]').forEach(el => el.addEventListener('click', () => {
+      const j = +el.dataset.j;
+      g.setJob(j);
+      Snd.gavel();
+      closeSheet(); renderAll(); saveGame();
+      toast(`${g.cur().name} goes to work as a ${JOBS[j].t}`, 2200);
+    }));
+  });
+}
+
+/* the stake is banked: place your piece on any of the four START squares */
+function sheetStarts(){
+  const g = V.g;
+  openSheet('To the Market!', b => {
+    const sides = ['bottom', 'left', 'top', 'right'];
+    const near = i => {
+      const nm = x => x && x.t === 'co' ? STOCKS[x.s].code : '';
+      return [nm(BOARD[i - 1]), nm(BOARD[i + 1])].filter(Boolean).join(' · ');
+    };
+    b.innerHTML = `<p style="font:600 13px/1.6 Archivo,sans-serif;color:var(--ink-soft);margin-bottom:12px">
+      You've banked ${fmt(g.cur().cash)} — time to play the market. Place your piece on any START
+      square, free (the ${fmt(CFG.START_FEE)} fee is only for landing there later). Your first
+      throw's odd or even decides which way you go.</p>` +
+      START_CELLS.map((i, k) => `
+        <button class="btn alt" data-st="${i}" style="width:100%;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <span>START — ${sides[k]} side</span><span style="font:600 11px Archivo,sans-serif;color:var(--ink-faint);white-space:nowrap">by ${near(i)}</span>
+        </button>`).join('');
+    b.querySelectorAll('[data-st]').forEach(el => el.addEventListener('click', () => {
+      g.enterMarket(+el.dataset.st);
+      Snd.cash();
+      closeSheet(); renderAll(); saveGame();
+      onActionResolved();
+    }));
+  });
 }
 
 /* ledger: inspect any player; trade on your own turn */
@@ -1706,6 +2031,7 @@ function sheetLedger(){
   const build = b => {
     const p = g.st.players[sel];
     const mine = sel === g.st.turn && !p.ai && !V.busy && !g.st.over &&
+      g.st.phase === 'idle' && p.mode !== 'work' &&
       (!V.online || myOnlineSeat() === g.st.turn);
     const lots = n => {
       const out = [];
@@ -1735,6 +2061,8 @@ function sheetLedger(){
       <div class="trow"><span class="ti"><b>Cash on hand</b><small>${p.job >= 0 ? esc(JOBS[p.job].t) + ' — ' + JOBS[p.job].nums.join(' or ') + ' pays ' + fmt(JOBS[p.job].pay) : 'No occupation yet — land on a corner'}</small></span><span class="pr num">${fmt(p.cash)}</span></div>
       <div class="billrow">${billChips(p.cash)}</div>
       ${certs || '<p style="font:600 13px/2 Archivo,sans-serif;color:var(--ink-faint);text-align:center;padding:12px 0">No certificates held.</p>'}
+      ${(!mine && sel === g.st.turn && !p.ai && !g.st.over && g.st.phase !== 'idle' && p.shares.some(n => n > 0))
+        ? '<p style="font:600 12px/1.5 Archivo,sans-serif;color:var(--ink-faint);text-align:center">Voluntary sales happen only immediately before your own throw — the Sell buttons return at the top of your next turn.</p>' : ''}
       <div class="lg-total"><span>NET WORTH</span><span>${fmt(g.netWorth(p))}</span></div>`;
     b.querySelectorAll('[data-t]').forEach(el => el.addEventListener('click', () => { sel = +el.dataset.t; build(b); }));
     b.querySelectorAll('[data-s]').forEach(el => el.addEventListener('click', () => {
@@ -1748,29 +2076,42 @@ function sheetRules(){
   openSheet('How to Play', b => {
     b.innerHTML = `<div class="rules">
       <h3>The Object</h3>
-      <p>Be the first investor to be worth <b>${fmt(V.g ? V.g.st.target : CFG.WIN)}</b> — cash plus stock at today's prices.</p>
-      <h3>Your Turn</h3>
+      <p>Be worth <b>${fmt(V.g ? V.g.st.target : CFG.WIN)}</b> — cash plus stock at board prices — <b>at your own turn to throw</b>. The moment you come to the dice that rich, you've won.</p>
+      <h3>Everybody Starts at Work</h3>
       <ul>
-        <li>Sell any of your holdings first, if you like (open the <b>Ledger</b>).</li>
-        <li>Throw the dice and move around the board.</li>
-        <li>Do what the space says — the board moves the market.</li>
-        <li>End your turn.</li>
+        <li>Everyone begins with empty pockets at one of the four corner occupations: ${JOBS.map(j => `${j.t} (${j.nums.join(' or ')} pays ${fmt(j.pay)})`).join(' · ')}.</li>
+        <li>Salaries pay on <b>every throw of the dice, no matter whose</b> — any time the two dice total your numbers, you collect.</li>
+        <li>The moment you've banked <b>${fmt(CFG.WORK_STAKE)}</b>, you must leave work and play the market: place your piece on any of the four START squares, free of charge.</li>
+      </ul>
+      <h3>Moving Around the Board</h3>
+      <ul>
+        <li>Leaving a START square, your throw picks the direction — <b>odd one way, even the other</b>, as the printed arrows show.</li>
+        <li>Everywhere else you follow the <b>arrow printed on the square you are leaving</b>.</li>
+        <li>Landing on START costs the ${fmt(CFG.START_FEE)} fee — landing only, passing is free.</li>
       </ul>
       <h3>The Indicator</h3>
-      <p>One indicator in the middle sets every price. Four issues (<b>ALC · AMO · JIC · GMI</b>, marked ▲) climb as it rises toward UP; their four mirror partners (<b>ISH · MAY · WPC · WLW</b>, marked ▼) climb as it falls toward DOWN. The printed columns tell the story: Alcoa runs $30–$230 while Woolworth runs it in reverse; the steadiest pair barely moves ($18–$42).</p>
-      <p>Company spaces and PAY-fee spaces slide the indicator by their printed amount — up to a violent 20. Buy an issue near the bottom of its printed column, ride the swing, sell near the top.</p>
-      <h3>The Spaces</h3>
+      <p>One indicator in the middle sets every price. Four issues (<b>ALC · AMO · JIC · GMI</b>, marked ▲) climb as it rises; their mirror partners (<b>ISH · MAY · WPC · WLW</b>, marked ▼) climb as it falls. Every square you land on slides it by the printed amount — and at the ends of the table it <b>bounces</b>: leftover movement reverses direction.</p>
+      <h3>Buying Stock</h3>
       <ul>
-        <li><b>Company spaces</b> — that company pays its printed <b>$1–$4 a share</b> dividend to whoever lands there, the indicator moves by the printed ▲/▼ amount, then the buying window opens (a few cells limit you to one share).</li>
-        <li><b>Black wedges (STOCKHOLDERS ENTER)</b> — you're sent into the stockholders meeting: the dice pick a 1, 2 or 3 FOR 1 cell, and certificates of the company it names multiply.</li>
-        <li><b>START</b> — pay the ${fmt(CFG.START_FEE)} fee every time you land or pass. Land exactly, and your next throw's odd/even decides which way you travel.</li>
-        <li><b>Corners</b> — take that job. From then on, any throw totalling its numbers pays its salary: rarer throws, richer jobs (${JOBS.map(j => j.t + ' $' + j.pay).join(' · ')}).</li>
-        <li><b>SELL ALL</b> — forced out of the named company at its printed floor price, like it or not.</li>
-        <li><b>PAY $${CFG.BROKER_PS} PER SHARE</b> — the broker charges every share you hold, then the indicator swings a full 20.</li>
+        <li>You may buy <b>only at the moment you land</b> on a company square — that company only, any amount you can pay, at the price <i>after</i> the indicator moves.</li>
+        <li>A few squares are printed <b>LIMIT 1 SHARE</b>; meeting entrances also allow exactly one.</li>
+        <li>No buying on fee squares, SELL ALL squares, or inside a meeting.</li>
       </ul>
-      <h3>The Ends of the Table</h3>
-      <p>The indicator stops at UP and DOWN — an issue at the bottom of its printed column can only go one way, if you have the nerve and the cash to be holding it when the market turns.</p>
-      <p class="fine">An original homage to the 1968 board game classic, rebuilt from photographs of the printed board: the see-saw price table, printed dividends, job corners, fees and floors follow the board itself; cell order and meeting-row values are reconstructed in its structure. Company names are historical references. Not affiliated with the original publishers.</p>
+      <h3>Selling Stock</h3>
+      <ul>
+        <li>Voluntary sales happen at one moment only: <b>immediately before your own throw</b>, at board prices, from the Ledger. Players never trade with each other.</li>
+        <li>Forced sales — SELL ALL squares, or covering a bill you can't pay — always go at the <b>very lowest board price</b> for that stock.</li>
+      </ul>
+      <h3>Dividends &amp; Stockholders Meetings</h3>
+      <ul>
+        <li>Land on a company square holding its stock and it pays its printed <b>$1–$4 a share</b> in cash — on the shares you held when you landed, not ones bought that moment.</li>
+        <li>Each stock has one <b>meeting entrance</b> (the black wedge). Land on it to buy one share and step in; or, passing it mid-throw with at least one share held, choose to turn in.</li>
+        <li>Inside, the rest of your throw carries you along the FOR-1 cells. Where you stop pays that many <b>additional shares per share held</b> — hold 5 and stop on 3 FOR 1, collect 15 more.</li>
+        <li>You keep moving the same direction, leave through the far end onto the paired stock's entrance, and follow its arrow from there. At a meeting you may sell, never buy.</li>
+      </ul>
+      <h3>Going Broke</h3>
+      <p>Can't cover a bill even after forced sales? Everything returns to the bank and you go back to work — earn your ${fmt(CFG.WORK_STAKE)} again and re-enter the market.</p>
+      <p class="fine">An original homage to the 1968 board-game classic, implemented from the rules printed inside the box lid (owner's transcription, rewritten here in our own words) and from photographs of the board. Square order, arrow directions and meeting-row values are reconstructed where the photographs could not be read. Company names are historical references. Not affiliated with the original publishers.</p>
     </div>`;
   });
 }
@@ -1778,8 +2119,9 @@ function sheetRules(){
 /* ================= TURN FLOW ================= */
 function onActionResolved(){ renderHint(); renderButtons(); }
 
-async function animateMove(mv){
+async function animatePath(steps){
   const g = V.g;
+  if (!steps || !steps.length){ renderPawns(); return; }
   const instant = (g.cur().ai && g.st.speed === 'instant') || RM;
   if (instant){ renderPawns(); return; }
   const stepMs = g.cur().ai && g.st.speed === 'fast' ? 80 : 170;
@@ -1788,9 +2130,11 @@ async function animateMove(mv){
   const inner = el && el.firstElementChild;
   const baseScale = matchMedia('(max-width:919px)').matches ? 1.45 : 1;
   if (inner) inner.setAttribute('transform', `scale(${baseScale * 1.3})`);
-  for (const pos of mv.path){
-    const c = V.cells[pos];
-    if (el) el.setAttribute('transform', `translate(${c.cx},${c.cy})`);
+  for (const stp of steps){
+    const c = stp.kind === 'meet'
+      ? (V.mcells[stp.row] || [])[Math.max(0, Math.min(7, stp.idx))]
+      : V.cells[stp.i];
+    if (el && c) el.setAttribute('transform', `translate(${c.cx},${c.cy})`);
     Snd.hop();
     await sleep(stepMs);
   }
@@ -1843,14 +2187,39 @@ async function takeRoll(){
   renderButtons();
   await rollDiceAnim(mv.d1, mv.d2);
   if (V.g !== g) return null;
-  const [spT] = describeSpace(mv.to);
-  $('sr').textContent = `${g.cur().name} throws ${mv.d1} and ${mv.d2} — lands on ${spT}`;
-  // what the throw itself settled: salary, direction, START fees on the way
-  await playEvents(mv.events);
+  await playEvents(mv.events);          // salaries for the workers, START direction
   if (V.g !== g) return null;
-  await animateMove(mv);
+  if (mv.worker){
+    $('sr').textContent = `${g.cur().name} throws ${mv.d1} and ${mv.d2} at work`;
+    renderAll();
+    return {done: true, worker: true, needs: null};
+  }
+  // walk the throw out, pausing wherever a meeting detour is on offer
+  let animated = 0;
+  let res = g.advance();
+  while (res && res.ask === 'detour'){
+    const part = g.st.mv.path.slice(animated);
+    animated = g.st.mv.path.length;
+    await animatePath(part);
+    if (V.g !== g) return null;
+    let enter;
+    if (g.cur().ai){
+      enter = AI.answerDetour(g, res.s);
+      if (g.st.speed !== 'instant') toast(`${g.cur().name} ${enter ? 'turns in at' : 'passes'} the ${STOCKS[res.s].code} meeting`, 1800);
+    } else {
+      enter = await askDetour(res.s);
+    }
+    if (V.g !== g) return null;
+    res = g.decideDetour(enter);
+  }
+  if (!res || V.g !== g) return null;
+  await animatePath(res.path.slice(animated));
   if (V.g !== g) return null;
-  const res = g.land(mv);
+  const p = g.cur();
+  const where = p.mode === 'meeting'
+    ? `into the ${STOCKS[p.meet.stock].code} stockholders meeting`
+    : `lands on ${describeSpace(p.pos)[0]}`;
+  $('sr').textContent = `${p.name} throws ${mv.d1} and ${mv.d2} — ${where}`;
   renderTape();
   await playEvents(res.events);
   if (V.g !== g) return null;
@@ -1862,6 +2231,7 @@ async function humanRoll(){
   if (V.busy || !V.g || V.g.st.over) return;
   if (V.online && myOnlineSeat() !== V.g.st.turn) return;
   Snd.unlock();
+  if (V.g.mustEnter()){ sheetStarts(); return; }   // the market is calling — place your piece first
   const gen = V.gen;
   V.busy = true;
   const res = await takeRoll();
@@ -1869,7 +2239,8 @@ async function humanRoll(){
   V.busy = false;
   if (!res){ renderButtons(); return; }
   if (res.needs){
-    if (res.needs.kind === 'buy') sheetBuy(res.needs.s, res.needs.limit);
+    if (res.needs.canEnter) sheetEntrance(res.needs);
+    else if (res.needs.kind === 'buy') sheetBuy(res.needs.s, res.needs.limit);
   }
   renderAll();
 }
@@ -1882,12 +2253,7 @@ function humanEndTurn(){
 
 function finishTurn(){
   const g = V.g; if (!g) return;
-  const over = g.endTurn();
-  if (over){
-    if (V.online){ onlinePublishTurn(); }
-    else store(SAVE_KEY, null);
-    renderAll(); showWin(); return;
-  }
+  g.endTurn();
   if (V.online){
     // computers keep playing on this device; hand off to the table
     // (one publish, one reload for every phone) at the next human turn
@@ -1909,14 +2275,14 @@ async function aiTurn(){
   renderHint(); renderButtons();
   await sleep(pause);
   if (gen !== V.gen) return;
-  AI.preTurnSells(g);
+  AI.preRoll(g);
   renderAll();
   const res = await takeRoll();
   if (gen !== V.gen) return;
   if (res && res.needs){
     await sleep(pause / 2);
     if (gen !== V.gen) return;
-    AI.answer(g, res.needs);
+    AI.answerLanding(g, res.needs);
     renderAll();
   }
   await sleep(pause);
@@ -1928,15 +2294,27 @@ async function aiTurn(){
 function runLoop(){
   const g = V.g;
   if (!g || g.st.over) return;
+  // the win is judged at your own turn to throw: cash plus stock at board prices
+  if (g.st.phase === 'idle' && g.checkWin()){
+    if (V.online){ onlinePublishTurn(); }
+    else store(SAVE_KEY, null);
+    renderAll(); showWin(); return;
+  }
   if (g.cur().ai){
     if (V.online && onlineDriver() !== myOnlineSeat()){ renderHint(); renderButtons(); return; }
     aiTurn();
   }
   else {
     renderHint(); renderButtons();
+    if (V.online && myOnlineSeat() !== g.st.turn) return;
     // hot-seat ritual: hand the board to the next investor (local play only)
     if (!V.online && g.st.turnCount > 0 && !g.st.pending && g.st.players.filter(p => !p.ai).length > 1){
       showCard('Pass the Board', g.cur().name, 'Your throw — tap to take the dice.', 60000);
+    }
+    const p = g.cur();
+    if (p.mode === 'work' && g.st.phase === 'idle'){
+      if (g.mustEnter()){ sheetStarts(); }
+      else if (g.st.turnCount < g.st.players.length){ sheetJobs(); }
     }
   }
 }
@@ -2014,12 +2392,13 @@ function showWin(){
   $('winName').textContent = w.name;
   $('winSum').textContent = fmt(g.netWorth(w)) + ' · ' + (w.job >= 0 ? JOBS[w.job].t : 'Speculator');
   const rows = [
-    ['Times around the board', w.laps],
-    ['Dividends & meetings', fmt(w.stats.divs)],
-    ['Stock dividends ridden', w.stats.splits],
+    ['Salary earned at work', fmt(w.stats.earned)],
+    ['Cash dividends collected', fmt(w.stats.divs)],
+    ['Shares won at meetings', w.stats.meetShares],
     ['Biggest single purchase', fmt(w.stats.bestTrade)],
-    ['Broker fees paid', fmt(w.stats.spentFees)],
-    ['Ticker closed at', g.st.M > CFG.M_START ? 'bull, notch ' + g.st.M : g.st.M < CFG.M_START ? 'bear, notch ' + g.st.M : 'par'],
+    ['Fees paid out', fmt(w.stats.spentFees)],
+    ['Times gone broke', w.stats.broke],
+    ['Indicator closed at', g.st.M > CFG.M_START ? 'notch ' + g.st.M + ', bull side' : g.st.M < CFG.M_START ? 'notch ' + g.st.M + ', bear side' : 'the START row'],
     ['Turns played (table)', g.st.turnCount],
   ];
   $('winStats').innerHTML = rows.map(r => `<div class="row"><span>${r[0]}</span><span>${r[1]}</span></div>`).join('');
@@ -2059,7 +2438,7 @@ function renderSeats(){
     </div>
     <div class="seat2">
       <label>Work</label>
-      <span style="font:600 12px/1.4 Archivo,sans-serif;color:var(--ink-faint)">Everyone starts unemployed — land on a corner to take a job</span>
+      <span style="font:600 12px/1.4 Archivo,sans-serif;color:var(--ink-faint)">Everyone starts at work — pick an occupation on your first turn</span>
     </div>`).join('');
   $('seatList').querySelectorAll('[data-n]').forEach(el => el.addEventListener('input', () => { V.seats[+el.dataset.n].name = el.value; }));
   $('seatList').querySelectorAll('[data-c]').forEach(el => el.addEventListener('click', () => {
@@ -2091,7 +2470,7 @@ function startGame(){
     target: V.target, speed: V.speed,
     players: V.seats.map((s, i) => ({name: s.name.trim() || 'Investor ' + (i + 1), ai: s.ai, color: s.color || PAWN_COLORS[i]})),
   });
-  V.g.addLog('The market opens. Every investor starts with ' + fmt(CFG.START_CASH) + '.');
+  V.g.addLog('The market opens. Everyone starts at work with empty pockets — first to ' + fmt(V.target) + ' wins.');
   V.online = false; $('liveBadge').style.display = 'none';
   V.gen++; V.busy = false;
   buildBoard(); buildQuote();
@@ -2104,12 +2483,12 @@ function startGame(){
   if (!read('sm68-coach')){
     store('sm68-coach', '1');
     (async () => {
-      await showCard('How It Works · 1 of 3', 'One Ticker Rules All',
-        'The strip in the middle sets every price. When it slides, the ▲ stocks and the ▼ stocks move opposite ways.', 5200);
-      await showCard('How It Works · 2 of 3', 'Buy Low, Ride the Swing',
-        'Buy an issue near the cheap end of its printed row, wait for the board to turn the market, sell it high.', 5200);
+      await showCard('How It Works · 1 of 3', 'Work, Then Invest',
+        'Everyone starts at work. Salaries pay on anyone’s throw of your numbers — bank $1,000 and you must enter the market.', 5200);
+      await showCard('How It Works · 2 of 3', 'One Indicator Rules All',
+        'The strip in the middle sets every price. When it slides, the ▲ stocks and the ▼ stocks move opposite ways — and it bounces off the ends.', 5200);
       await showCard('How It Works · 3 of 3', 'First to ' + fmt(V.g ? V.g.st.target : CFG.WIN),
-        'Salary, dividends and good trades all count — cash plus stock at today’s prices.', 5200);
+        'Buy only where you land; sell only before your own throw. Cash plus stock at board prices wins — judged as you take the dice.', 5200);
     })();
   }
   runLoop();
@@ -2132,7 +2511,8 @@ function resumeGame(saved){
   // or the resumed game has no legal action left (roll and end are gated)
   const pd = V.g.st.pending;
   if (pd){
-    if (V.g.cur().ai){ AI.answer(V.g, pd); renderAll(); saveGame(); }
+    if (V.g.cur().ai){ AI.answerLanding(V.g, pd); renderAll(); saveGame(); }
+    else if (pd.canEnter) sheetEntrance(pd);
     else if (pd.kind === 'buy') sheetBuy(pd.s, pd.limit);
   }
   runLoop();
@@ -2269,7 +2649,7 @@ function lobbyStart(){
     target, speed: 'fast',
     players: s.seats.map(x => ({name: x.name, ai: x.ai, color: x.color})),
   });
-  g.addLog('The market opens. Every investor starts with ' + fmt(CFG.START_CASH) + '.');
+  g.addLog('The market opens. Everyone starts at work with empty pockets — first to ' + fmt(target) + ' wins.');
   const st = netSnapshot({phase:'playing', target, game: g.st, note: 'The market is open — first throw: ' + g.st.players[0].name});
   NET.publish(st);
 }
@@ -2320,7 +2700,7 @@ function wire(){
     Snd.unlock();
     try{
       const sv = JSON.parse(read(SAVE_KEY));
-      if (!sv || !sv.st || sv.st.v !== 5) throw new Error('old save');
+      if (!sv || !sv.st || sv.st.v !== 6) throw new Error('old save');
       resumeGame(sv);
     }
     catch(e){ store(SAVE_KEY, null); toast('Saved game was from an older edition — starting fresh'); renderSeats(); showScr('setup'); }
@@ -2415,7 +2795,7 @@ function wire(){
 
 function refreshResume(){
   let has = false;
-  try{ const s = JSON.parse(read(SAVE_KEY)); has = !!(s && s.st && s.st.v === 5 && !s.st.over); }catch(e){}
+  try{ const s = JSON.parse(read(SAVE_KEY)); has = !!(s && s.st && s.st.v === 6 && !s.st.over); }catch(e){}
   $('btnResume').style.display = has ? '' : 'none';
 }
 
