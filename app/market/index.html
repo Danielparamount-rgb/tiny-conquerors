@@ -481,6 +481,7 @@ svg{display:block}
     <div id="onlineCard" style="display:none;margin-top:18px;border-top:1px solid var(--rule);padding-top:14px">
       <p class="lid-sub" style="margin-bottom:10px">Online — one table, everyone’s phone</p>
       <button class="btn red" id="btnOnline" style="min-width:230px">Host a Table</button>
+      <button class="btn alt small" id="btnOnline2" style="display:none;margin-top:8px">New Table — Back to the Lobby</button>
       <p id="onlineHint" class="homage" style="margin-top:10px"></p>
     </div>
     <p class="homage">An original homage to the 1968 board-game classic. Not affiliated with the original publishers. Company names are historical references.</p>
@@ -615,6 +616,7 @@ svg{display:block}
 <div id="menuPop" class="card-paper">
   <button class="btn alt small" id="mRules">How to Play</button>
   <button class="btn alt small" id="mLog">Ticker Wire</button>
+  <button class="btn alt small" id="mTable" style="display:none">New Table (Lobby)</button>
   <button class="btn alt small" id="mQuit">Abandon Game</button>
 </div>
 
@@ -2836,6 +2838,28 @@ function netSnapshot(extra){
     lastBy: NET.token, note: '',
   }, extra || {});
 }
+/* the host clears the game and calls everyone back to the lobby — the
+   way to start a fresh multiplayer game while a table is mid-play */
+function hostResetTable(){
+  const s = NET.state;
+  if (!s || s.host !== NET.token) return;
+  openSheet('New Table?', b => {
+    b.innerHTML = `<p style="font:600 14px/1.6 Archivo,sans-serif;color:var(--ink-soft);text-align:center;margin-bottom:14px">
+        This puts away the game in progress and calls everyone back to the lobby —
+        seats are kept, and you pick the rules fresh. Only the host can do this.</p>
+      <div style="display:flex;gap:10px">
+        <button class="btn alt" id="ntNo" style="flex:1">Keep Playing</button>
+        <button class="btn red" id="ntYes" style="flex:1">New Table</button>
+      </div>`;
+    b.querySelector('#ntNo').addEventListener('click', closeSheet);
+    b.querySelector('#ntYes').addEventListener('click', () => {
+      closeSheet();
+      NET.publish(netSnapshot({phase:'lobby', game: null,
+        note: 'The host reset the table — new game forming'}));
+    });
+  });
+}
+
 function hostTable(){
   const st = netSnapshot({phase:'lobby', host: NET.token, seats: [], game: null, note: 'The table is set'});
   NET.publish(st, 'Table created');
@@ -2855,6 +2879,7 @@ function routeSplashCard(){
     $('btnOnline').textContent = mine ? 'Return to the Table' : 'Watch the Table';
     $('onlineHint').textContent = mine ? 'Your game is in progress.' : 'A game is in progress — you can watch.';
   }
+  $('btnOnline2').style.display = (s && s.host === NET.token && s.phase !== 'lobby') ? '' : 'none';
 }
 function routeOnline(){
   const s = NET.state;
@@ -3057,12 +3082,17 @@ function wire(){
     store('sm68-sound', V.sound ? '1' : '0');
     if (V.sound) Snd.unlock();
   });
-  $('btnMenu').addEventListener('click', () => $('menuPop').classList.toggle('on'));
+  $('btnOnline2').addEventListener('click', () => { Snd.unlock(); hostResetTable(); });
+  $('btnMenu').addEventListener('click', () => {
+    $('mTable').style.display = (V.online && NET.state && NET.state.host === NET.token) ? '' : 'none';
+    $('menuPop').classList.toggle('on');
+  });
   document.addEventListener('click', e => {
     if (!e.target.closest('#menuPop') && !e.target.closest('#btnMenu')) $('menuPop').classList.remove('on');
   });
   $('mRules').addEventListener('click', () => { $('menuPop').classList.remove('on'); sheetRules(); });
   $('mLog').addEventListener('click', () => { $('menuPop').classList.remove('on'); $('log').classList.toggle('on'); renderLog(); });
+  $('mTable').addEventListener('click', () => { $('menuPop').classList.remove('on'); hostResetTable(); });
   $('mQuit').addEventListener('click', () => {
     $('menuPop').classList.remove('on');
     if (V.online){
