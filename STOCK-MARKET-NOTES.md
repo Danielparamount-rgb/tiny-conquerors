@@ -68,20 +68,26 @@ save/resume.
 
 ## Documented vs. reconstructed
 
+The v12 build transcribes the board square by square from the owner's photographs — every
+square's company, printed dividend, indicator move, direction arrow and floor price; the
+two PURCHASE LIMIT ONE SHARE squares on each side that carry the STOCKHOLDERS ENTER
+wedges; and the four boxed two-row meeting tracks (a 1 FOR 1 beside each entrance on the
+outer row, seven cells across the inner row, palindromic on every side). The printed
+arrows run clockwise on squares 2–9 of every side (read from that side's seat) and
+counter-clockwise on the PAY squares and squares 10–12; START squares send odd throws
+clockwise ("← ODD") and even the other way. Company colours follow the print (Alcoa red,
+Am. Motors yellow, J.I. Case amber, Gen. Mills light blue, Int. Shoe magenta, Maytag teal,
+Western Publishing light green, Woolworth rust).
+
 | Feature | Value | Source |
 | --- | --- | --- |
-| Rules of play | all of the above | inside-cover transcription |
-| Price table | ALC 30–230 / AMO 10–110 / JIC 15–75 / GMI 18–42 rising with the indicator; ISH, MAY, WPC, WLW mirror them falling | board photo |
-| Indicator | vertical track marked UP / START / DOWN; START row reads 130-60-45-30 / 30-45-60-130; 51 notches | board photo (notch count approximated) |
-| Company cells | printed dividend $1–$4 + printed indicator move + buying window; some "PURCHASE LIMIT ONE SHARE" | board photo |
-| Job corners | four occupations with printed numbers and salaries | board photo + transcription |
-| START cells | 4 mid-edge, "PAY $100 FEE", ODD/EVEN arrows | board photo + transcription |
-| SELL ALL cells | forced sale at the printed floor (e.g. Maytag $15, Alcoa $30) | board photo |
-| PAY cells | $10 per share held, then indicator swings ±20 | board photo |
-| Meeting rows | one per side between a mirror pair's entrances; 1/2/3 FOR 1 cells | photo + transcription (row values reconstructed) |
-| Track | 56 squares — 13 a side + 4 job corners | board photo (cell order per side reconstructed) |
-| Square arrows | per-square direction arrows | reconstructed (photos unreadable at that size) |
-| Win target | $100,000 printed; $50,000 / $25,000 offered | transcription (other amounts by agreement) |
+| Rules of play | see above | inside-cover transcription |
+| Price table | ALC 30–230 / AMO 10–110 / JIC 15–75 / GMI 18–42 rising with the indicator; ISH, MAY, WPC, WLW mirror them falling; 51 rows; START row 130-60-45-30 / 30-45-60-130 | board photo |
+| Square order, dividends, moves, arrows, floors | all 56 squares | board photos |
+| Meeting tracks | bottom WLW↔ALC 1·2·1·2·3·2·1·2·1 · left GMI↔ISH 1·3·2·3·2·3·2·3·1 · top AMO↔WPC 1·2·3·2·1·2·3·2·1 · right JIC↔MAY 1·2·3·2·3·2·3·2·1 | board photos |
+| Corners | Prospector 2/12 $400 · Deep Sea Diver 3/11 $300 · Doctor 4/10 $200 · Policeman 5/9 $100 | board photos |
+| Win target | $100,000 printed; $50,000 / $25,000 / timed offered | transcription (other terms by agreement) |
+| Notch count | 51 (values printed every row) | board photo |
 
 ## Verification
 

@@ -688,14 +688,14 @@ const CFG = {
    indicator rises, their mirror partners fall. Ranges, dividends
    and floors are the printed values. */
 const STOCKS = [
-  {code:'ALC', name:'Alcoa',               sector:'Aluminum',           color:'#3a7ca5', lo:30, hi:230, rise:true,  div:4},
-  {code:'AMO', name:'American Motors',     sector:'Automobiles',        color:'#e8862d', lo:10, hi:110, rise:true,  div:3},
-  {code:'JIC', name:'J.I. Case',           sector:'Farm Machinery',     color:'#c9a227', lo:15, hi: 75, rise:true,  div:2},
-  {code:'GMI', name:'General Mills',       sector:'Foods & Milling',    color:'#2456a0', lo:18, hi: 42, rise:true,  div:1},
-  {code:'ISH', name:'International Shoe',  sector:'Footwear',           color:'#8a5a2b', lo:18, hi: 42, rise:false, div:1},
-  {code:'MAY', name:'Maytag',              sector:'Home Appliances',    color:'#2a9d8f', lo:15, hi: 75, rise:false, div:2},
-  {code:'WPC', name:'Western Publishing',  sector:'Printing & Books',   color:'#43892f', lo:10, hi:110, rise:false, div:3},
-  {code:'WLW', name:'Woolworth',           sector:'Five & Dime Stores', color:'#d94f33', lo:30, hi:230, rise:false, div:4},
+  {code:'ALC', name:'Alcoa',               sector:'Aluminum',           color:'#c9372c', fg:'#fff',    lo:30, hi:230, rise:true,  div:4},
+  {code:'AMO', name:'American Motors',     sector:'Automobiles',        color:'#e8c43c', fg:'#22211f', lo:10, hi:110, rise:true,  div:3},
+  {code:'JIC', name:'J.I. Case',           sector:'Farm Machinery',     color:'#e59a2a', fg:'#22211f', lo:15, hi: 75, rise:true,  div:2},
+  {code:'GMI', name:'General Mills',       sector:'Foods & Milling',    color:'#3ba4c8', fg:'#fff',    lo:18, hi: 42, rise:true,  div:1},
+  {code:'ISH', name:'International Shoe',  sector:'Footwear',           color:'#c43a7c', fg:'#fff',    lo:18, hi: 42, rise:false, div:1},
+  {code:'MAY', name:'Maytag',              sector:'Home Appliances',    color:'#2f8f78', fg:'#fff',    lo:15, hi: 75, rise:false, div:2},
+  {code:'WPC', name:'Western Publishing',  sector:'Printing & Books',   color:'#8db94a', fg:'#22211f', lo:10, hi:110, rise:false, div:3},
+  {code:'WLW', name:'Woolworth',           sector:'Five & Dime Stores', color:'#c75d27', fg:'#fff',    lo:30, hi:230, rise:false, div:4},
 ];
 const priceAt = (i, M) => {
   const s = STOCKS[i], t = M / CFG.M_MAX;
@@ -717,11 +717,12 @@ const JOBS = [
    the two entrance squares of a mirror pair. Landing on N FOR 1
    pays N additional shares for every share held of the meeting's
    stock (own 5, land 3 FOR 1, receive 15 more). */
-const MEET_ROWS = [
-  {pair:[2, 5], cells:[1, 2, 3, 2, 2, 3, 2, 1]},   // J.I. Case ↔ Maytag
-  {pair:[0, 7], cells:[1, 2, 3, 2, 2, 3, 2, 1]},   // Alcoa ↔ Woolworth
-  {pair:[3, 4], cells:[1, 2, 3, 2, 2, 3, 2, 1]},   // Gen. Mills ↔ Int. Shoe
-  {pair:[1, 6], cells:[1, 2, 3, 2, 2, 3, 2, 1]},   // Am. Motors ↔ Western Publ.
+const MEET_ROWS = [   // one per side, in board order; each is a U-shaped 9-cell track:
+                      // a 1 FOR 1 by each entrance and seven cells across the inner row
+  {pair:[7, 0], cells:[1, 2, 1, 2, 3, 2, 1, 2, 1]},   // bottom: Woolworth ↔ Alcoa
+  {pair:[3, 4], cells:[1, 3, 2, 3, 2, 3, 2, 3, 1]},   // left:   Gen. Mills ↔ Int. Shoe
+  {pair:[1, 6], cells:[1, 2, 3, 2, 1, 2, 3, 2, 1]},   // top:    Am. Motors ↔ Western Publ.
+  {pair:[2, 5], cells:[1, 2, 3, 2, 3, 2, 3, 2, 1]},   // right:  J.I. Case ↔ Maytag
 ];
 
 /* Board: 56 squares — four occupation corners and 13 a side.
@@ -729,59 +730,44 @@ const MEET_ROWS = [
    arrow (+1 clockwise, −1 counter); START squares instead branch
    on the throw (odd one way, even the other). Entrance squares
    carry enter:{row, end}. Arrow layout is reconstructed. */
+/* Board: 56 squares — four occupation corners and 13 a side, transcribed
+   from the photographs. Each side is listed as printed for the player
+   seated at it, left corner → right corner. The printed direction arrows:
+   "<" runs clockwise (+1 in board order), ">" counter-clockwise (−1); START
+   squares branch on the throw (odd goes clockwise, even the other way).
+   The two PURCHASE LIMIT ONE SHARE squares on every side are that side's
+   stockholders-meeting entrances. */
 const BOARD = (() => {
-  const co = (code, d, arrow, opts) => {
-    const s = STOCKS.findIndex(x => x.code === code);
-    return Object.assign({t:'co', s, d, arrow}, opts || {});
-  };
-  const sell = (code, d, arrow) => {
-    const s = STOCKS.findIndex(x => x.code === code);
-    return {t:'sellall', s, d, arrow};
-  };
-  const pay = (d, arrow) => ({t:'payps', d, arrow});
+  const S = code => STOCKS.findIndex(x => x.code === code);
+  const A = a => a === '<' ? 1 : -1;
+  const co = (code, d, a, opts) => Object.assign({t:'co', s:S(code), d, arrow:A(a)}, opts || {});
+  const en = (code, d, a, row, end) => co(code, d, a, {limit:1, enter:{row, end}});
+  const sell = (code, d, a) => ({t:'sellall', s:S(code), d, arrow:A(a)});
+  const pay = (d, a) => ({t:'payps', d, arrow:A(a)});
+  const start = () => ({t:'start'});
+  const SEAT = [
+    { corner: 3, cells: [ // PROSPECTOR corner, then the bottom side (Deep Sea Diver … Prospector)
+      pay(-20,'>'), sell('ALC',5,'<'), co('WPC',-4,'<'), en('WLW',3,'<',0,0), co('ISH',-2,'<'), co('JIC',1,'<'),
+      start(), co('MAY',1,'<'), co('GMI',-2,'<'), en('ALC',3,'>',0,1), co('AMO',-4,'>'), sell('WLW',5,'>'), pay(20,'>') ]},
+    { corner: 0, cells: [ // DEEP SEA DIVER corner, then the left side (Doctor … Deep Sea Diver)
+      pay(20,'>'), sell('ISH',-5,'<'), co('MAY',4,'<'), en('GMI',-3,'<',1,0), co('ALC',2,'<'), co('AMO',-1,'<'),
+      start(), co('WPC',-1,'<'), co('WLW',2,'<'), en('ISH',-3,'>',1,1), co('JIC',4,'>'), sell('GMI',-5,'>'), pay(-20,'>') ]},
+    { corner: 1, cells: [ // DOCTOR corner, then the top side (Policeman … Doctor)
+      pay(-20,'>'), sell('WPC',5,'<'), co('ALC',-4,'<'), en('AMO',3,'<',2,0), co('MAY',-2,'<'), co('GMI',1,'<'),
+      start(), co('ISH',1,'<'), co('JIC',-2,'<'), en('WPC',3,'>',2,1), co('WLW',-4,'>'), sell('AMO',5,'>'), pay(20,'>') ]},
+    { corner: 2, cells: [ // POLICEMAN corner, then the right side (Prospector … Policeman)
+      pay(20,'>'), sell('MAY',-5,'<'), co('GMI',4,'<'), en('JIC',-3,'<',3,0), co('AMO',2,'<'), co('ALC',-1,'<'),
+      start(), co('WLW',-1,'<'), co('WPC',2,'<'), en('MAY',-3,'>',3,1), co('ISH',4,'>'), sell('JIC',-5,'>'), pay(-20,'>') ]},
+  ];
   const B = [];
-  const side = (job, cells) => { B.push({t:'job', j:job, arrow:1}); cells.forEach(c => B.push(c)); };
-  side(0, [ // Deep Sea Diver corner, then side one (J.I. Case ↔ Maytag row)
-    pay(20, 1), sell('MAY', 5, 1),
-    co('JIC', 1, 1, {enter:{row:0, end:0}}),
-    co('WPC', -4, -1), co('WLW', 3, 1), co('ISH', -2, 1),
-    {t:'start'},
-    co('GMI', 2, 1), co('ALC', -3, 1, {limit:1}), co('AMO', 4, -1),
-    co('MAY', -1, 1, {enter:{row:0, end:1}}),
-    sell('WLW', -5, 1), pay(-20, 1),
-  ]);
-  side(1, [ // Doctor corner, then side two (Alcoa ↔ Woolworth row)
-    pay(20, 1), sell('GMI', 5, 1),
-    co('ALC', 4, 1, {enter:{row:1, end:0}}),
-    co('MAY', -5, 1), co('AMO', 2, -1), co('JIC', -3, 1),
-    {t:'start'},
-    co('WPC', -2, 1), co('ISH', 3, 1), co('GMI', -4, -1),
-    co('WLW', 5, 1, {enter:{row:1, end:1}}),
-    sell('ALC', -5, 1), pay(-20, 1),
-  ]);
-  side(2, [ // Policeman corner, then side three (Gen. Mills ↔ Int. Shoe row)
-    pay(20, 1), sell('ISH', 5, -1),
-    co('GMI', 4, 1, {enter:{row:2, end:0}}),
-    co('JIC', -1, 1), co('MAY', -3, 1), co('WLW', 2, -1),
-    {t:'start'},
-    co('ALC', -4, 1, {limit:1}), co('AMO', 3, 1), co('WPC', -2, -1),
-    co('ISH', 1, 1, {enter:{row:2, end:1}}),
-    sell('AMO', -5, 1), pay(-20, 1),
-  ]);
-  side(3, [ // Prospector corner, then side four (Am. Motors ↔ Western Publ. row)
-    pay(20, 1), sell('JIC', 5, 1),
-    co('AMO', 5, 1, {enter:{row:3, end:0}}),
-    co('ALC', -4, -1), co('WLW', 3, 1, {limit:1}), co('GMI', -2, 1),
-    {t:'start'},
-    co('ISH', 2, 1), co('MAY', -4, 1), co('JIC', -1, -1),
-    co('WPC', 1, 1, {enter:{row:3, end:1}}),
-    sell('WPC', -5, 1), pay(-20, 1),
-  ]);
+  // board order runs clockwise; each printed side reads counter-clockwise,
+  // so a side's cells go in reversed after its clockwise-first corner
+  SEAT.forEach(sd => { B.push({t:'job', j:sd.corner, arrow:1}); sd.cells.slice().reverse().forEach(c => B.push(c)); });
   return B;
 })();
 const N_CELLS = BOARD.length;                                    // 56
 const START_CELLS = BOARD.map((c, i) => c.t === 'start' ? i : -1).filter(i => i >= 0);
-const CORNER_CELLS = BOARD.map((c, i) => c.t === 'job' ? i : -1).filter(i => i >= 0);
+const CORNER_CELLS = JOBS.map((_, j) => BOARD.findIndex(c => c.t === 'job' && c.j === j));   // corner of each occupation
 const ENTRANCE_OF = {};   // stock index -> board index of its meeting entrance
 BOARD.forEach((c, i) => { if (c.enter) ENTRANCE_OF[MEET_ROWS[c.enter.row].pair[c.enter.end]] = i; });
 
@@ -800,7 +786,7 @@ class Game {
   constructor(setup){
     const house = !!setup.house;          // house-rules opening: skip the working start
     this.st = {
-      v: 6,
+      v: 7,                                // save format: 7 = the photographed board
       house,
       rounds: setup.rounds || 0,           // timed sitting: richest after N rounds wins
       seed: setup.seed,
@@ -927,7 +913,7 @@ class Game {
     if (p.mode === 'meeting'){
       dir = p.meet.dir;
     } else if (BOARD[p.pos].t === 'start'){
-      dir = total % 2 === 0 ? 1 : -1;
+      dir = total % 2 === 1 ? 1 : -1;   // printed: ← ODD, EVEN →
       events.push({kind:'direction', dir, total});
       this.addLog(`${p.name} throws ${total} (${total % 2 === 0 ? 'even' : 'odd'}) and follows the ${dir > 0 ? 'clockwise' : 'counterclockwise'} arrow`);
     } else {
@@ -1467,14 +1453,17 @@ function cellRect(i){
 const SIDE = i => BOARD[i].t === 'job' ? 'corner' : i < 14 ? 'bottom' : i < 28 ? 'left' : i < 42 ? 'top' : 'right';
 const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+const CREAM = '#fbf7ea';
+const moveText = d => d > 0 ? '▲ UP ' + d : '▼ DOWN ' + Math.abs(d);
 function spaceLook(sp){
   switch (sp.t){
-    case 'co':      return {bg: STOCKS[sp.s].color, fg:'#fff', l1: STOCKS[sp.s].code,
-      l2: '$' + STOCKS[sp.s].div + ' DIV', l3: (sp.d > 0 ? '▲ UP ' + sp.d : '▼ DOWN ' + Math.abs(sp.d))};
-    case 'sellall': return {bg:'#22211f', fg:'#fff', l1:'SELL ALL', l2: STOCKS[sp.s].code, l3:'AT $' + STOCKS[sp.s].lo};
-    case 'payps':   return {bg:'#e9c46a', fg:'#22211f', l1:'PAY', l2:'$' + CFG.BROKER_PS + ' A SHARE', l3:(sp.d > 0 ? '▲ UP 20' : '▼ DOWN 20')};
-    case 'start':   return {bg:'#c73a63', fg:'#fff', l1:'START', l2:'PAY $' + CFG.START_FEE + ' FEE', l3:'ODD | EVEN'};
-    default:        return {bg:'#20573f', fg:'#fff', l1:'', l2:'', l3:''};
+    case 'co':      return {bg: STOCKS[sp.s].color, fg: STOCKS[sp.s].fg, l1: STOCKS[sp.s].code,
+      l2: '$' + STOCKS[sp.s].div + ' DIV', l3: moveText(sp.d)};
+    case 'sellall': return {bg: STOCKS[sp.s].color, fg: STOCKS[sp.s].fg, l1:'SELL ALL',
+      l2: STOCKS[sp.s].code + ' AT $' + STOCKS[sp.s].lo, l3: moveText(sp.d)};
+    case 'payps':   return {bg: CREAM, fg:'#22211f', l1:'PAY', l2:'BROKER FEE', l2b:'$' + CFG.BROKER_PS + ' PER SHARE', l3: moveText(sp.d)};
+    case 'start':   return {bg: CREAM, fg:'#22211f', l1:'START', l2:'PAY $' + CFG.START_FEE + ' FEE', l3:''};
+    default:        return {bg: CREAM, fg:'#22211f', l1:'', l2:'', l3:''};
   }
 }
 function describeSpace(i){
@@ -1500,7 +1489,7 @@ function buildBoard(){
   P.push(`<svg viewBox="0 0 ${BS} ${BS}" role="group" aria-label="Game board">`);
   P.push(`<defs>
     <radialGradient id="feltRim" cx="50%" cy="36%" r="90%">
-      <stop offset="0" stop-color="#27a496"/><stop offset=".55" stop-color="#1f8a80"/><stop offset="1" stop-color="#136058"/>
+      <stop offset="0" stop-color="#2f9a6e"/><stop offset=".55" stop-color="#238258"/><stop offset="1" stop-color="#155a3c"/>
     </radialGradient>
     <linearGradient id="stockSheen" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#fbf8ef"/><stop offset=".55" stop-color="#f7f3e8"/><stop offset="1" stop-color="#eee7d0"/>
@@ -1527,30 +1516,34 @@ function buildBoard(){
   //      with the indicator, four falling, around a white middle track
   //      marked UP / START / DOWN. One red bar reads them all at once. ----
   const cx = BS/2;
-  const QT = {y0: 246, y1: 758, gx0: 192, gx1: 808, midW: 88, colW: 66};
+  const QT = {y0: 336, y1: 716, gx0: 280, gx1: 720, midW: 80, colW: 45};
   QT.xs = STOCKS.map((_, i) => i < 4 ? QT.gx0 + i * QT.colW + QT.colW/2
                                      : cx + QT.midW/2 + (i - 4) * QT.colW + QT.colW/2);
   V.qt = QT;
   const yOf = m => QT.y1 - (m / CFG.M_MAX) * (QT.y1 - QT.y0);
-  // masthead printed both ways round, like a table game
-  P.push(`<text class="ctr-t" x="${cx}" y="806" font-size="22" text-anchor="middle">STOCK MARKET</text>`);
+  // the title printed for every seat: bottom, top (upside down), left and right (turned)
+  const mast = 'style="font:900 27px Archivo,sans-serif;letter-spacing:.02em;fill:#22211f" text-anchor="middle"';
+  P.push(`<text x="${cx}" y="766" ${mast}>STOCK MARKET</text>`);
+  P.push(`<text x="${cx}" y="243" ${mast} transform="rotate(180 ${cx} 234)">STOCK MARKET</text>`);
+  P.push(`<text x="252" y="${cx+9}" ${mast} transform="rotate(-90 252 ${cx})">STOCK MARKET</text>`);
+  P.push(`<text x="748" y="${cx+9}" ${mast} transform="rotate(90 748 ${cx})">STOCK MARKET</text>`);
   // table frame
   P.push(`<rect x="${QT.gx0-10}" y="${QT.y0-64}" width="${QT.gx1-QT.gx0+20}" height="${QT.y1-QT.y0+84}" fill="#fffdf6" stroke="#22211f" stroke-width="2.5"/>`);
   // the white middle track: UP at the top, DOWN at the bottom, START mid-scale
   P.push(`<rect x="${cx-QT.midW/2}" y="${QT.y0-64}" width="${QT.midW}" height="${QT.y1-QT.y0+84}" fill="#fff" stroke="#22211f" stroke-width="1.6"/>`);
-  P.push(`<text x="${cx}" y="${QT.y0-14}" text-anchor="middle" style="font:800 17px Archivo,sans-serif;letter-spacing:.2em;fill:#22211f">UP</text>`);
-  P.push(`<text x="${cx}" y="${QT.y1+16}" text-anchor="middle" style="font:800 17px Archivo,sans-serif;letter-spacing:.12em;fill:#22211f">DOWN</text>`);
-  P.push(`<text x="${cx}" y="${yOf(CFG.M_START)-7}" text-anchor="middle" style="font:800 10.5px Archivo,sans-serif;letter-spacing:.24em;fill:#c73a63">START</text>`);
+  P.push(`<text x="${cx}" y="${QT.y0-14}" text-anchor="middle" style="font:800 13px Archivo,sans-serif;letter-spacing:.2em;fill:#22211f">UP</text>`);
+  P.push(`<text x="${cx}" y="${QT.y1+15}" text-anchor="middle" style="font:800 13px Archivo,sans-serif;letter-spacing:.12em;fill:#22211f">DOWN</text>`);
+  P.push(`<text x="${cx}" y="${yOf(CFG.M_START)-6}" text-anchor="middle" style="font:800 8px Archivo,sans-serif;letter-spacing:.24em;fill:#c9372c">START</text>`);
   // columns: company header chips and every printed value of the ladder
   STOCKS.forEach((s, i) => {
     const x = QT.xs[i];
     P.push(`<rect x="${x-QT.colW/2+3}" y="${QT.y0-10}" width="${QT.colW-6}" height="${QT.y1-QT.y0+20}" fill="${s.color}" opacity=".3"/>`);
     P.push(`<rect x="${x-QT.colW/2+3}" y="${QT.y0-60}" width="${QT.colW-6}" height="44" fill="${s.color}" stroke="#22211f" stroke-width="1.4"/>`);
-    P.push(`<text x="${x}" y="${QT.y0-41}" text-anchor="middle" style="font:800 14px Archivo,sans-serif;fill:#fff">${s.code} ${s.rise?'▲':'▼'}</text>`);
-    P.push(`<text x="${x}" y="${QT.y0-26}" text-anchor="middle" style="font:800 8px Archivo,sans-serif;fill:#fff;opacity:.94">$${s.div} DIV</text>`);
+    P.push(`<text x="${x}" y="${QT.y0-40}" text-anchor="middle" style="font:800 10px Archivo,sans-serif;fill:${s.fg}">${s.code} ${s.rise?'▲':'▼'}</text>`);
+    P.push(`<text x="${x}" y="${QT.y0-27}" text-anchor="middle" style="font:800 6.5px Archivo,sans-serif;fill:${s.fg};opacity:.94">$${s.div} DIV</text>`);
     for (let m = 0; m <= CFG.M_MAX; m += 1){
       const par = m === CFG.M_START;
-      P.push(`<text x="${x}" y="${yOf(m)+2.8}" text-anchor="middle" style="font:${par?800:600} 8.4px 'Courier Prime',monospace;fill:${par?'#22211f':'#5a5142'}">${priceAt(i, m)}</text>`);
+      P.push(`<text x="${x}" y="${yOf(m)+2.2}" text-anchor="middle" style="font:${par?800:600} 6.8px 'Courier Prime',monospace;fill:${par?'#22211f':'#5a5142'}">${priceAt(i, m)}</text>`);
     }
   });
   // row ruling every five notches + the START line across the table
@@ -1563,42 +1556,64 @@ function buildBoard(){
   bar += `<rect x="${QT.gx0-10}" y="-8.5" width="${QT.gx1-QT.gx0+20}" height="17" fill="#e9c46a" opacity=".4"/>`;
   bar += `<line x1="${QT.gx0-10}" y1="-8.5" x2="${QT.gx1+10}" y2="-8.5" stroke="#22211f" stroke-width=".9" opacity=".55"/>`;
   bar += `<line x1="${QT.gx0-10}" y1="8.5" x2="${QT.gx1+10}" y2="8.5" stroke="#22211f" stroke-width=".9" opacity=".55"/>`;
-  bar += `<rect x="${cx-8}" y="-27" width="16" height="54" rx="3.5" fill="#22211f"/>`;
-  bar += `<rect x="${cx-27}" y="-7.5" width="54" height="15" rx="3" fill="#22211f"/>`;
-  bar += `<circle cx="${cx}" cy="0" r="3.2" fill="#bf3527"/>`;
+  bar += `<rect x="${cx-7}" y="-24" width="14" height="48" rx="3.5" fill="#22211f"/>`;
+  bar += `<rect x="${cx-24}" y="-7" width="48" height="14" rx="3" fill="#22211f"/>`;
+  bar += `<circle cx="${cx}" cy="0" r="3" fill="#bf3527"/>`;
   STOCKS.forEach((s, i) => {
-    bar += `<rect x="${QT.xs[i]-17}" y="-9.5" width="34" height="19" rx="3" fill="#fffdf6" stroke="#22211f" stroke-width="1.1"/>`;
-    bar += `<text id="qkt${i}" x="${QT.xs[i]}" y="4.2" text-anchor="middle" style="font:800 12px 'Courier Prime',monospace;fill:#22211f">${priceAt(i, CFG.M_START)}</text>`;
+    bar += `<rect x="${QT.xs[i]-15}" y="-8.5" width="30" height="17" rx="3" fill="#fffdf6" stroke="#22211f" stroke-width="1.1"/>`;
+    bar += `<text id="qkt${i}" x="${QT.xs[i]}" y="3.8" text-anchor="middle" style="font:800 10px 'Courier Prime',monospace;fill:#22211f">${priceAt(i, CFG.M_START)}</text>`;
   });
   bar += `</g>`;
   P.push(bar);
 
-  // ---- stockholders meeting rows: one detour track per side, running
-  //      between the two black-wedge entrances of a mirror pair ----
+  // ---- stockholders meetings: on every side a boxed two-row track between
+  //      the two entrance squares — a 1 FOR 1 beside each entrance on the
+  //      outer row, seven cells across the inner row, the sign between ----
   V.mcells = [];
   {
-    const MB = 56, ML = 52.5;   // band thickness, cell length
-    const geo = [
-      {o:'h', fixed: BS - CO - 8 - MB, from: 710, dir: -1},   // bottom side
-      {o:'v', fixed: CO + 8,           from: 710, dir: -1},   // left side
-      {o:'h', fixed: CO + 8,           from: 290, dir:  1},   // top side
-      {o:'v', fixed: BS - CO - 8 - MB, from: 290, dir:  1},   // right side
-    ];
+    const MB = 56;                                      // row thickness
     MEET_ROWS.forEach((row, ri) => {
-      const gz = geo[ri], cells = [];
-      const [pa, pb] = row.pair;
-      for (let k = 0; k < row.cells.length; k++){
-        const a = gz.from + gz.dir * (k + 1) * ML, b = gz.from + gz.dir * k * ML;
-        const lo = Math.min(a, b);
-        const rc = gz.o === 'h' ? {x: lo, y: gz.fixed, w: ML, h: MB}
-                                : {x: gz.fixed, y: lo, w: MB, h: ML};
+      const e0 = cellRect(ENTRANCE_OF[row.pair[0]]), e1 = cellRect(ENTRANCE_OF[row.pair[1]]);
+      const horiz = ri === 0 || ri === 2;               // bottom & top rows run along x
+      const cells = [];
+      // outer row hugs the track; inner row sits just inside it
+      const outer = ri === 0 ? [BS - CO - 4 - MB, BS - CO - 4] : ri === 2 ? [CO + 4, CO + 4 + MB]
+                  : ri === 1 ? [CO + 4, CO + 4 + MB] : [BS - CO - 4 - MB, BS - CO - 4];
+      const inner = ri === 0 || ri === 3 ? [outer[0] - 2 - MB, outer[0] - 2] : [outer[1] + 2, outer[1] + 2 + MB];
+      const along = r => horiz ? [r.x, r.x + r.w] : [r.y, r.y + r.h];
+      const a0 = along(e0), a1 = along(e1);
+      const dir = a1[0] > a0[0] ? 1 : -1;
+      const rectOf = (band, span) => horiz ? {x: Math.min(...span), y: band[0], w: Math.abs(span[1]-span[0]), h: MB}
+                                           : {x: band[0], y: Math.min(...span), w: MB, h: Math.abs(span[1]-span[0])};
+      const spans = [];
+      spans.push(rectOf(outer, a0));                                    // idx 0: 1 FOR 1 by entrance 0
+      for (let k = 1; k <= 7; k++){
+        const s0 = a0[0] + dir * (k - 1) * EW;
+        spans.push(rectOf(inner, [s0, s0 + EW]));                       // idx 1–7: the inner row
+      }
+      spans.push(rectOf(outer, a1));                                    // idx 8: 1 FOR 1 by entrance 1
+      // the black frame around the whole meeting
+      const xs = spans.map(r => r.x).concat(spans.map(r => r.x + r.w)), ys = spans.map(r => r.y).concat(spans.map(r => r.y + r.h));
+      const fx = Math.min(...xs), fy = Math.min(...ys), fw = Math.max(...xs) - fx, fh = Math.max(...ys) - fy;
+      P.push(`<rect x="${fx-3}" y="${fy-3}" width="${fw+6}" height="${fh+6}" fill="${CREAM}" stroke="#22211f" stroke-width="3"/>`);
+      spans.forEach((rc, k) => {
         cells.push({cx: rc.x + rc.w/2, cy: rc.y + rc.h/2});
         const ratio = row.cells[k];
-        P.push(`<rect x="${rc.x}" y="${rc.y}" width="${rc.w}" height="${rc.h}" fill="url(#${ratio === 3 ? 'meetCellHi' : 'meetCell'})" stroke="#22211f" stroke-width="1.5"/>`);
-        if (ratio === 3) P.push(`<rect x="${rc.x+3}" y="${rc.y+3}" width="${rc.w-6}" height="${rc.h-6}" fill="none" stroke="rgba(150,110,35,.5)" stroke-width="1"/>`);
-        P.push(`<text x="${rc.x+rc.w/2}" y="${rc.y+rc.h/2+1}" text-anchor="middle" style="font:800 11px Archivo,sans-serif;fill:#22211f">${ratio} FOR 1</text>`);
-        P.push(`<text x="${rc.x+rc.w/2}" y="${rc.y+rc.h/2+14}" text-anchor="middle" style="font:700 6.6px Archivo,sans-serif;letter-spacing:.06em;fill:#8c2318">${STOCKS[pa].code} · ${STOCKS[pb].code}</text>`);
-      }
+        P.push(`<rect x="${rc.x}" y="${rc.y}" width="${rc.w}" height="${rc.h}" fill="url(#${ratio === 3 ? 'meetCellHi' : 'meetCell'})" stroke="#22211f" stroke-width="1.4"/>`);
+        const rot = horiz ? 0 : (ri === 1 ? -90 : 90);
+        P.push(`<text x="${rc.x+rc.w/2}" y="${rc.y+rc.h/2+4}" text-anchor="middle" transform="rotate(${rot} ${rc.x+rc.w/2} ${rc.y+rc.h/2})" style="font:800 11.5px Archivo,sans-serif;fill:#22211f">${ratio} FOR 1</text>`);
+      });
+      // the sign in the outer row: whose dividends flow in from which end
+      const sign = rectOf(outer, [Math.min(a0[1], a1[1]) - (dir > 0 ? 0 : 0), 0]);
+      const lo = Math.min(a0[0], a0[1], a1[0], a1[1]), hi = Math.max(a0[0], a0[1], a1[0], a1[1]);
+      const mid = rectOf(outer, [lo + EW, hi - EW]);
+      const mx = mid.x + mid.w/2, my = mid.y + mid.h/2, rot = horiz ? 0 : (ri === 1 ? -90 : 90);
+      const [pa, pb] = row.pair;
+      const left = dir > 0 ? pa : pb, right = dir > 0 ? pb : pa;   // which company's end reads on the left
+      P.push(`<g transform="rotate(${rot} ${mx} ${my})">
+        <text x="${mx}" y="${my-1}" text-anchor="middle" style="font:800 10.5px Archivo,sans-serif;letter-spacing:.08em;fill:#2f7fa8">STOCKHOLDERS MEETING</text>
+        <text x="${mx}" y="${my+13}" text-anchor="middle" style="font:700 7px Archivo,sans-serif;letter-spacing:.04em;fill:#22211f">${STOCKS[left].code} STOCK DIVIDENDS ⟶ &nbsp;·&nbsp; ⟵ ${STOCKS[right].code} STOCK DIVIDENDS</text>
+      </g>`);
       V.mcells.push(cells);
     });
   }
@@ -1611,16 +1626,21 @@ function buildBoard(){
     if (side === 'corner'){
       // the corner occupations, straight off the board
       const j = JOBS[sp.j];
-      const cCol = ['#2a9d8f', '#3a7ca5', '#2456a0', '#c9a227'][sp.j];
-      P.push(`<rect x="${r.x+5}" y="${r.y+5}" width="${r.w-10}" height="${r.h-10}" fill="${cCol}" stroke="#22211f" stroke-width="1.5"/>`);
-      P.push(`<path d="M ${r.x+6.5} ${r.y+r.h-6.5} V ${r.y+6.5} H ${r.x+r.w-6.5}" fill="none" stroke="rgba(255,252,240,.3)" stroke-width="1.2"/>`);
-      P.push(`<path d="M ${r.x+r.w-6.5} ${r.y+6.5} V ${r.y+r.h-6.5} H ${r.x+6.5}" fill="none" stroke="rgba(25,16,7,.3)" stroke-width="1.2"/>`);
+      P.push(`<rect x="${r.x+3}" y="${r.y+3}" width="${r.w-6}" height="${r.h-6}" fill="${CREAM}" stroke="#22211f" stroke-width="1.5"/>`);
+      const gx = r.x + r.w/2, gy = r.y + 22;
+      const glyph = [
+        `<circle cx="${gx}" cy="${gy}" r="9" fill="#22211f"/><circle cx="${gx}" cy="${gy}" r="4.5" fill="${CREAM}"/><rect x="${gx-5}" y="${gy+7}" width="10" height="4" fill="#22211f"/>`,   // diver's helmet
+        `<rect x="${gx-10}" y="${gy-4}" width="20" height="13" rx="2" fill="#22211f"/><rect x="${gx-4}" y="${gy-8}" width="8" height="4" rx="1" fill="#22211f"/><rect x="${gx-1.2}" y="${gy-1}" width="2.4" height="7" fill="${CREAM}"/><rect x="${gx-3.5}" y="${gy+1.3}" width="7" height="2.4" fill="${CREAM}"/>`,   // doctor's bag
+        `<path d="M ${gx} ${gy-10} l 2.9 6.2 6.8 .8 -5 4.7 1.3 6.8 -6 -3.4 -6 3.4 1.3 -6.8 -5 -4.7 6.8 -.8 z" fill="#22211f"/>`,   // policeman's star
+        `<path d="M ${gx-9} ${gy-4} q 9 -7 18 0 l -1.6 2 q -7.4 -5 -14.8 0 z" fill="#22211f"/><rect x="${gx-1.3}" y="${gy-3}" width="2.6" height="14" fill="#22211f"/>`,   // prospector's pick
+      ][sp.j];
+      P.push(glyph);
       const words = j.t.toUpperCase().split(' ');
       words.forEach((w, k) => {
-        P.push(`<text x="${r.x+r.w/2}" y="${r.y+28+k*16}" text-anchor="middle" class="sp-big" style="fill:#fff;font-size:${words.length>2?12:14}px">${w}</text>`);
+        P.push(`<text x="${r.x+r.w/2}" y="${r.y+48+k*14}" text-anchor="middle" style="font:900 ${words.length>2?11:13}px Archivo,sans-serif;letter-spacing:.02em;fill:#22211f">${w}</text>`);
       });
-      P.push(`<text x="${r.x+r.w/2}" y="${r.y+r.h-30}" text-anchor="middle" style="font:800 10px Archivo,sans-serif;fill:#f7f3e8">${j.nums.join(' OR ')} PAYS</text>`);
-      P.push(`<text x="${r.x+r.w/2}" y="${r.y+r.h-14}" text-anchor="middle" style="font:800 13px Archivo,sans-serif;fill:#e9c46a">$${j.pay} SALARY</text>`);
+      P.push(`<text x="${r.x+r.w/2}" y="${r.y+r.h-22}" text-anchor="middle" style="font:800 9.5px Archivo,sans-serif;fill:#22211f">${j.nums.join(' OR ')} PAYS</text>`);
+      P.push(`<text x="${r.x+r.w/2}" y="${r.y+r.h-9}" text-anchor="middle" style="font:800 11px Archivo,sans-serif;fill:#22211f">$${j.pay} SALARY</text>`);
     } else {
       // solid vivid printed cells, three lines of type
       const lk = spaceLook(sp);
@@ -1628,10 +1648,11 @@ function buildBoard(){
       P.push(`<path d="M ${r.x+3.5} ${r.y+r.h-3.5} V ${r.y+3.5} H ${r.x+r.w-3.5}" fill="none" stroke="rgba(255,252,240,.3)" stroke-width="1"/>`);
       P.push(`<path d="M ${r.x+r.w-3.5} ${r.y+3.5} V ${r.y+r.h-3.5} H ${r.x+3.5}" fill="none" stroke="rgba(25,16,7,.3)" stroke-width="1"/>`);
       const px = r.x + r.w/2, pyMid = r.y + r.h/2;
-      const moveCol = /\u25b2/.test(lk.l3 || '') ? '#bff0c6' : '#ffd9cf';
-      P.push(`<text x="${px}" y="${pyMid-12}" text-anchor="middle" class="sp-label" style="font-size:12.5px;fill:${lk.fg}">${lk.l1}</text>`);
-      P.push(`<text x="${px}" y="${pyMid+3}" text-anchor="middle" class="sp-sub" style="font-size:8px;fill:${lk.fg};opacity:.94">${lk.l2}</text>`);
-      if (lk.l3) P.push(`<text x="${px}" y="${pyMid+18}" text-anchor="middle" class="sp-sub" style="font-size:8.6px;font-weight:800;fill:${sp.t==='payps'?'#22211f':sp.t==='start'?'#fff':moveCol}">${lk.l3}</text>`);
+      const l1Fill = sp.t === 'start' ? '#c9372c' : lk.fg;
+      P.push(`<text x="${px}" y="${pyMid-12}" text-anchor="middle" class="sp-label" style="font-size:${sp.t==='sellall'?10.5:12.5}px;fill:${l1Fill}">${lk.l1}</text>`);
+      P.push(`<text x="${px}" y="${pyMid+(lk.l2b?1:3)}" text-anchor="middle" class="sp-sub" style="font-size:${lk.l2b?7.2:8}px;fill:${lk.fg};opacity:.94">${lk.l2}</text>`);
+      if (lk.l2b) P.push(`<text x="${px}" y="${pyMid+10}" text-anchor="middle" class="sp-sub" style="font-size:6.6px;fill:${lk.fg};opacity:.94">${lk.l2b}</text>`);
+      if (lk.l3) P.push(`<text x="${px}" y="${pyMid+(lk.l2b?21:18)}" text-anchor="middle" class="sp-sub" style="font-size:8.6px;font-weight:800;fill:${lk.fg}">${lk.l3}</text>`);
       if (sp.t === 'co' && sp.enter !== undefined){
         // the black STOCKHOLDERS ENTER wedge on the cell's inner edge
         if (side === 'bottom')      P.push(`<path d="M ${r.x+8} ${r.y+3} h ${r.w-16} l -${(r.w-16)/2} 11 z" fill="#22211f"/>`);
@@ -1647,7 +1668,12 @@ function buildBoard(){
         const axp = px + (side === 'left' ? -(r.w/2-13) : side === 'right' ? (r.w/2-13) : 0);
         const ayp = pyMid + (side === 'bottom' ? (r.h/2-13) : side === 'top' ? -(r.h/2-13) : 0);
         [1, -1].forEach(sgn => {
-          P.push(`<path d="M ${axp + tan[0]*sgn*17} ${ayp + tan[1]*sgn*17} L ${axp + tan[0]*sgn*6 - tan[1]*5.5} ${ayp + tan[1]*sgn*6 - tan[0]*5.5} L ${axp + tan[0]*sgn*6 + tan[1]*5.5} ${ayp + tan[1]*sgn*6 + tan[0]*5.5} Z" fill="#fff" opacity=".95"/>`);
+          P.push(`<path d="M ${axp + tan[0]*sgn*17} ${ayp + tan[1]*sgn*17} L ${axp + tan[0]*sgn*6 - tan[1]*5.5} ${ayp + tan[1]*sgn*6 - tan[0]*5.5} L ${axp + tan[0]*sgn*6 + tan[1]*5.5} ${ayp + tan[1]*sgn*6 + tan[0]*5.5} Z" fill="#22211f"/>`);
+          // odd throws take the clockwise (+tan) arrow, even the other
+          const lx = axp + tan[0]*sgn*13 - tan[1]*(side === 'left' || side === 'right' ? 0 : 0);
+          const ly = ayp + tan[1]*sgn*13;
+          const off = (side === 'bottom') ? [0, 12] : (side === 'top') ? [0, -8] : (side === 'left') ? [14, 3] : [-14, 3];
+          P.push(`<text x="${lx + off[0]}" y="${ly + off[1]}" text-anchor="middle" style="font:800 6.6px Archivo,sans-serif;fill:#22211f">${sgn > 0 ? 'ODD' : 'EVEN'}</text>`);
         });
       } else if (sp.arrow){
         const dx = tan[0] * sp.arrow, dy = tan[1] * sp.arrow;
@@ -1991,7 +2017,7 @@ async function playEvents(events){
         renderPlayers(); break;
       }
       case 'direction':
-        toast(`${ev.total % 2 === 0 ? 'Even' : 'Odd'} throw — following the ${ev.dir > 0 ? 'even' : 'odd'} arrow off START`, 2200);
+        toast(`${ev.total % 2 ? 'Odd' : 'Even'} throw — off START the ${ev.total % 2 ? 'ODD' : 'EVEN'} way`, 2200);
         break;
       case 'startFee':
         Snd.fee(); cashFx(-ev.amt);
@@ -2067,7 +2093,7 @@ function stockRow(i, right){
   const par = priceAt(i, CFG.M_START);
   const rel = p > par ? `<span class="up">▲ above start</span>` : p < par ? `<span class="dn">▼ below start</span>` : 'on the start row';
   return `<div class="trow">
-    <span class="mono-chip" style="background:${s.color}">${s.code}</span>
+    <span class="mono-chip" style="background:${s.color};color:${s.fg}">${s.code}</span>
     <span class="ti"><b>${s.name}</b><small>${s.sector}</small></span>
     <span class="pr num">$${p}<small>${rel}</small></span>
     ${right || ''}
@@ -2085,7 +2111,7 @@ function dealPanel(box, sIdx, mode, after, limitQ){
   };
   box.innerHTML = `
     <div class="deal-card card-paper">
-      <div style="display:flex;justify-content:center;margin-bottom:8px"><span class="mono-chip" style="background:${s.color};width:46px;height:46px;font-size:14px">${s.code}</span></div>
+      <div style="display:flex;justify-content:center;margin-bottom:8px"><span class="mono-chip" style="background:${s.color};color:${s.fg};width:46px;height:46px;font-size:14px">${s.code}</span></div>
       <div class="deal-name">${s.name}</div>
       <div class="deal-sec">${s.sector} · ${mode === 'buy' ? 'Buying' : 'Selling'}</div>
       <div class="deal-price num">$${price()}<small> / share</small></div>
@@ -2160,8 +2186,8 @@ function sheetCompany(i){
       p ? ['Your holding', held + ' sh · ' + fmt(held * price)] : null,
     ].filter(Boolean);
     b.innerHTML = `
-      <div style="background:${s.color};border:2px solid #22211f;border-radius:10px;color:#fff;text-align:center;padding:22px 14px;margin-bottom:14px;box-shadow:inset 0 0 0 5px ${s.color},inset 0 0 0 6.5px rgba(255,255,255,.65)">
-        <div style="width:48px;height:48px;margin:0 auto 10px;border:2.5px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font:800 22px Georgia,serif">${s.code[0]}</div>
+      <div style="background:${s.color};border:2px solid #22211f;border-radius:10px;color:${s.fg};text-align:center;padding:22px 14px;margin-bottom:14px;box-shadow:inset 0 0 0 5px ${s.color},inset 0 0 0 6.5px rgba(255,255,255,.65)">
+        <div style="width:48px;height:48px;margin:0 auto 10px;border:2.5px solid ${s.fg};border-radius:50%;display:flex;align-items:center;justify-content:center;font:800 22px Georgia,serif">${s.code[0]}</div>
         <div style="font:800 21px Archivo,sans-serif;letter-spacing:.06em">${s.name.toUpperCase()}</div>
         <div style="font:700 10px Archivo,sans-serif;letter-spacing:.24em;opacity:.92;margin-top:5px">${s.sector.toUpperCase()}</div>
       </div>` +
@@ -2337,7 +2363,7 @@ function sheetLedger(){
       const val = p.shares[i] * g.st.prices[i];
       return `<div class="cert">
         <div class="cert-head">
-          <span class="mono-chip" style="background:${s.color}">${s.code}</span>
+          <span class="mono-chip" style="background:${s.color};color:${s.fg}">${s.code}</span>
           <span class="ti"><b style="font:800 13px Archivo,sans-serif">${s.name}</b><br><small style="font:600 10px Archivo,sans-serif;color:var(--ink-faint)">REGISTERED SHARE CERTIFICATES</small></span>
           <span class="cert-shares">${p.shares[i]} sh<br>@ $${g.st.prices[i]}</span>
         </div>
@@ -2411,7 +2437,7 @@ function sheetRules(){
       </ul>
       <h3>Going Broke</h3>
       <p>Can't cover a bill even after forced sales? Everything returns to the bank and you go back to work — earn your ${fmt(CFG.WORK_STAKE)} again and re-enter the market.</p>
-      <p class="fine">An original homage to the 1968 board-game classic, implemented from the rules printed inside the box lid (owner's transcription, rewritten here in our own words) and from photographs of the board. Square order, arrow directions and meeting-row values are reconstructed where the photographs could not be read. Company names are historical references. Not affiliated with the original publishers.</p>
+      <p class="fine">An original homage to the 1968 board-game classic: the rules follow the sheet printed inside the box lid (owner's transcription, rewritten here in our own words), and every square, arrow, entrance and meeting cell is transcribed from photographs of the board. Company names are historical references. Not affiliated with the original publishers.</p>
     </div>`;
   });
 }
@@ -2432,7 +2458,7 @@ async function animatePath(steps){
   if (inner) inner.setAttribute('transform', `scale(${baseScale * 1.3})`);
   for (const stp of steps){
     const c = stp.kind === 'meet'
-      ? (V.mcells[stp.row] || [])[Math.max(0, Math.min(7, stp.idx))]
+      ? (V.mcells[stp.row] || [])[Math.max(0, Math.min((V.mcells[stp.row] || []).length - 1, stp.idx))]
       : V.cells[stp.i];
     if (el && c) el.setAttribute('transform', `translate(${c.cx},${c.cy})`);
     Snd.hop();
@@ -2889,6 +2915,12 @@ function routeOnline(){
     if (NET.mySeat() >= 0 || s.host === NET.token){ enterLobby(); return true; }
     return false;
   }
+  if ((s.phase === 'playing' || s.phase === 'over') && s.game && s.game.v !== 7){
+    // a game from an older board edition: the table reforms in its lobby
+    s.phase = 'lobby'; s.game = null; s.note = 'The board was rebuilt from the photographs — new game forming';
+    if (NET.mySeat() >= 0 || s.host === NET.token){ enterLobby(); return true; }
+    return false;
+  }
   if ((s.phase === 'playing' || s.phase === 'over') && NET.mySeat() >= 0){ enterOnlineGame(); return true; }
   return false;
 }
@@ -3044,7 +3076,7 @@ function wire(){
     Snd.unlock();
     try{
       const sv = JSON.parse(read(SAVE_KEY));
-      if (!sv || !sv.st || sv.st.v !== 6) throw new Error('old save');
+      if (!sv || !sv.st || sv.st.v !== 7) throw new Error('old save');
       resumeGame(sv);
     }
     catch(e){ store(SAVE_KEY, null); toast('Saved game was from an older edition — starting fresh'); renderSeats(); showScr('setup'); }
@@ -3162,7 +3194,7 @@ function restoreOpts(){
 
 function refreshResume(){
   let has = false;
-  try{ const s = JSON.parse(read(SAVE_KEY)); has = !!(s && s.st && s.st.v === 6 && !s.st.over); }catch(e){}
+  try{ const s = JSON.parse(read(SAVE_KEY)); has = !!(s && s.st && s.st.v === 7 && !s.st.over); }catch(e){}
   $('btnResume').style.display = has ? '' : 'none';
 }
 
