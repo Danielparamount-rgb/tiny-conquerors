@@ -1,0 +1,36 @@
+{
+  "packageId": "com.paramountoutdoorliving.stockmarket1968",
+  "host": "danielparamount-rgb.github.io",
+  "name": "Stock Market 1968",
+  "launcherName": "Stock Market",
+  "display": "standalone",
+  "themeColor": "#0f2b21",
+  "navigationColor": "#0f2b21",
+  "backgroundColor": "#0f2b21",
+  "enableNotifications": true,
+  "startUrl": "/tiny-conquerors/market/",
+  "iconUrl": "https://danielparamount-rgb.github.io/tiny-conquerors/market/icon-512.png",
+  "maskableIconUrl": "https://danielparamount-rgb.github.io/tiny-conquerors/market/icon-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./android.keystore",
+    "alias": "stockmarket1968"
+  },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://danielparamount-rgb.github.io/tiny-conquerors/market/manifest.webmanifest",
+  "fullScopeUrl": "https://danielparamount-rgb.github.io/tiny-conquerors/market/",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "orientation": "default",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": []
+}

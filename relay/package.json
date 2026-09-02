@@ -4,7 +4,14 @@
   "private": true,
   "description": "Lockstep command relay for Tiny Conquerors. Rooms by code; forwards command blobs. No game logic.",
   "main": "server.js",
-  "engines": { "node": ">=18" },
-  "scripts": { "start": "node server.js" },
-  "dependencies": { "ws": "^8.18.0" }
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "web-push": "^3.6.7",
+    "ws": "^8.18.0"
+  }
 }

@@ -71,3 +71,60 @@ ownership again on arrival — belt and braces.)
 **It watches the hashes.** Peers post a state fingerprint every turn; the moment
 two disagree the whole room is told. A desync is a bug, and the players should
 find out in a second rather than after ten minutes of divergence.
+
+## Stock Market 1968 tables
+
+The same process also hosts the turn-based money game's online tables — an even
+simpler room type, kept deliberately separate from the lockstep rooms above.
+
+A **table** is a 4-letter code, an opaque state blob with a revision number, the
+people sitting at it (each phone identified by a token it remembers), and the last
+60 lines of table talk. Whoever finishes a turn posts the whole new state; the relay
+stores it and fans it out. It never looks inside the blob and has no rules in it.
+
+Tables live in memory and outlive their sockets (games span days); one untouched
+for two weeks is swept. Every phone keeps its own copy of the latest state, so when
+the free-tier service restarts the first phone back **re-seeds** the table under its
+old code and play carries on. If the relay comes back holding an older revision than
+a phone remembers, the newest copy wins.
+
+**client → server**
+
+| message | meaning |
+| --- | --- |
+| `{t:'tbHost', name, tok, code?, state?, rev?}` | open a table; with `code` + `state` it re-seeds one (a live code just sits you down) |
+| `{t:'tbJoin', code, name, tok}` | sit at a table by code |
+| `{t:'tbState', rev, state, notify?}` | publish revision `rev` (must be current + 1); `notify` lists `{tok, title, body, url}` pushes to send |
+| `{t:'tbChat', n, c, x}` | a line of table talk (name, colour, text) |
+| `{t:'tbPush', sub, tok?}` | remember a web-push subscription for a token (`null` forgets it) |
+| `{t:'tbLeave'}` | stand up (the seat stays yours) |
+
+**server → client**
+
+`{t:'tbJoined', code, rev, state, chat, members, push}`, `{t:'tbState', rev, state, by}`,
+`{t:'tbAck', rev}`, `{t:'tbStale', rev, state}` (your publish was behind — here is the live
+table), `{t:'tbChat', n, c, x, tm}`, `{t:'tbMembers', members:[{tok, name, on}]}`,
+`{t:'tbPushOk', ok}`, `{t:'err', msg, code}` (`code:'nosuch'` carries the table code so a
+phone with a copy can re-seed).
+
+Frames are capped at 256 KB; a table's state is refused above 200 KB.
+
+### "Your throw" notifications (web push)
+
+Push is off until the service carries VAPID keys. Generate a pair once —
+
+```bash
+cd relay && npm install && node vapid.mjs
+```
+
+— and set the three printed variables on the Render service (Environment):
+`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (a `mailto:` address). Never commit
+the private key. `GET /push-key` then returns the public key the app subscribes with; without
+keys it answers 404 and the app hides its notification switch. Only people sitting at the
+table can be notified, never the sender.
+
+### Tests
+
+`npm run test:tables` (from the repository root) spawns the relay on a spare port and checks
+host/join, revisions, stale detection, chat, presence, oversize refusal and re-seeding after
+a restart.

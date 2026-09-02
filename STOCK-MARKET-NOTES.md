@@ -63,8 +63,53 @@ The printed rules invite the table to set its own terms, and the game offers two
 - **Timed sitting** — no dollar target; after 20 full rounds the richest investor at the
   bell wins (the printed WINNING paragraph's "play for a specified time" variant).
 
-Both are available in local setup and to the online host in the lobby, and both survive
+- **Short game** — house opening, first to $25,000 *or* the richest after 15 rounds,
+  whichever comes first (a rounds cap and a target can now coexist).
+- **Partner play** — seats pair up (1&2, 3&4 …) and pool their worth: a side wins the moment
+  any partner comes to the dice with the pair's combined worth at the target. Needs an even
+  table of four or more.
+- **Presets** — Printed Rules ($100,000, work for your stake), Family Game ($50,000) and Short
+  Game set the options in one tap.
+
+All are available in local setup and to the online host in the lobby, and all survive
 save/resume.
+
+## Computer investors (v13)
+
+Five personalities can be seated, each with its own reserve, buying threshold, selling
+threshold and appetite for meetings: **Steady Hand**, **Bold Plunger**, **Dividend Hunter**
+(holds the $3–$4 payers), **Meeting Chaser** (a share at every entrance) and **Contrarian**
+(buys the floor, sells the first bounce). Three skill levels sit on top: *Easy* dithers and
+keeps cash, *Normal* plays the persona straight, *Hard* keeps the broker paid without floor
+sales, buys only with real headroom and sells the top of a column. Simulated at $50,000:
+easy tables run ~290 median turns, normal ~185, hard ~175. Computers also drop a line of
+table talk in character (a big buy, a good sale, a meeting jackpot, going broke), at most one
+every three turns each. `Autoplay to the End` lets the computer play every seat of a local
+game, with Stop handing the dice back at the next human throw.
+
+## Coach, referee, recap (v13)
+
+- **Coach** — nine one-time pointers through a first game (the first throw, pay day, the
+  arrows, the indicator, buying where you land, selling before the throw, meetings, the broker,
+  SELL ALL), each a callout anchored to the control it talks about. Settings can switch it off
+  or replay it; "Guided First Game" on the splash resets it.
+- **Referee** — tapping any square opens its printed face, what happens there, and what it
+  would do to *you* right now (where the indicator would go, the new price, your dividend or
+  fee); every line of the Ticker Wire carries a `?` that opens the rule it came from (the engine
+  tags each log line with a rule key, kept in `st.logWhy`).
+- **Recap** — the win card shows net worth turn by turn, the indicator's journey (`st.mHist`),
+  standings by side, the winner's story (best sale, realized gains and trades from a per-stock
+  cost basis), household records kept per name on the device, and a shareable recap card
+  (image via the Web Share API where available, text otherwise).
+
+## Settings & accessibility (v13)
+
+Sound, haptics, patterned pawns (eight SVG/CSS patterns so colour is never the only clue),
+large type (a 15 % zoom), left-handed controls (dice and buttons swap sides), coach tips,
+a reduce-motion override, and — on a relay table — turn notifications. Pawns carry spoken
+titles (name and square), the indicator announces its notch, and the board's squares were
+already labelled. A phone turned sideways gets two columns with the board sized to the height;
+tablets and desks get the board at full height.
 
 ## Documented vs. reconstructed
 
@@ -102,8 +147,21 @@ median table turns at the $50,000 target.
 
 ## Online play
 
-The published claude.ai artifact of this page supports true online multiplayer over the
-artifact runtime's self-publish capability: the page embeds the table state in a
+Two transports sit behind one `NET` interface.
+
+**Over the relay (the installed app, v13).** On any host that ships the manifest (the static
+deploy at `/market/`, an app shell, a dev server) the page talks to the Tiny Conquerors relay
+over a WebSocket: Host a Table gets a four-letter code, Join with a Code (or an invite link,
+`?table=CODE`) seats a friend, and after each turn the acting phone posts the whole table
+state, which the relay fans out live — no reloads, no edit access. Chat is its own stream.
+Every phone keeps a copy of the latest table; after a relay restart the first phone back
+re-seeds it under the same code. Seats are claimed by name and pawn as before; presence dots
+show who is connected. "Notify me on my turn" subscribes the phone to web push through the
+relay (Android and installed-to-Home-Screen iPhone), and the phone that ends a turn tells the
+relay whom to wake. Protocol and push setup: `relay/README.md`.
+
+**Over the artifact (the claude.ai page).** The published artifact of this page supports online
+multiplayer over the artifact runtime's self-publish capability: the page embeds the table state in a
 `#netState` JSON block, and after each human turn the acting phone publishes a new version
 of the page — every open view reloads to it. A lobby lets each device claim a seat (name
 and pawn color) identified by a per-device token in localStorage; computer turns are
@@ -126,8 +184,28 @@ copying `stock-market.html` after any change.
 ## Installable app
 
 `/market/` ships as a PWA: `manifest.webmanifest`, original icons (the red slider on its
-quotation track), and a service worker (`sw.js`, cache `sm68-v9` — bump per release) that
-serves the whole game offline, network-first for the page itself so updates land. The
+quotation track), and a service worker (`sw.js`, cache `sm68-v13` — bump per release) that
+serves the whole game offline, network-first for the page itself so updates land, and handles
+push (`push` shows the notification, `notificationclick` focuses or opens the table). The
 splash shows an Install button when the browser offers the prompt (Android/desktop Chrome)
 and an Add-to-Home-Screen hint on iPhone. The claude.ai artifact variant is body-only, so
 it carries no manifest and none of the install UI — guarded by a `HAS_MANIFEST` check.
+
+## Store packaging
+
+`app-shell/` scaffolds real store apps around the hosted PWA: a Bubblewrap `twa-manifest.json`
+for an Android Trusted Web Activity (with `app/.well-known/assetlinks.json` awaiting the signing
+fingerprint) and a Capacitor project for an iOS shell (`npm run sync` bundles `app/market`).
+`app-shell/README.md` walks through both builds and the store listings. Known limit: WKWebView
+has no Web Push, so the iOS shell would need APNs for turn notifications — the installed PWA
+and the Android TWA have them.
+
+## Verification (v13)
+
+Beyond the earlier suites: `test/tables.mjs` (12 relay checks, `npm run test:tables`), a
+two-phone relay simulation (12 checks: host/join by code, seats, a turn crossing the wire
+without a reload, chat, presence, invite link, return-to-table, relay restart healed by
+re-seeding, play continuing, host reset), and a 16-check feature suite (settings persistence,
+setup variants, partner play, the coach, the square sheet, the wire's `?`, autoplay, the recap
+and records, certificates, patterned pawns, spoken labels, landscape layout, table talk, the
+variant helpers, v7 saves resuming as v8, the desktop board with its corner figures).

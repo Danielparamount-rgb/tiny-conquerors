@@ -1,6 +1,6 @@
 /* Stock Market 1968 — service worker.
    Bump CACHE on each release so installed apps pick up the new build. */
-const CACHE = 'sm68-v12';
+const CACHE = 'sm68-v13';
 const CORE = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-180.png'];
 
 self.addEventListener('install', e => {
@@ -49,4 +49,24 @@ self.addEventListener('fetch', e => {
       return hit || net;
     })
   );
+});
+
+/* "your throw" — web push from the relay (see relay/README.md for the keys) */
+self.addEventListener('push', e => {
+  let d = {};
+  try{ d = e.data ? e.data.json() : {}; }catch(_){ d = {body: e.data ? e.data.text() : ''}; }
+  e.waitUntil(self.registration.showNotification(d.title || 'Stock Market 1968', {
+    body: d.body || '', tag: d.tag || 'sm68', renotify: true,
+    icon: './icon-192.png', badge: './icon-192.png',
+    data: {url: d.url || './'},
+  }));
+});
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const url = new URL((e.notification.data && e.notification.data.url) || './', self.location.href).href;
+  e.waitUntil(clients.matchAll({type: 'window', includeUncontrolled: true}).then(cs => {
+    const c = cs.find(x => 'focus' in x);
+    if (c){ try{ c.navigate(url); }catch(_){} return c.focus(); }
+    return clients.openWindow(url);
+  }));
 });

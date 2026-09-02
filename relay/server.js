@@ -34,6 +34,31 @@
  *     {t:'desync', turn, hashes}       the peers stopped agreeing
  *     {t:'err', msg}
  *     {t:'pong'}
+ *
+ * ---------------------------------------------------------------------------
+ * Stock Market 1968 tables. A second, even simpler room type for the turn-based
+ * money game: a table is a 4-letter code, an opaque state blob with a revision
+ * number, the people sitting at it (by a token their phone remembers), and a
+ * short chat history. Whoever finishes a turn posts the whole new state and
+ * everyone else receives it; the relay never looks inside the blob. Tables live
+ * in memory — every phone keeps its own copy of the latest state, so after a
+ * relay restart the first phone back re-seeds the table under the same code.
+ *
+ *   client -> server
+ *     {t:'tbHost', name, tok, code?, state?, rev?}   open a table (code+state = re-seed one)
+ *     {t:'tbJoin', code, name, tok}                   sit at a table by code
+ *     {t:'tbState', rev, state, notify?}              publish revision rev (= current + 1)
+ *     {t:'tbChat', n, c, x}                           a line of table talk
+ *     {t:'tbPush', sub, tok?}                         web-push subscription for a token (null clears)
+ *     {t:'tbLeave'}
+ *   server -> client
+ *     {t:'tbJoined', code, rev, state, chat, members, push}
+ *     {t:'tbState', rev, state, by}                   somebody else's new revision
+ *     {t:'tbAck', rev} | {t:'tbStale', rev, state}    your publish landed / was behind
+ *     {t:'tbChat', n, c, x, tm}
+ *     {t:'tbMembers', members:[{tok, name, on}]}
+ *     {t:'tbPushOk', ok}
+ *     {t:'err', msg, code}
  */
 
 const http = require('http');
@@ -43,7 +68,7 @@ const PORT = process.env.PORT || 8080;
 const MAX_SEATS = 8;
 const MAX_ROOMS = 200;
 const IDLE_MS = 30 * 60 * 1000;      // a room with nobody talking is swept
-const MAX_FRAME = 64 * 1024;         // a turn's commands are tiny; anything huge is a bug or an attack
+const MAX_FRAME = 256 * 1024;        // a turn's commands are tiny; a table's whole state is tens of KB; anything huge is a bug or an attack
 /* When somebody drops mid-battle their seat is handed to the computer. Every
    peer must do that on the SAME turn or the simulations part company, and only
    the relay knows the socket died — so the relay names the turn. It picks one
@@ -75,6 +100,74 @@ const MISSES_ALLOWED = 3;
 /* Room codes skip O/0/I/1/S/5 — these get read aloud and typed on phones. */
 const ALPHABET = 'ABCDEFGHJKLMNPQRTUVWXYZ23456789';
 const rooms = new Map();
+
+/* ------------------------------ tables ------------------------------ */
+const tables = new Map();                 // code -> table
+const MAX_TABLES = 500;
+const TABLE_IDLE_MS = 14 * 24 * 3600 * 1000;   // a table nobody has touched in two weeks is swept
+const TABLE_STATE_MAX = 200 * 1024;       // a long game's state is tens of KB; this is only an abuse cap
+const TABLE_CHAT_KEEP = 60;
+const pushSubs = new Map();               // token -> {sub, at}
+
+/* Web push, if the deployment carries VAPID keys (see README). Without them
+   every push call is a no-op and the client hides its notification switch. */
+let webpush = null;
+try { webpush = require('web-push'); } catch (_) { webpush = null; }
+const VAPID = {
+  pub: process.env.VAPID_PUBLIC_KEY || '',
+  priv: process.env.VAPID_PRIVATE_KEY || '',
+  subject: process.env.VAPID_SUBJECT || 'mailto:relay@example.com',
+};
+const pushReady = !!(webpush && VAPID.pub && VAPID.priv);
+if (pushReady) { try { webpush.setVapidDetails(VAPID.subject, VAPID.pub, VAPID.priv); } catch (_) {} }
+function pushTo(tok, payload) {
+  if (!pushReady) return;
+  const rec = pushSubs.get(tok);
+  if (!rec) return;
+  webpush.sendNotification(rec.sub, JSON.stringify(payload), { TTL: 24 * 3600 })
+    .catch((err) => {
+      // a subscription the browser has dropped comes back 404/410: forget it
+      if (err && (err.statusCode === 404 || err.statusCode === 410)) pushSubs.delete(tok);
+    });
+}
+function cleanTok(t) { return String(t == null ? '' : t).replace(/[^\w-]/g, '').slice(0, 40); }
+function cleanCode(c) { return String(c == null ? '' : c).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4); }
+function makeTableCode() {
+  for (let attempt = 0; attempt < 50; attempt++) {
+    let c = '';
+    for (let i = 0; i < 4; i++) c += ALPHABET[(Math.random() * ALPHABET.length) | 0];
+    if (!tables.has(c)) return c;
+  }
+  return null;
+}
+function membersView(tb) {
+  return { t: 'tbMembers', members: [...tb.members.values()].map((m) => ({ tok: m.tok, name: m.name, on: !!(m.ws && m.ws.readyState === 1) })) };
+}
+function tableCast(tb, obj, exceptWs) {
+  for (const m of tb.members.values()) if (m.ws && m.ws !== exceptWs) send(m.ws, obj);
+}
+function stateSize(state) {
+  try { return JSON.stringify(state === undefined ? null : state).length; } catch (_) { return Infinity; }
+}
+function seatAt(ws, tb, tok, name) {
+  let m = tb.members.get(tok);
+  if (m) { if (m.ws && m.ws !== ws) { try { m.ws.tbl = null; } catch (_) {} } m.ws = ws; m.name = name; }
+  else { m = { tok, name, ws, seen: Date.now() }; tb.members.set(tok, m); }
+  m.seen = Date.now();
+  ws.tbl = tb; ws.tok = tok;
+  tb.seen = Date.now();
+  send(ws, { t: 'tbJoined', code: tb.code, rev: tb.rev, state: tb.state, chat: tb.chat, push: pushReady, members: membersView(tb).members });
+  tableCast(tb, membersView(tb), ws);
+}
+function tableLeave(ws) {
+  const tb = ws.tbl;
+  if (!tb) return;
+  ws.tbl = null;
+  const m = tb.members.get(ws.tok);
+  if (m && m.ws === ws) { m.ws = null; m.seen = Date.now(); }
+  tb.seen = Date.now();
+  tableCast(tb, membersView(tb));
+}
 
 function makeCode() {
   for (let attempt = 0; attempt < 50; attempt++) {
@@ -190,6 +283,13 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'content-type': 'text/plain' });
     return res.end('ok');
   }
+  if (req.url === '/push-key') {
+    // the VAPID public key a browser needs to subscribe; 404 = push not configured here
+    if (req.method === 'OPTIONS') { res.writeHead(204, CORS); return res.end(); }
+    if (!pushReady) { res.writeHead(404, { ...CORS, 'content-type': 'application/json' }); return res.end('{"key":null}'); }
+    res.writeHead(200, { ...CORS, 'content-type': 'application/json' });
+    return res.end(JSON.stringify({ key: VAPID.pub }));
+  }
   if (req.url.startsWith('/daily')) {
     if (req.method === 'OPTIONS') { res.writeHead(204, CORS); return res.end(); }
     if (req.method === 'POST') {
@@ -243,7 +343,9 @@ const server = http.createServer((req, res) => {
   res.end(
     'Tiny Conquerors relay\n' +
     'rooms: ' + rooms.size + '\n' +
-    'players: ' + [...rooms.values()].reduce((n, r) => n + r.seats.filter(Boolean).length, 0) + '\n'
+    'players: ' + [...rooms.values()].reduce((n, r) => n + r.seats.filter(Boolean).length, 0) + '\n' +
+    'tables: ' + tables.size + '\n' +
+    'push: ' + (pushReady ? 'on' : 'off') + '\n'
   );
 });
 
@@ -455,13 +557,102 @@ wss.on('connection', (ws) => {
         return;
       }
 
+      /* ------------------------- Stock Market tables ------------------------- */
+      case 'tbHost': {
+        if (ws.tbl) return send(ws, { t: 'err', msg: 'already at a table', code: 'busy' });
+        const tok = cleanTok(m.tok);
+        if (!tok) return send(ws, { t: 'err', msg: 'no device token', code: 'bad' });
+        const name = cleanName(m.name);
+        let code = cleanCode(m.code);
+        if (code && code.length === 4 && tables.has(code)) {
+          // somebody re-seeded this table first (or it never went away): just sit down
+          return seatAt(ws, tables.get(code), tok, name);
+        }
+        if (tables.size >= MAX_TABLES) return send(ws, { t: 'err', msg: 'the relay is full — try again shortly', code: 'full' });
+        if (!code || code.length !== 4) code = makeTableCode();
+        if (!code) return send(ws, { t: 'err', msg: 'could not allocate a table', code: 'full' });
+        const state = m.state === undefined ? null : m.state;
+        if (stateSize(state) > TABLE_STATE_MAX) return send(ws, { t: 'err', msg: 'table state too large', code: 'big' });
+        const tb = { code, rev: Number.isInteger(m.rev) && m.rev >= 0 ? m.rev : 0, state, chat: [], members: new Map(), seen: Date.now(), created: Date.now() };
+        tables.set(code, tb);
+        return seatAt(ws, tb, tok, name);
+      }
+
+      case 'tbJoin': {
+        if (ws.tbl) return send(ws, { t: 'err', msg: 'already at a table', code: 'busy' });
+        const tok = cleanTok(m.tok);
+        if (!tok) return send(ws, { t: 'err', msg: 'no device token', code: 'bad' });
+        const code = cleanCode(m.code);
+        const tb = tables.get(code);
+        if (!tb) return send(ws, { t: 'err', msg: 'No table with that code', code: 'nosuch', table: code });
+        return seatAt(ws, tb, cleanTok(tok), cleanName(m.name));
+      }
+
+      case 'tbState': {
+        const tb = ws.tbl;
+        if (!tb) return send(ws, { t: 'err', msg: 'not at a table', code: 'notable' });
+        if (!Number.isInteger(m.rev)) return send(ws, { t: 'err', msg: 'bad revision', code: 'bad' });
+        if (m.rev !== tb.rev + 1) return send(ws, { t: 'tbStale', rev: tb.rev, state: tb.state });
+        if (stateSize(m.state) > TABLE_STATE_MAX) return send(ws, { t: 'err', msg: 'table state too large', code: 'big' });
+        tb.rev = m.rev; tb.state = m.state === undefined ? null : m.state; tb.seen = Date.now();
+        const mem = tb.members.get(ws.tok); if (mem) mem.seen = Date.now();
+        send(ws, { t: 'tbAck', rev: tb.rev });
+        tableCast(tb, { t: 'tbState', rev: tb.rev, state: tb.state, by: ws.tok }, ws);
+        // "your throw" pushes: only to people who sit at THIS table, never to the sender
+        if (Array.isArray(m.notify)) {
+          m.notify.slice(0, 8).forEach((n) => {
+            if (!n || typeof n !== 'object') return;
+            const tok = cleanTok(n.tok);
+            if (!tok || tok === ws.tok || !tb.members.has(tok)) return;
+            pushTo(tok, {
+              title: String(n.title == null ? 'Stock Market 1968' : n.title).slice(0, 60),
+              body: String(n.body == null ? '' : n.body).slice(0, 140),
+              tag: 'sm68-' + tb.code, url: typeof n.url === 'string' ? n.url.slice(0, 200) : '', code: tb.code,
+            });
+          });
+        }
+        return;
+      }
+
+      case 'tbChat': {
+        const tb = ws.tbl;
+        if (!tb) return;
+        const x = String(m.x == null ? '' : m.x).slice(0, 140).trim();
+        if (!x) return;
+        const line = {
+          n: cleanName(m.n), x, tm: Date.now(),
+          c: /^#[0-9a-fA-F]{6}$/.test(String(m.c || '')) ? m.c : '#8a7d63',
+        };
+        tb.chat.push(line);
+        while (tb.chat.length > TABLE_CHAT_KEEP) tb.chat.shift();
+        tb.seen = Date.now();
+        tableCast(tb, { t: 'tbChat', ...line });
+        return;
+      }
+
+      case 'tbPush': {
+        const tok = ws.tok || cleanTok(m.tok);
+        if (!tok) return send(ws, { t: 'tbPushOk', ok: false });
+        if (m.sub && typeof m.sub === 'object' && typeof m.sub.endpoint === 'string' && m.sub.endpoint.startsWith('https://')) {
+          pushSubs.set(tok, { sub: m.sub, at: Date.now() });
+          if (pushSubs.size > 5000) pushSubs.delete(pushSubs.keys().next().value);
+        } else {
+          pushSubs.delete(tok);
+        }
+        return send(ws, { t: 'tbPushOk', ok: pushReady });
+      }
+
+      case 'tbLeave':
+        tableLeave(ws);
+        return;
+
       default:
         return;
     }
   });
 
-  ws.on('close', () => leave(ws));
-  ws.on('error', () => leave(ws));
+  ws.on('close', () => { leave(ws); tableLeave(ws); });
+  ws.on('error', () => { leave(ws); tableLeave(ws); });
 });
 
 /* Dead sockets. Terminating one raises 'close', which is what actually runs
@@ -481,6 +672,10 @@ setInterval(() => {
   const now = Date.now();
   for (const [code, r] of rooms) {
     if (now - r.seen > IDLE_MS || r.seats.every((s) => !s)) rooms.delete(code);
+  }
+  // tables outlive their sockets by design (games span days); only true neglect sweeps them
+  for (const [code, tb] of tables) {
+    if (now - tb.seen > TABLE_IDLE_MS) tables.delete(code);
   }
 }, 30000);
 
