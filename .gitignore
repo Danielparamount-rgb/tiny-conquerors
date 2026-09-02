@@ -21,3 +21,13 @@ blender/bsheets/
 blender/sheets-hd/
 blender/hd-render.log
 blender/hd-render.err
+
+# app-store shells: keystores and generated projects stay local
+app-shell/*.keystore
+app-shell/app/
+app-shell/build/
+app-shell/*.log
+app-shell/capacitor/node_modules/
+app-shell/capacitor/www/
+app-shell/capacitor/ios/
+app-shell/capacitor/android/

@@ -37,8 +37,16 @@ the race to $100,000. 2–8 investors (pass-and-play humans and/or computer oppo
 phone-first, single self-contained file, autosaves locally. Deployable copy lives at
 `app/market/index.html` (served at <https://danielparamount-rgb.github.io/tiny-conquerors/market/>). Installable as its own
 app — open `/market/` on a phone and use the Install button (Android) or Share → Add to
-Home Screen (iPhone); it runs full-screen with its own icon and works offline. Design and
-provenance notes: `STOCK-MARKET-NOTES.md`.
+Home Screen (iPhone); it runs full-screen with its own icon and works offline.
+
+**Play online:** on the installed app, Host a Table, read out the four-letter code (or Share
+Invite), and friends join from their own phones — turns cross the relay live, with chat and
+"your throw" notifications (once the relay carries push keys, see `relay/README.md`). Five
+computer personalities at three skill levels, partner play, a short game, a guided first game,
+a tap-anywhere rule referee, a recap card and household records, and settings for large type,
+patterned pawns, left-handed controls and reduced motion. Store packaging (Android TWA and an
+iOS Capacitor shell) is scaffolded under `app-shell/`. Design and provenance notes:
+`STOCK-MARKET-NOTES.md`.
 
 ## Art and audio
 

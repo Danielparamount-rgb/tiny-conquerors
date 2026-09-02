@@ -454,6 +454,110 @@ svg{display:block}
   .ctr-m{font-size:11px}
 }
 .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ============================ v13 ============================ */
+/* large type: the whole page zooms like the browser's own control */
+html.big{zoom:1.15}
+html.rm *{animation:none!important;transition:none!important}
+html.big .log-line,html.big .chat-line{font-size:13.5px}
+/* left-handed: the dice and the main buttons swap to the left thumb */
+html.lefty .dock-row,html.lefty .dock-btns,html.lefty #chatForm{flex-direction:row-reverse}
+html.lefty #topbar{flex-direction:row-reverse}
+/* the coach's callout, anchored to whatever it is talking about */
+#coach{position:fixed;z-index:66;width:min(300px,86vw);padding:14px 14px 12px;display:none;text-align:left}
+#coach.on{display:block;animation:coachIn .3s cubic-bezier(.3,1.3,.5,1)}
+@keyframes coachIn{from{opacity:0;transform:translateY(8px) scale(.96)}}
+@media (prefers-reduced-motion:reduce){#coach.on{animation:none}}
+#coach .ck{font:800 10px/1 var(--grot);letter-spacing:.28em;color:var(--red);text-transform:uppercase;margin-bottom:6px}
+#coach .ct{font-family:var(--serif-slab);font-size:17px;line-height:1.15;margin-bottom:6px}
+#coach .cb{font:600 13px/1.5 var(--grot);color:var(--ink-soft)}
+#coach .cf{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px}
+#coach .cf small{font:600 10px var(--grot);color:var(--ink-faint);letter-spacing:.1em;text-transform:uppercase}
+#coach::before{content:"";position:absolute;width:16px;height:16px;background:var(--paper);border:2px solid var(--ink);
+  border-right:none;border-bottom:none;transform:rotate(45deg);left:var(--ax,50%);margin-left:-8px;top:-10px}
+#coach.below::before{top:auto;bottom:-10px;border:2px solid var(--ink);border-left:none;border-top:none}
+#coach.noarrow::before{display:none}
+.coach-ring{outline:4px solid var(--gold-hi)!important;outline-offset:3px;border-radius:8px;animation:ring 1.2s infinite}
+@keyframes ring{50%{outline-color:transparent}}
+@media (prefers-reduced-motion:reduce){.coach-ring{animation:none}}
+/* table code + presence (relay tables) */
+.code-box{display:flex;flex-direction:column;align-items:center;gap:6px;margin:4px 0 12px;padding:10px;border:2px dashed var(--rule);border-radius:10px}
+.code-lbl{font:700 10px/1 var(--grot);letter-spacing:.28em;text-transform:uppercase;color:var(--ink-faint)}
+.code-val{font:700 42px/1 var(--mono);letter-spacing:.32em;color:var(--red);padding-left:.32em;user-select:all}
+.code-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:4px}
+.presence{display:inline-block;width:9px;height:9px;border-radius:50%;background:#9b8f76;margin-right:5px;vertical-align:1px;border:1px solid rgba(0,0,0,.35)}
+.presence.on{background:#2e9e5e}
+#joinCode{width:100%;text-align:center;font:700 30px/1 var(--mono);letter-spacing:.3em;text-transform:uppercase;background:var(--paper);border:2px solid var(--ink);border-radius:8px;padding:12px 10px 12px .3em;margin:8px 0 12px}
+/* the referee's "why" on every wire line */
+.log-line{display:flex;gap:7px;align-items:flex-start}
+.log-line>span{flex:1;min-width:0}
+.why{flex:none;width:22px;height:22px;border-radius:50%;border:1.5px solid var(--green);color:var(--green);font:800 12px/1 var(--grot);display:inline-flex;align-items:center;justify-content:center;background:transparent}
+.why:active{background:var(--green);color:var(--paper)}
+.sq-print{margin:0 auto 12px;width:126px;height:126px;border:2px solid #22211f;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-align:center;padding:6px;
+  box-shadow:inset 0 0 0 3px rgba(255,252,240,.35),0 3px 10px rgba(0,0,0,.2)}
+.sq-print b{font:800 15px/1.1 var(--grot);letter-spacing:.02em}
+.sq-print small{font:700 9.5px/1.3 var(--grot);letter-spacing:.04em}
+/* settings rows */
+.set-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid var(--rule);width:100%;text-align:left;font-family:inherit}
+.set-row .st{flex:1;min-width:0}
+.set-row b{font:800 14px/1.2 var(--grot);color:var(--ink);display:block}
+.set-row small{display:block;font:600 11px/1.4 var(--grot);color:var(--ink-faint);margin-top:2px}
+.switch{flex:none;width:54px;height:32px;border-radius:16px;border:2px solid var(--ink);background:var(--paper-lo);position:relative;transition:background .15s}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:24px;height:24px;border-radius:50%;background:var(--ink);transition:transform .15s}
+.switch[aria-checked="true"]{background:var(--green-hi)}
+.switch[aria-checked="true"]::after{transform:translateX(22px);background:var(--paper)}
+@media (prefers-reduced-motion:reduce){.switch,.switch::after{transition:none}}
+/* partner badges + AI style on chips */
+.pchip .tm{font:800 9px/1 var(--grot);background:var(--gold);color:var(--ink);border-radius:3px;padding:2px 4px;letter-spacing:.06em}
+.seat .persona{flex:none;max-width:44%;font-size:13px;min-height:44px;background:var(--paper);border:2px solid var(--ink);border-radius:6px;padding:6px 6px;font-weight:700}
+.preset-row{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:10px}
+.preset-row .btn{min-height:38px;padding:6px 12px;font-size:11.5px}
+/* printed-look share certificates */
+.cert{padding:0;overflow:hidden;border-radius:4px;background:#f6efd8;box-shadow:none;border:1px solid var(--ink)}
+.cert-in{margin:5px;border:3px double var(--ink);padding:9px 10px 8px;position:relative;
+  background:repeating-linear-gradient(45deg,rgba(32,87,63,.055) 0 2px,transparent 2px 7px),
+             repeating-linear-gradient(-45deg,rgba(32,87,63,.055) 0 2px,transparent 2px 7px),#f6efd8}
+.cert-in::before{content:"";position:absolute;inset:3px;border:1px solid rgba(32,87,63,.5);pointer-events:none}
+.cert-kick{font:800 8.5px/1 var(--grot);letter-spacing:.3em;text-transform:uppercase;color:var(--green);text-align:center;margin-bottom:5px}
+.cert-name{font-family:var(--serif-slab);font-size:15px;text-align:center;line-height:1.1;color:var(--ink)}
+.cert-sub{font:600 8.5px/1.4 var(--grot);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);text-align:center;margin:2px 0 7px}
+.cert-body{display:flex;align-items:center;gap:9px}
+.cert-seal{flex:none;width:52px;height:52px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font:800 13px/1 var(--mono);color:#fff;border:2px solid rgba(0,0,0,.35);
+  box-shadow:inset 0 0 0 3px rgba(255,255,255,.35);text-shadow:0 1px 1px rgba(0,0,0,.35);
+  background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.35),transparent 55%),var(--c,#20573f)}
+.cert-seal.dk{color:#3a332a;text-shadow:none}
+.cert-body .ti{flex:1;min-width:0;font:600 10.5px/1.55 var(--grot);color:var(--ink-soft)}
+.cert-body .ti b{font-family:var(--mono);color:var(--ink);font-weight:700}
+.cert-serial{font:600 8.5px/1 var(--mono);color:var(--ink-faint);letter-spacing:.08em;text-align:right;margin-top:6px}
+.cert .cert-foot{margin:8px 6px 6px}
+/* recap */
+.stand{display:flex;align-items:center;gap:8px;font:600 13px/2 var(--grot);border-bottom:1px dotted var(--rule)}
+.stand .rk{font:800 11px var(--mono);color:var(--ink-faint);width:16px;text-align:right}
+.stand .nw{margin-left:auto;font:700 13px var(--mono)}
+.stand .dot{width:12px;height:12px;border-radius:50%;border:1.5px solid rgba(0,0,0,.4);flex:none}
+#chart2{width:100%;height:60px;margin:0 0 8px}
+.recap-h{font:800 10px/1 var(--grot);letter-spacing:.24em;text-transform:uppercase;color:var(--green);margin:12px 0 4px;text-align:left}
+.win-stats{max-width:360px}
+/* the table full-size on tablets and desks; two columns on a phone turned sideways */
+@media (min-width:920px){#boardWrap{max-width:min(100%,calc(100dvh - 150px));margin:0 auto}}
+@media (max-width:919px) and (orientation:landscape) and (min-width:600px){
+  #main{flex-direction:row;align-items:flex-start;gap:10px;padding:2px 10px 6px}
+  #colBoard{flex:none;width:min(46vw,calc(100dvh - 140px))}
+  #boardWrap{max-width:none;margin:0}
+  #colSide{flex:1;min-width:0}
+  #folio{flex-wrap:wrap}
+  #log{display:block}
+  .sp-label{font-size:11px!important}
+  /* the dock folds into one row so the board keeps the height */
+  .dock-in{flex-direction:row;align-items:center;gap:10px}
+  #players{flex:1;min-width:0}
+  .dock-row{flex:1.3;min-width:0}
+  #hint{font-size:12px;min-height:0}
+  .dock-btns{flex:none;width:230px}
+  .dock-btns .btn{min-height:40px;font-size:12px}
+  #dock{padding-top:6px;padding-bottom:calc(6px + env(safe-area-inset-bottom))}
+  #colBoard{width:min(46vw,calc(100dvh - 118px))}
+}
 </style>
 <!-- ============================ SPLASH ============================ -->
 <div id="splash" class="scr on">
@@ -475,13 +579,22 @@ svg{display:block}
       <button class="btn" id="btnNew" style="min-width:230px">New Game</button>
       <button class="btn gold" id="btnResume" style="min-width:230px;display:none">Resume Game</button>
       <button class="btn alt small" id="btnRules0">How to Play</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+        <button class="btn alt small" id="btnSettings0">Settings</button>
+        <button class="btn alt small" id="btnRecords0">Records</button>
+        <button class="btn alt small" id="btnCoach0">Guided First Game</button>
+      </div>
       <button class="btn gold small" id="btnInstall" style="display:none">Install the App</button>
     </div>
     <p id="iosHint" class="homage" style="display:none">Make it an app: tap Share, then “Add to Home Screen”.</p>
     <div id="onlineCard" style="display:none;margin-top:18px;border-top:1px solid var(--rule);padding-top:14px">
       <p class="lid-sub" style="margin-bottom:10px">Online — one table, everyone’s phone</p>
-      <button class="btn red" id="btnOnline" style="min-width:230px">Host a Table</button>
-      <button class="btn alt small" id="btnOnline2" style="display:none;margin-top:8px">New Table — Back to the Lobby</button>
+      <div style="display:flex;flex-direction:column;gap:8px;align-items:center">
+        <button class="btn red" id="btnOnline" style="min-width:230px">Host a Table</button>
+        <button class="btn gold" id="btnJoin" style="min-width:230px;display:none">Join with a Code</button>
+        <button class="btn alt small" id="btnReturnTbl" style="display:none">Return to Table</button>
+        <button class="btn alt small" id="btnOnline2" style="display:none">New Table — Back to the Lobby</button>
+      </div>
       <p id="onlineHint" class="homage" style="margin-top:10px"></p>
     </div>
     <p class="homage">An original homage to the 1968 board-game classic. Not affiliated with the original publishers. Company names are historical references.</p>
@@ -497,6 +610,11 @@ svg{display:block}
     <div style="text-align:center;margin-top:10px">
       <button class="btn alt small" id="btnAddSeat">+ Add Investor</button>
     </div>
+    <div class="preset-row" aria-label="Table presets">
+      <button class="btn alt" data-preset="printed">Printed Rules</button>
+      <button class="btn alt" data-preset="family">Family Game</button>
+      <button class="btn alt" data-preset="short">Short Game</button>
+    </div>
     <div class="setup-row">
       <label for="optOpen">Opening</label>
       <select id="optOpen">
@@ -510,7 +628,23 @@ svg{display:block}
         <option value="100000">$100,000 — the classic marathon</option>
         <option value="50000" selected>$50,000 — the family game</option>
         <option value="25000">$25,000 — a quick flutter</option>
+        <option value="25000r15">Short — $25,000 or 15 rounds, whichever first</option>
         <option value="timed20">Timed — 20 rounds, richest wins</option>
+      </select>
+    </div>
+    <div class="setup-row">
+      <label for="optLevel">Computer skill</label>
+      <select id="optLevel">
+        <option value="easy">Easy — dithers and keeps cash</option>
+        <option value="normal" selected>Normal</option>
+        <option value="hard">Hard — pays its fees, sells the tops</option>
+      </select>
+    </div>
+    <div class="setup-row">
+      <label for="optTeams">Partners</label>
+      <select id="optTeams">
+        <option value="none" selected>Everyone for themselves</option>
+        <option value="pairs">Pairs — seats 1&amp;2, 3&amp;4… pool their worth</option>
       </select>
     </div>
     <div class="setup-row">
@@ -533,6 +667,7 @@ svg{display:block}
   <div class="setup-card card-paper">
     <h2 class="setup-h">The Table Is Set</h2>
     <p class="setup-sub" id="lobbySub">Claim a seat — the game starts when the host opens the market</p>
+    <div id="lobbyCode"></div>
     <div id="lobbySeats"></div>
     <div class="setup-row" id="lobbyHostRow" style="display:none">
       <label for="lobbyTarget">Win at</label>
@@ -540,6 +675,7 @@ svg{display:block}
         <option value="100000">$100,000 — the classic marathon</option>
         <option value="50000" selected>$50,000 — the family game</option>
         <option value="25000">$25,000 — a quick flutter</option>
+        <option value="25000r15">Short — $25,000 or 15 rounds</option>
         <option value="timed20">Timed — 20 rounds, richest wins</option>
       </select>
     </div>
@@ -548,6 +684,21 @@ svg{display:block}
       <select id="lobbyOpen">
         <option value="classic" selected>Classic — work for your first $1,000</option>
         <option value="house">House rules — $1,000 + 1 share of each</option>
+      </select>
+    </div>
+    <div class="setup-row" id="lobbyHostRow3" style="display:none">
+      <label for="lobbyLevel">Computer skill</label>
+      <select id="lobbyLevel">
+        <option value="easy">Easy</option>
+        <option value="normal" selected>Normal</option>
+        <option value="hard">Hard</option>
+      </select>
+    </div>
+    <div class="setup-row" id="lobbyHostRow4" style="display:none">
+      <label for="lobbyTeams">Partners</label>
+      <select id="lobbyTeams">
+        <option value="none" selected>Everyone for themselves</option>
+        <option value="pairs">Pairs — seats 1&amp;2, 3&amp;4… pool their worth</option>
       </select>
     </div>
     <div class="setup-actions">
@@ -616,8 +767,20 @@ svg{display:block}
 <div id="menuPop" class="card-paper">
   <button class="btn alt small" id="mRules">How to Play</button>
   <button class="btn alt small" id="mLog">Ticker Wire</button>
+  <button class="btn alt small" id="mSettings">Settings</button>
+  <button class="btn alt small" id="mRecords">Records</button>
+  <button class="btn alt small" id="mAuto" style="display:none">Autoplay to the End</button>
+  <button class="btn alt small" id="mNotify" style="display:none">Notify Me on My Turn</button>
   <button class="btn alt small" id="mTable" style="display:none">New Table (Lobby)</button>
   <button class="btn alt small" id="mQuit">Abandon Game</button>
+</div>
+
+<!-- the coach's callout -->
+<div id="coach" class="card-paper" role="dialog" aria-live="polite">
+  <div class="ck" id="coachKick">Coach</div>
+  <div class="ct" id="coachTitle"></div>
+  <div class="cb" id="coachBody"></div>
+  <div class="cf"><small id="coachStep"></small><button class="btn small gold" id="coachOk">Got it</button></div>
 </div>
 
 <!-- generic bottom sheet -->
@@ -648,9 +811,20 @@ svg{display:block}
     <div class="win-kick">The Market Has Closed</div>
     <div class="win-name" id="winName"></div>
     <div class="win-sum" id="winSum"></div>
+    <div class="recap-h">Net worth, turn by turn</div>
     <canvas id="chart"></canvas>
+    <div class="recap-h">The indicator's journey</div>
+    <canvas id="chart2"></canvas>
+    <div class="recap-h">Standings</div>
+    <div id="winStand" style="max-width:360px;margin:0 auto 6px"></div>
+    <div class="recap-h">The winner's story</div>
     <div class="win-stats" id="winStats"></div>
+    <div class="recap-h">Household records</div>
+    <div id="winRecords" style="max-width:360px;margin:0 auto 14px"></div>
     <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+      <button class="btn alt small" id="btnShare">Share the Recap</button>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:10px">
       <button class="btn" id="btnAgain">Play Again</button>
       <button class="btn alt" id="btnToSplash">Main Menu</button>
     </div>
@@ -785,19 +959,23 @@ function makeRng(seed){ let a = seed >>> 0;
 class Game {
   constructor(setup){
     const house = !!setup.house;          // house-rules opening: skip the working start
+    const teams = Array.isArray(setup.teams) && setup.teams.length === setup.players.length ? setup.teams.slice() : null;
     this.st = {
-      v: 7,                                // save format: 7 = the photographed board
+      v: 8,                                // save format: 8 = v13 (7 = the photographed board, read with backfill)
       house,
-      rounds: setup.rounds || 0,           // timed sitting: richest after N rounds wins
+      rounds: setup.rounds || 0,           // a rounds cap: richest side after N rounds wins (alone = a timed sitting)
+      level: LEVELS[setup.level] ? setup.level : 'normal',   // computer skill
+      teams,                               // partner play: team id per seat, or null
       seed: setup.seed,
       rngN: 0,
       target: setup.target === 0 ? 0 : (setup.target || CFG.WIN),
       speed: setup.speed || 'normal',
       M: CFG.M_START,
+      mHist: [CFG.M_START],                // the indicator after every turn — the recap chart
       prices: STOCKS.map((_, i) => priceAt(i, CFG.M_START)),
       players: setup.players.map((p, i) => ({
         name: p.name, ai: !!p.ai, color: p.color || PAWN_COLORS[i],
-        persona: p.ai ? (i % 3) : -1,
+        persona: p.ai ? (Number.isInteger(p.persona) && p.persona >= 0 ? p.persona % PERSONAS.length : i % PERSONAS.length) : -1,
         mode: house ? 'market' : 'work',     // work | market | meeting
         job: i % 4,                          // occupation while at work (and if broke)
         cash: house ? CFG.WORK_STAKE : 0,
@@ -805,14 +983,16 @@ class Game {
         meet: null,                          // {row, idx, dir, stock} while in a meeting
         entering: house,                     // placed on a START square this turn
         shares: STOCKS.map(() => house ? 1 : 0),
-        stats: {earned:0, spentFees:0, divs:0, meetShares:0, bestTrade:0, broke:0},
+        basis: STOCKS.map((_, k) => house ? priceAt(k, CFG.M_START) : 0),   // cost of the shares held (realised gains)
+        stats: {earned:0, spentFees:0, divs:0, meetShares:0, bestTrade:0, broke:0,
+                trades:0, bought:0, realized:0, bestGain:0, worstGain:0, bestSale:null},
         nwHist: [0],
       })),
       turn: 0, phase: 'idle',                // idle → moving → done
       pending: null,                          // landing choices {kind:'buy', s, limit, bought, canEnter}
       mv: null,                               // in-flight movement
       dice: [0,0], turnCount: 0,
-      log: [], over: false, winner: -1,
+      log: [], logWhy: [], over: false, winner: -1,
     };
     this._rng = makeRng(this.st.seed);
     for (let i = 0; i < this.st.rngN; i++) this._rng();
@@ -820,6 +1000,17 @@ class Game {
 
   static fromSave(s){
     const g = Object.create(Game.prototype);
+    // a v7 save (the same board) reads straight in: fill what v13 added
+    if (!s.mHist) s.mHist = [s.M];
+    if (!s.logWhy) s.logWhy = (s.log || []).map(() => '');
+    if (!LEVELS[s.level]) s.level = 'normal';
+    if (s.teams === undefined) s.teams = null;
+    (s.players || []).forEach((p, i) => {
+      if (!p.basis) p.basis = STOCKS.map(() => 0);
+      p.stats = Object.assign({trades:0, bought:0, realized:0, bestGain:0, worstGain:0, bestSale:null}, p.stats || {});
+      if (p.ai && !(p.persona >= 0)) p.persona = i % PERSONAS.length;
+    });
+    s.v = 8;
     g.st = s;
     g._rng = makeRng(s.seed);
     for (let i = 0; i < s.rngN; i++) g._rng();
@@ -832,16 +1023,45 @@ class Game {
   cur(){ return this.st.players[this.st.turn]; }
   price(i){ return this.st.prices[i]; }
   netWorth(p){ return p.cash + p.shares.reduce((a, n, i) => a + n * this.st.prices[i], 0); }
-  addLog(msg){ this.st.log.push(msg); if (this.st.log.length > 120) this.st.log.shift(); }
+  /* every line of the wire carries the rule it comes from (the referee's "why") */
+  addLog(msg, why){
+    const st = this.st;
+    st.log.push(msg); st.logWhy.push(why || '');
+    while (st.log.length > 120){ st.log.shift(); st.logWhy.shift(); }
+  }
+  /* partner play: a side is a seat, or the seats that share its team */
+  teamOf(i){ return this.st.teams ? this.st.teams[i] : null; }
+  sideSeats(i){
+    const t = this.teamOf(i);
+    if (t === null || t === undefined) return [i];
+    return this.st.players.map((_, k) => k).filter(k => this.st.teams[k] === t);
+  }
+  sideWorth(i){ return this.sideSeats(i).reduce((a, k) => a + this.netWorth(this.st.players[k]), 0); }
+  sideName(i){ return this.sideSeats(i).map(k => this.st.players[k].name).join(' & '); }
+  /* selling shares at a price: cash in, cost basis out, the gain remembered */
+  _realize(p, s, q, price){
+    const held = p.shares[s];
+    const avg = held > 0 ? p.basis[s] / held : 0;
+    const gain = Math.round(q * (price - avg));
+    p.basis[s] = Math.max(0, p.basis[s] - q * avg);
+    p.shares[s] -= q; p.cash += q * price;
+    p.stats.realized += gain;
+    if (gain > p.stats.bestGain){ p.stats.bestGain = gain; p.stats.bestSale = {s, q, price, gain}; }
+    if (gain < p.stats.worstGain) p.stats.worstGain = gain;
+    return gain;
+  }
 
   /* the win is judged at your own turn to roll: cash plus stock at board prices */
   checkWin(){
     const st = this.st, p = this.cur();
     if (st.over) return true;
     if (!st.target) return false;          // timed sitting: the bell decides, not a target
-    if (this.netWorth(p) >= st.target){
+    if (this.sideWorth(st.turn) >= st.target){
       st.over = true; st.winner = st.turn;
-      this.addLog(`${p.name} comes to the table worth $${this.netWorth(p).toLocaleString('en-US')} — the game is won!`);
+      const worth = '$' + this.sideWorth(st.turn).toLocaleString('en-US');
+      this.addLog(st.teams
+        ? `${this.sideName(st.turn)} come to the table worth ${worth} between them — the game is won!`
+        : `${p.name} comes to the table worth ${worth} — the game is won!`, 'win');
       return true;
     }
     return false;
@@ -852,7 +1072,7 @@ class Game {
     const p = this.cur();
     if (p.mode !== 'work' || this.st.phase !== 'idle') return false;
     p.job = j; p.pos = CORNER_CELLS[j];
-    this.addLog(`${p.name} takes up work as a ${JOBS[j].t}`);
+    this.addLog(`${p.name} takes up work as a ${JOBS[j].t}`, 'job');
     return true;
   }
   mustEnter(){ const p = this.cur(); return p.mode === 'work' && p.cash >= CFG.WORK_STAKE; }
@@ -861,7 +1081,7 @@ class Game {
     if (p.mode !== 'work' || this.st.phase !== 'idle') return false;
     if (!START_CELLS.includes(startIdx)) return false;
     p.mode = 'market'; p.pos = startIdx; p.entering = true;   // no fee to start
-    this.addLog(`${p.name} leaves work with $${p.cash.toLocaleString('en-US')} and steps up to a START square`);
+    this.addLog(`${p.name} leaves work with $${p.cash.toLocaleString('en-US')} and steps up to a START square`, 'enter');
     return true;
   }
 
@@ -897,7 +1117,7 @@ class Game {
       if (pl.mode === 'work' && JOBS[pl.job].nums.includes(total)){
         pl.cash += JOBS[pl.job].pay; pl.stats.earned += JOBS[pl.job].pay;
         paid.push({i, amt: JOBS[pl.job].pay, job: pl.job});
-        this.addLog(`The throw of ${total} pays ${pl.name} the ${JOBS[pl.job].t} $${JOBS[pl.job].pay}`);
+        this.addLog(`The throw of ${total} pays ${pl.name} the ${JOBS[pl.job].t} $${JOBS[pl.job].pay}`, 'salary');
       }
     });
     if (paid.length) events.push({kind:'salary', paid, total});
@@ -915,7 +1135,7 @@ class Game {
     } else if (BOARD[p.pos].t === 'start'){
       dir = total % 2 === 1 ? 1 : -1;   // printed: ← ODD, EVEN →
       events.push({kind:'direction', dir, total});
-      this.addLog(`${p.name} throws ${total} (${total % 2 === 0 ? 'even' : 'odd'}) and follows the ${dir > 0 ? 'clockwise' : 'counterclockwise'} arrow`);
+      this.addLog(`${p.name} throws ${total} (${total % 2 === 0 ? 'even' : 'odd'}) and follows the ${dir > 0 ? 'clockwise' : 'counterclockwise'} arrow`, 'direction');
     } else {
       dir = BOARD[p.pos].arrow || 1;
     }
@@ -973,7 +1193,7 @@ class Game {
       p.mode = 'meeting';
       p.meet = {row: a.row, idx: a.end === 0 ? -1 : MEET_ROWS[a.row].cells.length,
                 dir: a.end === 0 ? 1 : -1, stock: a.s};
-      this.addLog(`${p.name} turns in at the ${STOCKS[a.s].code} stockholders meeting`);
+      this.addLog(`${p.name} turns in at the ${STOCKS[a.s].code} stockholders meeting`, 'detour');
     } else {
       mv.noDetour = true;    // step past this entrance without asking again
       // put the flag back down after the entrance square is behind us
@@ -997,7 +1217,7 @@ class Game {
       if (gain > 0){
         p.shares[p.meet.stock] += gain;
         p.stats.meetShares += gain;
-        this.addLog(`${STOCKS[p.meet.stock].code} declares ${ratio} FOR 1 — ${p.name}'s ${held} shares earn ${gain} more`);
+        this.addLog(`${STOCKS[p.meet.stock].code} declares ${ratio} FOR 1 — ${p.name}'s ${held} shares earn ${gain} more`, 'meetdiv');
       }
       events.push({kind:'meetdiv', s:p.meet.stock, ratio, held, gain});
       st.phase = 'done';
@@ -1012,7 +1232,7 @@ class Game {
         const paid = this.payOrBroke(p, CFG.START_FEE, events);
         p.stats.spentFees += paid;
         events.push({kind:'startFee', amt:paid});
-        this.addLog(`${p.name} lands on START and pays the $${CFG.START_FEE} fee`);
+        this.addLog(`${p.name} lands on START and pays the $${CFG.START_FEE} fee`, 'startfee');
         break;
       }
       case 'payps': {
@@ -1021,15 +1241,15 @@ class Game {
         const paid = owed ? this.payOrBroke(p, owed, events) : 0;
         p.stats.spentFees += paid;
         events.push({kind:'payps', owned, amt:paid});
-        this.addLog(owned ? `${p.name} pays the broker $${paid} — $${CFG.BROKER_PS} on each of ${owned} shares` : `${p.name} holds no shares — the broker collects nothing`);
+        this.addLog(owned ? `${p.name} pays the broker $${paid} — $${CFG.BROKER_PS} on each of ${owned} shares` : `${p.name} holds no shares — the broker collects nothing`, 'broker');
         break;
       }
       case 'sellall': {
         const n = p.shares[sq.s], floor = STOCKS[sq.s].lo;
         if (n > 0){
           const amt = n * floor;
-          p.cash += amt; p.shares[sq.s] = 0;
-          this.addLog(`SELL ALL ${STOCKS[sq.s].code} at $${floor} — ${p.name} is forced out of ${n} shares for $${amt}`);
+          this._realize(p, sq.s, n, floor);
+          this.addLog(`SELL ALL ${STOCKS[sq.s].code} at $${floor} — ${p.name} is forced out of ${n} shares for $${amt}`, 'sellall');
           events.push({kind:'sellall', s:sq.s, n, amt, floor});
         } else {
           events.push({kind:'sellall', s:sq.s, n:0, amt:0, floor});
@@ -1041,7 +1261,7 @@ class Game {
           const amt = p.shares[sq.s] * STOCKS[sq.s].div;
           p.cash += amt; p.stats.divs += amt;
           events.push({kind:'codiv', s:sq.s, amt});
-          this.addLog(`${STOCKS[sq.s].code} pays its $${STOCKS[sq.s].div} dividend — ${p.name} collects $${amt}`);
+          this.addLog(`${STOCKS[sq.s].code} pays its $${STOCKS[sq.s].div} dividend — ${p.name} collects $${amt}`, 'div');
         }
         const isEntrance = sq.enter !== undefined;
         // an exit landing is still a company landing, but the fresh entrance
@@ -1072,19 +1292,19 @@ class Game {
         if (p.cash >= owed) break;
         const floor = STOCKS[i].lo;
         const q = Math.min(p.shares[i], Math.ceil((owed - p.cash) / floor));
-        p.shares[i] -= q; p.cash += q * floor;
+        this._realize(p, i, q, floor);
         events.push({kind:'forcedSale', s:i, q, floor});
-        this.addLog(`${p.name} is sold out of ${q} ${STOCKS[i].code} at the $${floor} floor to cover the bill`);
+        this.addLog(`${p.name} is sold out of ${q} ${STOCKS[i].code} at the $${floor} floor to cover the bill`, 'floor');
       }
     }
     if (p.cash < owed){
       // broke: everything goes back to the bank; back to work
       const j = p.job >= 0 ? p.job : 0;
-      p.cash = 0; p.shares = STOCKS.map(() => 0);
+      p.cash = 0; p.shares = STOCKS.map(() => 0); p.basis = STOCKS.map(() => 0);
       p.mode = 'work'; p.meet = null; p.pos = CORNER_CELLS[j];
       p.stats.broke++;
       events.push({kind:'broke', j});
-      this.addLog(`${p.name} is broke — everything returns to the bank and it's back to work as a ${JOBS[j].t}`);
+      this.addLog(`${p.name} is broke — everything returns to the bank and it's back to work as a ${JOBS[j].t}`, 'broke');
       return 0;
     }
     p.cash -= owed;
@@ -1098,10 +1318,11 @@ class Game {
     if (pend.limit && pend.bought + qty > pend.limit) return false;
     const price = st.prices[s];
     if (qty < 1 || qty * price > p.cash) return false;
-    p.cash -= qty * price; p.shares[s] += qty;
+    p.cash -= qty * price; p.shares[s] += qty; p.basis[s] += qty * price;
     pend.bought += qty;
+    p.stats.trades++; p.stats.bought += qty * price;
     if (qty * price > p.stats.bestTrade) p.stats.bestTrade = qty * price;
-    this.addLog(`${p.name} buys ${qty} ${STOCKS[s].code} at $${price} — $${qty * price}`);
+    this.addLog(`${p.name} buys ${qty} ${STOCKS[s].code} at $${price} — $${qty * price}`, 'buy');
     return true;
   }
   enterMeeting(){
@@ -1111,7 +1332,7 @@ class Game {
     p.mode = 'meeting';
     p.meet = {row: e.row, idx: e.end === 0 ? -1 : MEET_ROWS[e.row].cells.length,
               dir: e.end === 0 ? 1 : -1, stock: pend.s};
-    this.addLog(`${p.name} steps into the ${STOCKS[pend.s].code} stockholders meeting`);
+    this.addLog(`${p.name} steps into the ${STOCKS[pend.s].code} stockholders meeting`, 'meetenter');
     st.pending = null; st.phase = 'done';
     return true;
   }
@@ -1123,8 +1344,10 @@ class Game {
     if (st.phase !== 'idle' || st.over) return false;
     const price = st.prices[s];
     if (qty < 1 || p.shares[s] < qty) return false;
-    p.shares[s] -= qty; p.cash += qty * price;
-    this.addLog(`${p.name} sells ${qty} ${STOCKS[s].code} at $${price} — $${qty * price}`);
+    const gain = this._realize(p, s, qty, price);
+    p.stats.trades++;
+    this.addLog(`${p.name} sells ${qty} ${STOCKS[s].code} at $${price} — $${qty * price}` +
+      (gain ? ` (${gain > 0 ? 'a gain of' : 'a loss of'} $${Math.abs(gain).toLocaleString('en-US')})` : ''), 'sell');
     return true;
   }
 
@@ -1134,14 +1357,16 @@ class Game {
     st.pending = null; st.mv = null;
     st.turnCount++;
     st.players.forEach(pl => pl.nwHist.push(this.netWorth(pl)));
+    st.mHist.push(st.M);
     st.turn = (st.turn + 1) % st.players.length;
     st.phase = 'idle';
-    // timed sitting: after the last throw of the final round, the richest wins
+    // the bell: after the last throw of the final round, the richest side wins
+    // (a timed sitting on its own, or the cap on a short game with a target)
     if (st.rounds && st.turnCount >= st.rounds * st.players.length){
       let best = 0;
-      st.players.forEach((p, i) => { if (this.netWorth(p) > this.netWorth(st.players[best])) best = i; });
+      st.players.forEach((p, i) => { if (this.sideWorth(i) > this.sideWorth(best)) best = i; });
       st.over = true; st.winner = best;
-      this.addLog(`Time is called after ${st.rounds} rounds — ${st.players[best].name} is the richest at $${this.netWorth(st.players[best]).toLocaleString('en-US')}.`);
+      this.addLog(`Time is called after ${st.rounds} rounds — ${this.sideName(best)} ${st.teams ? 'are' : 'is'} the richest at $${this.sideWorth(best).toLocaleString('en-US')}.`, 'bell');
       return true;
     }
     return false;
@@ -1153,10 +1378,15 @@ class Game {
    printed column, bank the swing near the top before the throw.
    ============================================================ */
 const AI = {
-  reserve(p){ return [400, 200, 700][p.persona] || 400; },
-  buyBelow(p){ return [.4, .5, .32][p.persona] ?? .4; },
-  sellAbove(p){ return [.78, .86, .7][p.persona] ?? .78; },
+  persona(p){ return PERSONAS[p.persona >= 0 ? p.persona % PERSONAS.length : 0]; },
+  level(g){ return LEVELS[g.st.level] || LEVELS.normal; },
   rel(g, i){ return (g.price(i) - priceMin(i)) / (priceMax(i) - priceMin(i)); },
+  sellAbove(g, p, i){
+    const P = this.persona(p), L = this.level(g);
+    let a = P.sellAbove + L.sellAdj;
+    if (P.divBias && STOCKS[i].div >= 3) a = Math.max(a, .95);   // the dividend hunter holds its payers
+    return Math.min(a, .99);
+  },
 
   preRoll(g){
     const p = g.cur();
@@ -1167,38 +1397,125 @@ const AI = {
       return;
     }
     if (g.st.phase !== 'idle') return;
+    const L = this.level(g);
     STOCKS.forEach((_, i) => {
       if (p.shares[i] < 1) return;
-      if (this.rel(g, i) >= this.sellAbove(p)) g.sell(i, p.shares[i]);
+      const r = this.rel(g, i);
+      if (r >= this.sellAbove(g, p, i)) g.sell(i, p.shares[i]);
+      else if (L.hard && r >= .98) g.sell(i, p.shares[i]);          // at the top of the column it can only fall
+      else if (L.hard && r >= .85 && p.cash < 10 * p.shares.reduce((a, n) => a + n, 0) + CFG.START_FEE){
+        g.sell(i, Math.max(1, Math.ceil(p.shares[i] / 2)));           // keep the broker paid without a floor sale
+      }
     });
   },
 
   wantQty(g, s, limit){
-    const p = g.cur();
+    const p = g.cur(), P = this.persona(p), L = this.level(g);
     const r = this.rel(g, s);
-    if (r > this.buyBelow(p)) return 0;
-    const reserve = r <= .08 ? 50 : this.reserve(p);
-    const budget = p.cash - reserve, pr = g.price(s);
+    let below = P.buyBelow + L.buyAdj;
+    if (P.divBias && STOCKS[s].div >= 3) below += .15;
+    if (L.hard && (priceMax(s) - g.price(s)) / g.price(s) < .5) return 0;   // less than 50% of headroom: not worth the fees
+    if (r > below) return 0;
+    if (L.skip && g.rand() < L.skip) return 0;                              // the easy table dithers
+    const held = p.shares.reduce((a, n) => a + n, 0);
+    const reserve = r <= .08 ? 50 : Math.round(P.reserve * L.reserveMul) + (L.hard ? 10 * held + CFG.START_FEE : 0);
+    const budget = (p.cash - reserve) * P.max, pr = g.price(s);
     if (budget < pr) return 0;
     const q = Math.floor(budget / pr);
     return limit ? Math.min(q, limit) : q;
   },
 
-  answerDetour(g, s){ return g.cur().shares[s] > 0; },   // the rules call it usually worthwhile
+  answerDetour(g, s){
+    const p = g.cur();
+    if (p.shares[s] < 1) return false;
+    const P = this.persona(p), L = this.level(g);
+    return g.rand() < P.detour * L.detourMul;   // the rules call it usually worthwhile
+  },
 
   answerLanding(g, needs){
-    const p = g.cur();
+    const p = g.cur(), P = this.persona(p), L = this.level(g);
     if (needs.kind === 'buy'){
       if (needs.canEnter){
         // an entrance: one share is cheap admission to the meeting
-        if (p.cash > g.price(needs.s) + 100 && needs.bought < 1) g.buy(needs.s, 1);
-        if (p.shares[needs.s] > 0){ g.enterMeeting(); return; }
+        const keen = L.hard ? 1 : P.entrance;
+        if (p.cash > g.price(needs.s) + 100 && needs.bought < 1 && g.rand() < keen) g.buy(needs.s, 1);
+        if (p.shares[needs.s] > 0 && g.rand() < P.detour * L.detourMul){ g.enterMeeting(); return; }
       } else {
         const q = this.wantQty(g, needs.s, needs.limit);
         if (q > 0) g.buy(needs.s, q);
       }
     }
     g.resolvePending();
+  },
+
+  /* a line of table talk in the investor's own voice; null = says nothing */
+  quip(p, kind, ctx, rnd){
+    const P = this.persona(p);
+    const lines = (QUIPS[P.key] || {})[kind] || QUIPS.any[kind] || [];
+    if (!lines.length) return null;
+    const line = lines[Math.floor((rnd === undefined ? Math.random() : rnd) * lines.length)];
+    return line.replace(/\{(\w+)\}/g, (m, k) => ctx && ctx[k] !== undefined ? ctx[k] : m);
+  },
+};
+
+/* The five investors you can seat, and the three tables they play at. */
+const PERSONAS = [
+  {key:'steady', name:'Steady Hand',      blurb:'Keeps a cash cushion, buys low, banks early.',
+   reserve:700, buyBelow:.32, sellAbove:.70, entrance:.5, detour:1,  max:.6},
+  {key:'bold',   name:'Bold Plunger',     blurb:'All in when a column looks cheap, rides it to the top.',
+   reserve:150, buyBelow:.50, sellAbove:.90, entrance:.9, detour:1,  max:1},
+  {key:'divs',   name:'Dividend Hunter',  blurb:'Collects the $3 and $4 payers and holds on for the cheques.',
+   reserve:400, buyBelow:.45, sellAbove:.95, entrance:.7, detour:1,  max:.85, divBias:true},
+  {key:'meet',   name:'Meeting Chaser',   blurb:'One share at every entrance; lives for 3 FOR 1.',
+   reserve:300, buyBelow:.55, sellAbove:.80, entrance:1,  detour:1,  max:.7},
+  {key:'contra', name:'Contrarian',       blurb:'Buys at the floor, sells at the first bounce.',
+   reserve:350, buyBelow:.25, sellAbove:.60, entrance:.3, detour:.6, max:1},
+];
+const LEVELS = {
+  easy:   {name:'Easy',   reserveMul:1.6, buyAdj:-.08, sellAdj:-.12, skip:.25, detourMul:.7},
+  normal: {name:'Normal', reserveMul:1,   buyAdj:0,    sellAdj:0,    skip:0,   detourMul:1},
+  hard:   {name:'Hard',   reserveMul:.8,  buyAdj:.05,  sellAdj:.05,  skip:0,   detourMul:1, hard:true},
+};
+const QUIPS = {
+  any: {
+    bigbuy: ['{q} {code} at ${price}. Mark it down.', 'Loading up on {code} — {q} shares.'],
+    sold:   ['Cashed out of {code}. ${gain} to the good.', 'That’s {code} sold. Thank you, indicator.'],
+    loss:   ['Ouch. {code} cost me ${loss} on the way out.', 'Took my lumps on {code}.'],
+    meet:   ['{ratio} FOR 1 on {code} — {gain} shares, free of charge!', 'The {code} meeting was generous today.'],
+    broke:  ['Cleaned out. Back to honest work.', 'Well. That’s the bank’s money now.'],
+    divs:   ['Little {code} dividend. Every dollar counts.'],
+    fee:    ['The broker again. ${amt} gone.', 'Fees, fees, fees.'],
+    win:    ['That’s the game. Drinks are on me.', 'Called it. Good table, everyone.'],
+    open:   ['Good luck, everybody.', 'Let’s see who’s got the nerve.'],
+  },
+  steady: {
+    bigbuy: ['A sensible {q} {code}. Nothing rash.', '{code} at ${price} is fair value. In.'],
+    sold:   ['Banked {code}. A bird in the hand.', 'Out of {code} with ${gain}. No greed.'],
+    meet:   ['{ratio} FOR 1 — that’s the quiet way to get rich.'],
+    open:   ['Slow and steady, friends.'],
+  },
+  bold: {
+    bigbuy: ['{q} {code}! Fortune favours the bold.', 'All in on {code}. Watch this.'],
+    sold:   ['{code} was a rocket — ${gain} banked.', 'Rode {code} to the top. Next!'],
+    loss:   ['{code} bit me. I’ll be back.'],
+    broke:  ['Ha! Broke. The market giveth…', 'Cleaned out — and I’d do it again.'],
+    open:   ['Big money or nothing tonight.'],
+  },
+  divs: {
+    bigbuy: ['{q} {code} — that’s ${divs} every time I land there.', '{code} pays ${div} a share. I’ll take {q}.'],
+    divs:   ['{code} dividend, ${amt}. Steady income.', 'Another {code} cheque. Told you.'],
+    sold:   ['Only sold {code} because it stopped paying its way.'],
+    open:   ['I’m here for the dividends.'],
+  },
+  meet: {
+    meet:   ['{ratio} FOR 1! {gain} more {code} for nothing!', 'The {code} meeting pays again. Love that room.'],
+    bigbuy: ['One {code} share buys me a ticket to the meeting.'],
+    open:   ['See you at the stockholders meeting.'],
+  },
+  contra: {
+    bigbuy: ['Everybody hates {code}. Perfect — {q} shares.', 'Buying {code} at ${price} while it’s unloved.'],
+    sold:   ['Sold {code} into the cheer. ${gain}.', 'First bounce on {code} and I’m gone.'],
+    open:   ['Buy fear, sell cheer.'],
   },
 };
 
@@ -1210,8 +1527,9 @@ window.__sim = function(nGames = 10, nPlayers = 3, target = CFG.WIN, seed0 = 123
   for (let gi = 0; gi < nGames; gi++){
     const g = new Game({
       seed: seed0 + gi * 7919,
-      target, house: !!opts.house, rounds: opts.rounds || 0,
-      players: Array.from({length: nPlayers}, (_, i) => ({name: 'AI' + (i + 1), ai: true})),
+      target, house: !!opts.house, rounds: opts.rounds || 0, level: opts.level, teams: opts.teams || null,
+      players: Array.from({length: nPlayers}, (_, i) => ({name: 'AI' + (i + 1), ai: true,
+        persona: Array.isArray(opts.personas) ? opts.personas[i % opts.personas.length] : undefined})),
     });
     let guard = CFG.MAX_TURNS;
     while (!g.st.over && guard-- > 0){
@@ -1229,7 +1547,8 @@ window.__sim = function(nGames = 10, nPlayers = 3, target = CFG.WIN, seed0 = 123
     const w = g.st.winner;
     out.games.push({
       turns: g.st.turnCount,
-      winnerNW: w >= 0 ? g.netWorth(g.st.players[w]) : -1,
+      winner: w,
+      winnerNW: w >= 0 ? g.sideWorth(w) : -1,
       broke: g.st.players.reduce((a, p) => a + p.stats.broke, 0),
       prices: g.st.prices.slice(),
     });
@@ -1252,9 +1571,9 @@ const PRISTINE = '<!doctype html>\n' + document.documentElement.outerHTML;
    ============================================================ */
 const $ = id => document.getElementById(id);
 const fmt = n => '$' + Math.round(n).toLocaleString('en-US');
-const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const buzz = ms => { try{ if (navigator.vibrate) navigator.vibrate(ms); }catch(e){} };
+const buzz = ms => { if (V.set && V.set.haptics === false) return; try{ if (navigator.vibrate) navigator.vibrate(ms); }catch(e){} };
 
 /* the printed money and certificates, colored like the real parts */
 const BILLS = [20000, 10000, 5000, 1000, 500, 100, 50, 20, 10, 5, 1];
@@ -1325,7 +1644,13 @@ const V = {
   card: {timer:0, resolve:null},
   chat: [],           // local-table chat (online tables keep theirs in the shared state)
   chatQueue: [],      // online: lines waiting to ride this device's next publish
+  set: null,          // settings (loaded at boot)
+  level: 'normal', teamsMode: 'none',
+  autoplay: false,    // the computer plays every seat to the end (local games)
+  quipAt: {},         // when each computer last spoke
 };
+const acting = () => !!(V.g && (V.g.cur().ai || V.autoplay));                 // a seat the computer is playing right now
+const paceOf = () => V.autoplay ? 'instant' : (V.g ? V.g.st.speed : 'normal');
 
 /* ---------------- storage (never let a blocked store crash the game) --- */
 function store(k, v){ try{ if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); }catch(e){} }
@@ -1335,17 +1660,394 @@ function saveGame(){
   store(SAVE_KEY, JSON.stringify({st: V.g.st, seats: V.seats, target: V.target, speed: V.speed, chat: V.chat}));
 }
 
+/* ---------------- table variants ---------------- */
+function parseTarget(tv){
+  if (tv === 'timed20') return {target: 0, rounds: 20};
+  if (tv === '25000r15') return {target: 25000, rounds: 15};
+  return {target: +tv || CFG.WIN, rounds: 0};
+}
+function pairTeams(n){ return n >= 4 && n % 2 === 0 ? Array.from({length: n}, (_, i) => Math.floor(i / 2)) : null; }
+function openingLine(house, target, rounds, teams){
+  const goal = !target ? 'richest after ' + rounds + ' rounds wins'
+    : 'first to ' + fmt(target) + (rounds ? ' (or the richest after ' + rounds + ' rounds)' : '') + ' wins';
+  const who = teams ? 'partners pool their worth; ' : '';
+  return house
+    ? 'The market opens under house rules — everyone starts with ' + fmt(CFG.WORK_STAKE) + ' and one share of each issue; ' + who + goal + '.'
+    : 'The market opens. Everyone starts at work with empty pockets — ' + who + goal + '.';
+}
+
+/* ---------------- settings ---------------- */
+const SET_KEY = 'sm68-set';
+const SET_DEF = {patterns: false, big: false, lefty: false, haptics: true, coach: true, motion: 'auto'};
+function loadSettings(){
+  try{ V.set = Object.assign({}, SET_DEF, JSON.parse(read(SET_KEY) || '{}') || {}); }catch(e){ V.set = Object.assign({}, SET_DEF); }
+}
+function saveSettings(){ store(SET_KEY, JSON.stringify(V.set)); }
+function applySettings(){
+  const h = document.documentElement;
+  h.classList.toggle('big', !!V.set.big);
+  h.classList.toggle('lefty', !!V.set.lefty);
+  h.classList.toggle('pat', !!V.set.patterns);
+  RM = V.set.motion === 'less' ? true : V.set.motion === 'full' ? false : matchMedia('(prefers-reduced-motion: reduce)').matches;
+  h.classList.toggle('rm', V.set.motion === 'less');
+  const layer = document.getElementById('pawnLayer');
+  if (layer) layer.innerHTML = '';          // pawns re-skin with the pattern setting
+  if (V.g){ renderPawns(); renderPlayers(); }
+}
+function sheetSettings(){
+  openSheet('Settings', b => {
+    const rows = [
+      ['sound', 'Sound', 'Dice, cash and the gavel — all synthesized', () => V.sound, v => {
+        V.sound = v; $('btnSound').setAttribute('aria-pressed', String(v)); $('btnSound').textContent = v ? '♬' : '♪';
+        store('sm68-sound', v ? '1' : '0'); if (v) Snd.unlock(); }],
+      ['haptics', 'Haptics', 'A buzz on the dice and when money moves, where the phone allows', () => V.set.haptics, v => { V.set.haptics = v; }],
+      ['patterns', 'Patterned pawns', 'Stripes, dots and checks on every pawn — colour is never the only clue', () => V.set.patterns, v => { V.set.patterns = v; }],
+      ['big', 'Large type', 'Everything about 15% bigger', () => V.set.big, v => { V.set.big = v; }],
+      ['lefty', 'Left-handed controls', 'Dice and buttons swap over to the left thumb', () => V.set.lefty, v => { V.set.lefty = v; }],
+      ['coach', 'Coach tips', 'Pointers through your first game', () => V.set.coach, v => { V.set.coach = v; }],
+      ['motion', 'Reduce motion', 'Skip the tumbles, glides and confetti', () => V.set.motion === 'less' || (V.set.motion === 'auto' && RM), v => { V.set.motion = v ? 'less' : 'full'; }],
+    ];
+    if (NET.mode === 'relay' && Push.supported()){
+      rows.push(['push', 'Notify me on my turn', 'A notification when it is your throw at an online table', () => Push.wanted(),
+        async v => { if (v) await Push.enable(); else await Push.disable(); }]);
+    }
+    b.innerHTML = rows.map(r => `<button class="set-row" data-k="${r[0]}" role="switch" aria-checked="${r[3]() ? 'true' : 'false'}">
+        <span class="st"><b>${r[1]}</b><small>${r[2]}</small></span><span class="switch" aria-checked="${r[3]() ? 'true' : 'false'}"></span></button>`).join('') +
+      `<div style="display:flex;gap:8px;margin-top:12px"><button class="btn alt small" id="setCoachReset" style="flex:1">Replay the Coach</button></div>`;
+    b.querySelectorAll('[data-k]').forEach(el => el.addEventListener('click', async () => {
+      const r = rows.find(x => x[0] === el.dataset.k);
+      await r[4](!r[3]());
+      saveSettings(); applySettings();
+      const on = r[3]();
+      el.setAttribute('aria-checked', String(on)); el.querySelector('.switch').setAttribute('aria-checked', String(on));
+      buzz(10);
+    }));
+    b.querySelector('#setCoachReset').addEventListener('click', () => {
+      Coach.reset(); V.set.coach = true; saveSettings(); closeSheet();
+      toast('The coach will walk you through your next game', 2600);
+    });
+  });
+}
+
+/* ---------------- the coach: pointers through a first game ---------------- */
+const Coach = {
+  seen: new Set(), cur: null, t: 0, STEPS: 9,
+  load(){ try{ this.seen = new Set(JSON.parse(read('sm68-coach2') || '[]')); }catch(e){ this.seen = new Set(); } },
+  save(){ store('sm68-coach2', JSON.stringify([...this.seen])); },
+  reset(){ this.seen.clear(); this.save(); },
+  active(){ return !!(V.set && V.set.coach); },
+  async show(key, sel, title, body){
+    if (!this.active() || this.seen.has(key) || V.autoplay) return;
+    if (V.g && V.g.cur().ai) return;
+    this.seen.add(key); this.save();
+    await cardQueue;                       // never on top of a ticker card
+    await sleep(120);
+    if (!V.g && key !== 'welcome') return;
+    const el = sel ? document.querySelector(sel) : null;
+    this.hide();
+    const c = $('coach');
+    $('coachTitle').textContent = title; $('coachBody').innerHTML = body;
+    $('coachStep').textContent = 'Coach · ' + Math.min(this.STEPS, this.seen.size) + ' of ' + this.STEPS;
+    c.classList.remove('below', 'noarrow');
+    c.style.left = ''; c.style.top = '';
+    c.classList.add('on');
+    const cw = c.offsetWidth, ch = c.offsetHeight;
+    if (el && el.getBoundingClientRect){
+      const r = el.getBoundingClientRect();
+      const cx = Math.max(8 + cw / 2, Math.min(innerWidth - 8 - cw / 2, r.left + r.width / 2));
+      let top = r.bottom + 14;
+      if (top + ch > innerHeight - 8){ top = r.top - ch - 14; c.classList.add('below'); }
+      if (top < 8){ top = Math.max(8, (innerHeight - ch) / 2); c.classList.add('noarrow'); }
+      c.style.left = (cx - cw / 2) + 'px'; c.style.top = top + 'px';
+      c.style.setProperty('--ax', Math.max(16, Math.min(cw - 16, r.left + r.width / 2 - (cx - cw / 2))) + 'px');
+      el.classList.add('coach-ring'); this.cur = el;
+    } else {
+      c.classList.add('noarrow');
+      c.style.left = ((innerWidth - cw) / 2) + 'px'; c.style.top = Math.max(8, innerHeight * .28) + 'px';
+    }
+    Snd.tick();
+    clearTimeout(this.t); this.t = setTimeout(() => this.hide(), 15000);
+  },
+  hide(){
+    const c = $('coach'); if (c) c.classList.remove('on');
+    if (this.cur){ this.cur.classList.remove('coach-ring'); this.cur = null; }
+    clearTimeout(this.t);
+  },
+};
+
+/* ---------------- the referee: every rule on tap ---------------- */
+const RULES = {
+  open:      ['The Table Opens', 'The printed rules invite the table to agree its own terms — the opening, the target, a time limit, partners. Whatever was agreed is written on the first line of the wire.'],
+  job:       ['Occupations', 'Everyone begins at work at one of the four corners. Any throw of your numbers — by anybody at the table — pays your salary. The rarer the numbers, the richer the pay.'],
+  salary:    ['Salaries', 'A salary pays on every throw of its numbers, no matter whose throw it is. Bank $1,000 and you must leave for the market.'],
+  enter:     ['To the Market', 'The moment you have banked $1,000 you must leave work and place your piece, free of charge, on any of the four START squares.'],
+  direction: ['Leaving START', 'Off a START square the throw picks the way: an odd total follows the ODD arrow (clockwise), an even total the other.'],
+  startfee:  ['The START Fee', 'Landing on START — not passing it — costs the $100 fee.'],
+  broker:    ['Broker Fee', 'PAY BROKER FEE charges $10 for every share you hold, then swings the indicator 20 notches.'],
+  sellall:   ['SELL ALL', 'A SELL ALL square forces your whole holding of that stock out at its very lowest board price.'],
+  div:       ['Cash Dividends', 'Land on a company square holding its stock and it pays its printed dividend on every share you held when you landed — never on shares bought that moment.'],
+  buy:       ['Buying', 'You buy only where you land, that company only, any amount you can pay, at the price after the indicator moves. LIMIT 1 SHARE squares and meeting entrances allow exactly one.'],
+  sell:      ['Selling', 'Voluntary sales happen at one moment only: immediately before your own throw, at board prices, from the Ledger. Players never trade with each other.'],
+  floor:     ['Forced Sales', 'A bill you cannot cover forces sales at the stock’s lowest board price, largest holding first, until it is paid.'],
+  broke:     ['Going Broke', 'Still short after forced sales? Everything returns to the bank and you go back to work for a fresh $1,000.'],
+  detour:    ['Turning In', 'Passing a meeting entrance mid-throw while holding that stock, you may turn in; the rest of the throw carries you along the FOR-1 cells.'],
+  meetenter: ['Stepping In', 'Land on an entrance holding at least one share and you may step into the meeting; your next throw moves you through it.'],
+  meetdiv:   ['Stock Dividends', 'Stopping on N FOR 1 pays N additional shares for every share held — 5 held on 3 FOR 1 collects 15 more. You leave through the far end onto the paired stock’s entrance.'],
+  win:       ['Winning', 'The win is judged at your own turn to throw: cash plus stock at board prices reaching the target. Partners count their worth together.'],
+  bell:      ['The Bell', 'When the agreed rounds are up, the richest side at the bell wins.'],
+};
+function sheetWhy(key){
+  const r = RULES[key]; if (!r) return;
+  openSheet(r[0], b => {
+    b.innerHTML = `<div class="rules"><p style="font-size:15px">${r[1]}</p>
+      <p class="fine">From the rules printed inside the box lid, in our own words. The whole sheet is under How to Play.</p></div>
+      <button class="btn alt small" id="whyAll" style="width:100%;margin-top:12px">Open How to Play</button>`;
+    b.querySelector('#whyAll').addEventListener('click', () => { closeSheet(); sheetRules(); });
+  });
+}
+/* tap any square: what it does, and what it would do to you right now */
+function sheetSquare(i){
+  const sp = BOARD[i], [t, body] = describeSpace(i), g = V.g;
+  openSheet(t, b => {
+    const lk = spaceLook(sp);
+    const me = g ? g.st.players[folioWho()] : null;
+    const now = [];
+    if (g && me){
+      let M2 = g.st.M + (sp.d || 0), guard = 8;
+      while ((M2 < 0 || M2 > CFG.M_MAX) && guard-- > 0) M2 = M2 < 0 ? -M2 : 2 * CFG.M_MAX - M2;
+      M2 = Math.max(0, Math.min(CFG.M_MAX, M2));
+      if (sp.d) now.push(['Indicator would go', `${g.st.M} → ${M2}` + (M2 !== g.st.M + sp.d ? ' (bounced)' : '')]);
+      if (sp.t === 'co'){
+        const pr = priceAt(sp.s, M2);
+        now.push([STOCKS[sp.s].code + ' would quote', '$' + pr]);
+        if (me.shares[sp.s]) now.push(['Your dividend', fmt(me.shares[sp.s] * STOCKS[sp.s].div)]);
+        now.push(['You could buy', (sp.limit || sp.enter !== undefined) ? '1 share' : Math.floor(me.cash / pr) + ' shares']);
+      }
+      if (sp.t === 'payps'){ const n = me.shares.reduce((a, x) => a + x, 0); now.push(['Your broker fee', fmt(n * CFG.BROKER_PS)]); }
+      if (sp.t === 'sellall') now.push(['Your forced sale', me.shares[sp.s] ? me.shares[sp.s] + ' sh → ' + fmt(me.shares[sp.s] * STOCKS[sp.s].lo) : 'nothing held']);
+      if (sp.t === 'start') now.push(['Landing fee', fmt(CFG.START_FEE)]);
+      if (sp.t === 'job') now.push(['Salary', JOBS[sp.j].nums.join(' or ') + ' pays ' + fmt(JOBS[sp.j].pay)]);
+      if (sp.arrow && sp.t !== 'job') now.push(['You leave it', sp.arrow > 0 ? 'clockwise ↻' : 'counter-clockwise ↺']);
+    }
+    const face = sp.t === 'job'
+      ? `<b>${esc(JOBS[sp.j].t.toUpperCase())}</b><small>${JOBS[sp.j].nums.join(' OR ')} PAYS $${JOBS[sp.j].pay}</small>`
+      : `<b style="${sp.t === 'start' ? 'color:#c9372c' : ''}">${lk.l1}</b><small>${lk.l2}${lk.l2b ? '<br>' + lk.l2b : ''}</small>${lk.l3 ? `<small style="font-weight:800">${lk.l3}</small>` : ''}${sp.limit ? '<small>LIMIT 1 SHARE</small>' : ''}`;
+    b.innerHTML = `<div class="sq-print" style="background:${lk.bg};color:${lk.fg}">${face}</div>
+      <p style="font:600 13.5px/1.6 Archivo,sans-serif;color:var(--ink-soft);margin-bottom:10px">${body}</p>` +
+      (now.length ? `<div class="recap-h">For ${esc(me.name)} right now</div>` +
+        now.map(r => `<div class="trow"><span class="ti"><b>${r[0]}</b></span><span class="pr num">${r[1]}</span></div>`).join('') : '');
+  });
+}
+
+/* ---------------- household records ---------------- */
+const REC_KEY = 'sm68-records';
+function loadRecords(){ try{ return JSON.parse(read(REC_KEY) || '{}') || {}; }catch(e){ return {}; } }
+function recordGame(g){
+  if (!g || !g.st.over || g.st.winner < 0) return;
+  const tag = 'sm68-rec-' + g.st.seed;
+  if (read(tag)) return;
+  store(tag, '1');
+  const R = loadRecords();
+  const winners = g.sideSeats(g.st.winner);
+  g.st.players.forEach((p, i) => {
+    const k = (p.name || '').trim() || 'Investor';
+    const r = R[k] || {games: 0, wins: 0, best: 0, fastest: 0};
+    r.games++; r.ai = !!p.ai;
+    const nw = g.netWorth(p); if (nw > r.best) r.best = nw;
+    if (winners.includes(i)){ r.wins++; if (!r.fastest || g.st.turnCount < r.fastest) r.fastest = g.st.turnCount; }
+    R[k] = r;
+  });
+  store(REC_KEY, JSON.stringify(R));
+}
+function recordsRows(limit){
+  const R = loadRecords();
+  return Object.keys(R).map(k => Object.assign({name: k}, R[k]))
+    .sort((a, b) => b.wins - a.wins || b.best - a.best).slice(0, limit || 50);
+}
+function recordsHtml(limit){
+  const rows = recordsRows(limit);
+  if (!rows.length) return '<div class="fempty">No games on record on this device yet.</div>';
+  return rows.map((r, i) => `<div class="stand"><span class="rk">${i + 1}</span><span>${esc(r.name)}${r.ai ? ' ⚙' : ''}</span>
+    <small style="color:var(--ink-faint);font:600 10.5px Archivo,sans-serif">${r.wins} win${r.wins === 1 ? '' : 's'} · ${r.games} game${r.games === 1 ? '' : 's'}${r.fastest ? ' · best ' + r.fastest + ' turns' : ''}</small>
+    <span class="nw">${fmt(r.best)}</span></div>`).join('');
+}
+function sheetRecords(){
+  openSheet('Household Records', b => {
+    b.innerHTML = `<p style="font:600 12px/1.5 Archivo,sans-serif;color:var(--ink-faint);margin-bottom:8px">Wins, games and best net worth for everyone who has played on this device.</p>
+      ${recordsHtml(50)}<button class="btn alt small" id="recClear" style="width:100%;margin-top:14px">Clear the Records</button>`;
+    b.querySelector('#recClear').addEventListener('click', () => { store(REC_KEY, null); toast('Records cleared'); closeSheet(); });
+  });
+}
+
+/* ---------------- the recap: standings, the indicator's journey, a shareable card ---------------- */
+function standings(g){
+  const seen = new Set(), out = [];
+  g.st.players.forEach((p, i) => {
+    const key = g.sideSeats(i).join(',');
+    if (seen.has(key)) return; seen.add(key);
+    out.push({name: g.sideName(i), nw: g.sideWorth(i), color: p.color, seats: g.sideSeats(i)});
+  });
+  return out.sort((a, b) => b.nw - a.nw);
+}
+function recapText(){
+  const g = V.g; if (!g || g.st.winner < 0) return '';
+  const w = g.st.winner;
+  return `Stock Market 1968 — ${g.sideName(w)} ${g.st.teams ? 'win' : 'wins'} with ${fmt(g.sideWorth(w))} after ${g.st.turnCount} turns. ` +
+    standings(g).map((s, i) => `${i + 1}. ${s.name} ${fmt(s.nw)}`).join(' · ');
+}
+function recapCard(){
+  const g = V.g, W = 720, H = 400, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const x = cv.getContext('2d');
+  x.fillStyle = '#0f2b21'; x.fillRect(0, 0, W, H);
+  x.fillStyle = '#f7efda'; x.fillRect(18, 18, W - 36, H - 36);
+  x.strokeStyle = '#251f17'; x.lineWidth = 3; x.strokeRect(26, 26, W - 52, H - 52);
+  x.fillStyle = '#20573f'; x.font = '700 13px Archivo, Arial, sans-serif'; x.fillText('THE CLASSIC MONEY GAME · 1968', 44, 58);
+  x.fillStyle = '#251f17'; x.font = '400 44px Bevan, Georgia, serif'; x.fillText('STOCK MARKET', 44, 104);
+  x.fillStyle = '#bf3527'; x.font = '800 12px Archivo, Arial, sans-serif'; x.fillText('THE MARKET HAS CLOSED', 44, 132);
+  const w = g.st.winner;
+  x.fillStyle = '#251f17'; x.font = '700 28px Archivo, Arial, sans-serif'; x.fillText(g.sideName(w).slice(0, 26), 44, 172);
+  x.fillStyle = '#20573f'; x.font = '700 19px "Courier Prime", Courier, monospace'; x.fillText(fmt(g.sideWorth(w)) + ' · ' + g.st.turnCount + ' turns', 44, 200);
+  standings(g).slice(0, 6).forEach((s, i) => {
+    const y = 236 + i * 24;
+    x.fillStyle = s.color; x.beginPath(); x.arc(52, y - 5, 6, 0, 7); x.fill();
+    x.fillStyle = '#251f17'; x.font = '600 15px Archivo, Arial, sans-serif'; x.fillText((i + 1) + '. ' + s.name.slice(0, 22), 66, y);
+    x.font = '700 15px "Courier Prime", Courier, monospace'; x.fillText(fmt(s.nw), 300, y);
+  });
+  const cx0 = 430, cy0 = 150, cw = 240, ch = 200;
+  x.fillStyle = '#f2e9cd'; x.fillRect(cx0, cy0, cw, ch);
+  const maxLen = Math.max(...g.st.players.map(p => p.nwHist.length));
+  const maxV = Math.max(1, g.st.target || 0, ...g.st.players.flatMap(p => p.nwHist));
+  g.st.players.forEach((p, pi) => {
+    x.strokeStyle = p.color; x.lineWidth = g.sideSeats(w).includes(pi) ? 3 : 1.5; x.globalAlpha = g.sideSeats(w).includes(pi) ? 1 : .6;
+    x.beginPath();
+    p.nwHist.forEach((v, i) => { const X = cx0 + 6 + (cw - 12) * (maxLen < 2 ? 1 : i / (maxLen - 1)), Y = cy0 + ch - 6 - (ch - 12) * v / maxV; i ? x.lineTo(X, Y) : x.moveTo(X, Y); });
+    x.stroke(); x.globalAlpha = 1;
+  });
+  x.fillStyle = '#665b49'; x.font = '600 11px Archivo, Arial, sans-serif'; x.fillText('Net worth, turn by turn', cx0, cy0 - 8);
+  return cv;
+}
+async function shareRecap(){
+  const text = recapText(); if (!text) return;
+  try{
+    if (navigator.canShare && navigator.share){
+      const blob = await new Promise(r => recapCard().toBlob(r, 'image/png'));
+      if (blob){
+        const file = new File([blob], 'stock-market-1968-recap.png', {type: 'image/png'});
+        if (navigator.canShare({files: [file]})){ await navigator.share({files: [file], text, title: 'Stock Market 1968'}); return; }
+      }
+    }
+    if (navigator.share){ await navigator.share({text, title: 'Stock Market 1968'}); return; }
+  }catch(e){ if (e && e.name === 'AbortError') return; }
+  try{ await navigator.clipboard.writeText(text); toast('Recap copied to the clipboard', 3000); }
+  catch(e){ toast(text, 6000); }
+}
+function drawChart2(){
+  const g = V.g, cv = $('chart2'); if (!cv || !g) return;
+  const W = cv.clientWidth || 360, H = 60, dpr = window.devicePixelRatio || 1;
+  cv.width = W * dpr; cv.height = H * dpr;
+  const x = cv.getContext('2d'); x.scale(dpr, dpr);
+  x.fillStyle = '#f2e9cd'; x.fillRect(0, 0, W, H);
+  const h = g.st.mHist && g.st.mHist.length ? g.st.mHist : [g.st.M];
+  const px = i => 8 + (W - 16) * (h.length < 2 ? 1 : i / (h.length - 1));
+  const py = m => H - 6 - (H - 12) * (m / CFG.M_MAX);
+  x.strokeStyle = 'rgba(37,31,23,.35)'; x.setLineDash([4, 4]); x.lineWidth = 1;
+  x.beginPath(); x.moveTo(8, py(CFG.M_START)); x.lineTo(W - 8, py(CFG.M_START)); x.stroke(); x.setLineDash([]);
+  x.fillStyle = 'rgba(37,31,23,.6)'; x.font = '600 9px Archivo,sans-serif';
+  x.fillText('UP', 10, 12); x.fillText('DOWN', 10, H - 8); x.fillText('START', W - 40, py(CFG.M_START) - 3);
+  x.strokeStyle = '#bf3527'; x.lineWidth = 2; x.beginPath();
+  h.forEach((m, i) => { i ? x.lineTo(px(i), py(m)) : x.moveTo(px(i), py(m)); });
+  x.stroke();
+  x.fillStyle = '#bf3527'; x.beginPath(); x.arc(px(h.length - 1), py(h[h.length - 1]), 3, 0, 7); x.fill();
+}
+
+/* ---------------- patterned pawns: colour is never the only clue ---------------- */
+const PAT_INK = 'rgba(255,248,225,.78)';
+function patDefs(){
+  const k = PAT_INK;
+  return `<pattern id="pat0" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3" height="6" fill="${k}"/></pattern>
+    <pattern id="pat1" width="6" height="6" patternUnits="userSpaceOnUse"><circle cx="3" cy="3" r="1.6" fill="${k}"/></pattern>
+    <pattern id="pat2" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="3" height="3" fill="${k}"/><rect x="3" y="3" width="3" height="3" fill="${k}"/></pattern>
+    <pattern id="pat3" width="8" height="8" patternUnits="userSpaceOnUse"><circle cx="4" cy="4" r="2.6" fill="none" stroke="${k}" stroke-width="1.3"/></pattern>
+    <pattern id="pat4" width="6" height="6" patternUnits="userSpaceOnUse"><path d="M0 0L6 6M6 0L0 6" stroke="${k}" stroke-width="1.2"/></pattern>
+    <pattern id="pat5" width="8" height="6" patternUnits="userSpaceOnUse"><path d="M0 4L4 0L8 4" fill="none" stroke="${k}" stroke-width="1.4"/></pattern>
+    <pattern id="pat6" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="2.5" fill="${k}"/></pattern>
+    <pattern id="pat7" width="8" height="6" patternUnits="userSpaceOnUse"><path d="M0 3Q2 0 4 3T8 3" fill="none" stroke="${k}" stroke-width="1.3"/></pattern>`;
+}
+function patCss(i){
+  const k = PAT_INK;
+  return [
+    `repeating-linear-gradient(45deg,${k} 0 2px,transparent 2px 5px)`,
+    `radial-gradient(circle,${k} 1.2px,transparent 1.6px) 0 0/5px 5px`,
+    `repeating-conic-gradient(${k} 0 25%,transparent 0 50%) 0 0/6px 6px`,
+    `radial-gradient(circle,transparent 1.5px,${k} 1.8px,${k} 2.4px,transparent 2.8px) 0 0/7px 7px`,
+    `repeating-linear-gradient(45deg,${k} 0 1px,transparent 1px 4px),repeating-linear-gradient(-45deg,${k} 0 1px,transparent 1px 4px)`,
+    `repeating-linear-gradient(135deg,${k} 0 1.5px,transparent 1.5px 4px)`,
+    `repeating-linear-gradient(0deg,${k} 0 2px,transparent 2px 5px)`,
+    `repeating-linear-gradient(90deg,${k} 0 1.5px,transparent 1.5px 4px)`,
+  ][i % 8];
+}
+function dotStyle(color, i){ return `background:${color}` + (V.set && V.set.patterns ? `;background-image:${patCss(i)}` : ''); }
+
+/* ---------------- table talk from the computers ---------------- */
+function postChat(msg){
+  if (!V.online){ V.chat.push(msg); if (V.chat.length > 60) V.chat.shift(); renderChat(); saveGame(); return; }
+  if (NET.mode === 'relay'){ NET.send({t:'tbChat', n: msg.n, c: msg.c, x: msg.x}); return; }
+  V.chatQueue.push(msg); renderChat();   // rides this device's next publish
+}
+function aiTalk(g, p, before){
+  if (!p.ai) return;
+  const now = g.st.turnCount;
+  if (V.quipAt[p.name] !== undefined && now - V.quipAt[p.name] < 3) return;
+  const S = code => STOCKS.findIndex(s => s.code === code);
+  let kind = null, ctx = {}, m;
+  for (const l of g.st.log.slice(before)){
+    if ((m = l.match(/ buys (\d+) (\w+) at \$(\d+) — \$(\d+)$/)) && (+m[4] >= 800 || +m[1] >= 10)){
+      const s = S(m[2]); kind = 'bigbuy'; ctx = {q: m[1], code: m[2], price: m[3], div: s >= 0 ? STOCKS[s].div : 1, divs: +m[1] * (s >= 0 ? STOCKS[s].div : 1)};
+    } else if ((m = l.match(/ sells \d+ (\w+) at \$\d+ — \$\d+ \(a gain of \$([\d,]+)\)/))){ kind = 'sold'; ctx = {code: m[1], gain: m[2]}; }
+    else if ((m = l.match(/ sells \d+ (\w+) at \$\d+ — \$\d+ \(a loss of \$([\d,]+)\)/))){ kind = 'loss'; ctx = {code: m[1], loss: m[2]}; }
+    else if ((m = l.match(/^(\w+) declares (\d) FOR 1 — .* earn (\d+) more/))){ kind = 'meet'; ctx = {code: m[1], ratio: m[2], gain: m[3]}; }
+    else if (/ is broke — /.test(l)) kind = 'broke';
+    else if ((m = l.match(/pays the broker \$(\d+)/)) && +m[1] >= 100){ kind = 'fee'; ctx = {amt: m[1]}; }
+    else if ((m = l.match(/^(\w+) pays its \$\d dividend — .* collects \$(\d+)/)) && +m[2] >= 20){ kind = 'divs'; ctx = {code: m[1], amt: m[2]}; }
+  }
+  if (!kind || Math.random() > .45) return;
+  const text = AI.quip(p, kind, ctx);
+  if (!text) return;
+  V.quipAt[p.name] = now;
+  postChat({n: p.name, c: p.color, x: text, t: Date.now()});
+}
+
 /* ============================================================
-   NET — online play over the artifact runtime: the page embeds the
-   table state in its own HTML and publishes a new version of itself
-   after each human turn; every open phone reloads to the latest.
+   NET — online play, two transports behind one interface.
+   · artifact: the page embeds the table in its own HTML and publishes a
+     new version of itself after each turn; every open phone reloads to it.
+   · relay: the installed app talks to the Tiny Conquerors relay over a
+     WebSocket — a 4-letter table code, the whole state posted after each
+     turn and fanned out live. No reloads, no edit access, invite by link.
+   Every phone keeps a copy of the latest table; if the relay restarts, the
+   first phone back re-seeds the table under its old code.
    ============================================================ */
+const RELAY_WS = (() => {
+  let q = null; try{ q = new URLSearchParams(location.search).get('relay'); }catch(e){}
+  if (q) return q;
+  const h = location.hostname;
+  // a dev server is plain http on localhost; an app shell (capacitor://localhost) is not
+  if ((h === 'localhost' || h === '127.0.0.1') && location.protocol === 'http:') return 'ws://' + h + ':8080';
+  return 'wss://tiny-conquerors-relay.onrender.com';
+})();
+const RELAY_HTTP = RELAY_WS.replace(/^ws/, 'http');
+const TABLE_KEY = 'sm68-table';
+
 const NET = {
   api: null,                 // artifact capability namespace, or null
-  state: null,               // the shared table parsed from #netState
+  mode: null,                // 'artifact' | 'relay' | null
+  state: null,               // the shared table
   token: null,               // this device's identity
   publishing: false,
+  rl: {ws:null, opening:null, code:null, rev:0, connected:false, members:[], chat:[],
+       pending:null, joining:null, tries:0, retryT:0, pushOk:false, pongAt:0},
 
+  on(){ return this.mode !== null; },
   parse(){
     try{ this.state = JSON.parse($('netState').textContent); }catch(e){ this.state = null; }
   },
@@ -1356,16 +2058,38 @@ const NET = {
       store('sm68-id', this.token);
     }
     this.parse();
-    if (!(window.claude && typeof window.claude.use === 'function')){ onReady(false); return; }
-    window.claude.use('artifact').then(ns => { this.api = ns || null; onReady(!!this.api); })
-      .catch(() => onReady(false));
+    if (window.claude && typeof window.claude.use === 'function'){
+      window.claude.use('artifact').then(ns => { this.api = ns || null; if (this.api) this.mode = 'artifact'; onReady(!!this.api); })
+        .catch(() => onReady(false));
+      return;
+    }
+    let relayParam = false; try{ relayParam = !!new URLSearchParams(location.search).get('relay'); }catch(e){}
+    if (HAS_MANIFEST || relayParam){
+      this.mode = 'relay';
+      this.state = null;
+      const c = this.cached();
+      if (c){ this.rl.code = c.code; this.rl.rev = c.rev; this.rl.chat = c.chat || []; }
+      // wake the free-tier relay behind the player's own setup time
+      if (/^https?:/.test(location.protocol)){ try{ fetch(RELAY_HTTP + '/healthz', {mode:'no-cors'}).catch(() => {}); }catch(e){} }
+      onReady(true); return;
+    }
+    onReady(false);
   },
+  mySeat(){
+    const s = this.state;
+    if (!s || !s.seats) return -1;
+    return s.seats.findIndex(x => x && x.token === this.token);
+  },
+  myName(){ const s = this.state, i = this.mySeat(); return (s && i >= 0 && s.seats[i]) ? s.seats[i].name : 'Investor'; },
+
+  /* ---------------- artifact transport ---------------- */
   buildDoc(state){
     const json = JSON.stringify(state).replace(/</g, '\\u003c');
     return PRISTINE.replace(/(<script id="netState"[^>]*>)[\s\S]*?(<\/script>)/,
       (m, a, b) => a + json + b);
   },
   async publish(state, okMsg){
+    if (this.mode === 'relay') return this.publishRelay(state, okMsg);
     if (!this.api){ toast('Online play is not available in this view'); return false; }
     if (this.publishing) return false;
     this.publishing = true;
@@ -1384,12 +2108,298 @@ const NET = {
       this.publishing = false;
     }
   },
-  mySeat(){
-    const s = this.state;
-    if (!s || !s.seats) return -1;
-    return s.seats.findIndex(x => x && x.token === this.token);
+
+  /* ---------------- relay transport ---------------- */
+  cached(){ try{ const c = JSON.parse(read(TABLE_KEY) || 'null'); return c && c.code ? c : null; }catch(e){ return null; } },
+  cache(){
+    if (this.mode !== 'relay' || !this.rl.code) return;
+    store(TABLE_KEY, JSON.stringify({code: this.rl.code, rev: this.rl.rev, state: this.state, chat: this.rl.chat.slice(-60), at: Date.now()}));
+  },
+  forget(){ store(TABLE_KEY, null); this.rl.code = null; this.rl.rev = 0; this.rl.chat = []; this.rl.members = []; this.state = null; },
+  send(o){
+    const ws = this.rl.ws;
+    if (ws && ws.readyState === 1){ try{ ws.send(JSON.stringify(o)); return true; }catch(e){} }
+    return false;
+  },
+  connect(){
+    const rl = this.rl;
+    if (rl.ws && rl.ws.readyState === 1) return Promise.resolve(true);
+    if (rl.opening) return rl.opening;
+    rl.opening = new Promise(res => {
+      let ws;
+      try{ ws = new WebSocket(RELAY_WS); }catch(e){ rl.opening = null; res(false); return; }
+      rl.ws = ws;
+      let settled = false;
+      const finish = ok => { if (!settled){ settled = true; rl.opening = null; res(ok); } };
+      ws.onopen = () => { rl.connected = true; rl.tries = 0; finish(true); };
+      ws.onmessage = e => { let m = null; try{ m = JSON.parse(e.data); }catch(x){} if (m) this.onMsg(m); };
+      ws.onerror = () => {};
+      ws.onclose = () => {
+        if (rl.ws !== ws) return;        // a stale socket must not null out its replacement
+        rl.ws = null; rl.connected = false; finish(false);
+        if (rl.pending){ const p = rl.pending; rl.pending = null; p.res(false); }
+        if (rl.joining){ const j = rl.joining; rl.joining = null; j.res(false); }
+        if (rl.code && V.online) this.retry();
+        renderPresence();
+      };
+      setTimeout(() => { if (ws.readyState === 0){ try{ ws.close(); }catch(e){} } }, 15000);
+    });
+    return rl.opening;
+  },
+  /* the wire dropped mid-table: knock again with growing patience */
+  retry(){
+    const rl = this.rl;
+    if (rl.retryT) return;
+    const wait = Math.min(60000, 2000 * Math.pow(2, Math.min(6, rl.tries++)));
+    rl.retryT = setTimeout(async () => {
+      rl.retryT = 0;
+      if (!rl.code || !V.online) return;
+      const ok = await this.connect();
+      if (ok) this.send({t:'tbJoin', code: rl.code, name: this.myName(), tok: this.token});
+      else this.retry();
+    }, wait);
+  },
+  /* iOS kills a backgrounded socket without a close event: verify on return */
+  checkAlive(){
+    const rl = this.rl;
+    if (this.mode !== 'relay' || !rl.code || !V.online) return;
+    if (!rl.connected){ this.retry(); return; }
+    rl.pongAt = 0;
+    this.send({t:'ping'});
+    setTimeout(() => { if (!rl.pongAt && rl.ws){ try{ rl.ws.close(); }catch(e){} } }, 2500);
+  },
+  /* open a table: host a new one, or join (return to) one by code */
+  async open(kind, code){
+    const rl = this.rl;
+    if (rl.joining) return false;
+    toast(kind === 'host' ? 'Setting the table…' : 'Finding the table…', 8000);
+    const ok = await this.connect();
+    if (!ok){ toast('Could not reach the relay — it wakes in under a minute; try again', 4200); return false; }
+    return new Promise(res => {
+      rl.joining = {kind, code, res, reseeded: false};
+      if (kind === 'host') this.send({t:'tbHost', name: 'Host', tok: this.token});
+      else this.send({t:'tbJoin', code, name: this.myName(), tok: this.token});
+      setTimeout(() => {
+        if (rl.joining && rl.joining.res === res){ rl.joining = null; toast('The relay did not answer — try again', 3000); res(false); }
+      }, 12000);
+    });
+  },
+  onMsg(m){
+    const rl = this.rl;
+    switch (m.t){
+      case 'tbJoined': {
+        const j = rl.joining; rl.joining = null;
+        const back = !j && rl.code === m.code;          // a reconnect, not a fresh join
+        rl.code = m.code; rl.members = m.members || []; rl.pushOk = !!m.push;
+        rl.chat = Array.isArray(m.chat) ? m.chat.map(x => ({n:x.n, c:x.c, x:x.x, t:x.tm})) : [];
+        if (m.state === null || m.state === undefined){
+          // a brand-new table: I am its host — lay the empty lobby
+          rl.rev = m.rev || 0; this.state = null;
+          const st = netSnapshot({phase:'lobby', host: this.token, seats: [], game: null, note: 'The table is set — share the code'});
+          this.publish(st).then(ok => { if (j) j.res(ok); });
+          return;
+        }
+        if (back && this.state && rl.rev > (m.rev || 0)){
+          // the table came back older than this phone remembers it: the newest copy wins
+          const mine = this.state;
+          rl.rev = m.rev || 0;
+          this.publishRelay(mine);
+          Push.resub();
+          return;
+        }
+        this.apply(m.state, m.rev, false, true);
+        Push.resub();
+        if (back) toast('Back at the table', 1800);
+        if (j) j.res(true);
+        return;
+      }
+      case 'tbState': this.apply(m.state, m.rev, false, false); return;
+      case 'tbAck': {
+        const p = rl.pending; rl.pending = null;
+        if (p){ this.apply(p.state, m.rev, true, false); p.res(true); }
+        return;
+      }
+      case 'tbStale': {
+        const p = rl.pending; rl.pending = null;
+        toast('The table moved first — catching up…');
+        this.apply(m.state, m.rev, false, false);
+        if (p) p.res(false);
+        return;
+      }
+      case 'tbChat': {
+        rl.chat.push({n: m.n, c: m.c, x: m.x, t: m.tm});
+        if (rl.chat.length > 60) rl.chat.shift();
+        this.cache(); renderChat();
+        const me = chatMe();
+        if (V.online && !(me && m.n === me.n)){ Snd.tick(); toast(m.n + ': ' + m.x, 3200); }
+        return;
+      }
+      case 'tbMembers': rl.members = m.members || []; renderPresence(); return;
+      case 'tbPushOk': rl.pushOk = !!m.ok; return;
+      case 'pong': rl.pongAt = Date.now(); return;
+      case 'err': {
+        const j = rl.joining;
+        if (m.code === 'nosuch'){
+          const c = this.cached();
+          if (c && c.code === m.table && c.state && !(j && j.reseeded)){
+            // the relay has restarted since this table last played: re-seed it from this
+            // phone's copy — on a fresh join or a reconnect alike (the first phone back wins;
+            // a second re-seeder simply sits down at the table it finds)
+            if (j) j.reseeded = true;
+            this.send({t:'tbHost', name: this.myName(), tok: this.token, code: c.code, state: c.state, rev: c.rev});
+            return;
+          }
+          if (j){ rl.joining = null; toast('No table with that code', 3000); j.res(false); }
+          else { toast('The table is gone from the relay', 3000); }
+          return;
+        }
+        if (j){ rl.joining = null; toast(m.msg || 'The relay refused', 3000); j.res(false); return; }
+        if (m.msg) toast(m.msg, 3000);
+        return;
+      }
+    }
+  },
+  /* a new revision of the table: my own (after its ack) or somebody else's */
+  apply(state, rev, own, first){
+    const rl = this.rl;
+    const prev = rl.rev;
+    rl.rev = rev; this.state = state; this.cache();
+    if (own){
+      const same = V.g && state && state.phase === 'playing' && $('game').classList.contains('on');
+      if (same){ renderAll(); return; }
+      routeOnline(); return;
+    }
+    if (!V.online && V.g) return;      // playing a local game: the table waits on the splash
+    const inGame = V.g && V.online && $('game').classList.contains('on');
+    if (inGame && state && state.phase === 'playing' && rev <= prev){
+      // a reconnect handed back the table as this phone already has it (or older):
+      // nothing new to show — never rebuild the game under a player mid-throw
+      renderPresence(); return;
+    }
+    const soft = inGame && state && state.phase === 'playing' && state.game;
+    if (soft){
+      if ($('sheet').classList.contains('on')) closeSheet();
+      V.g = Game.fromSave(JSON.parse(JSON.stringify(state.game)));
+      V.gen++; V.busy = false;
+      dieFace($('die1'), V.g.st.dice[0] || 1); dieFace($('die2'), V.g.st.dice[1] || 1);
+      renderAll();
+      if (state.note && state.lastBy !== this.token) toast(state.note, 3800);
+      if (V.g.st.over){ showWin(); return; }
+      runLoop(); return;
+    }
+    const routed = routeOnline();
+    if (routed && !first && state && state.note && state.lastBy !== this.token) toast(state.note, 3200);
+  },
+  async publishRelay(state, okMsg){
+    const rl = this.rl;
+    if (this.publishing) return false;
+    this.publishing = true;
+    try{
+      const ok = await this.connect();
+      if (!ok){ toast('Could not reach the table — try again', 3000); return false; }
+      if (!rl.code) return false;
+      const rev = rl.rev + 1;
+      const res = await new Promise(res => {
+        rl.pending = {rev, res, state};
+        if (!this.send({t:'tbState', rev, state, notify: this.notifyFor(state)})){ rl.pending = null; res(false); return; }
+        setTimeout(() => {
+          if (rl.pending && rl.pending.rev === rev){ rl.pending = null; toast('The table did not answer — try again', 3000); res(false); }
+        }, 8000);
+      });
+      if (res && okMsg) toast(okMsg);
+      return res;
+    } finally { this.publishing = false; }
+  },
+  /* who the relay should wake with a push: the next human at the table, never me */
+  notifyFor(state){
+    if (!state) return [];
+    const url = (/^https?:/.test(location.protocol) ? location.origin + location.pathname : '') + (this.rl.code ? '?table=' + this.rl.code : '');
+    const out = [], seats = state.seats || [];
+    const everyone = (title, body) => seats.forEach(x => { if (x && x.token && x.token !== this.token) out.push({tok: x.token, title, body, url}); });
+    if (state.phase === 'playing' && state.game){
+      const g = state.game;
+      if (g.over){
+        const w = g.players[g.winner];
+        everyone('The market has closed', w ? w.name + ' takes the game' : 'The game is over');
+      } else if (g.turnCount === 0){
+        everyone('The market is open', 'First throw: ' + g.players[0].name);
+      } else {
+        // the next human — the seat whose phone plays next, computers included
+        let idx = -1;
+        for (let k = 0; k < g.players.length; k++){ const i = (g.turn + k) % g.players.length; if (!g.players[i].ai){ idx = i; break; } }
+        const seat = seats[idx];
+        if (seat && seat.token && seat.token !== this.token){
+          out.push({tok: seat.token, title: (idx === g.turn ? 'Your throw, ' : 'You’re up next, ') + seat.name,
+            body: String(state.note || '').replace(/ — next:.*$/, '').slice(0, 120), url});
+        }
+      }
+    } else if (state.phase === 'lobby' && /reset the table/.test(state.note || '')){
+      everyone('New table forming', 'The host called everyone back to the lobby');
+    }
+    return out;
+  },
+  leaveTable(){ this.send({t:'tbLeave'}); },
+};
+
+/* ---- "your throw" notifications for the installed app (web push via the relay) ---- */
+const Push = {
+  supported(){ return HAS_MANIFEST && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && /^https?:/.test(location.protocol); },
+  wanted(){ return read('sm68-push') === '1'; },
+  b64(s){ const b = atob((s + '='.repeat((4 - s.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(b, c => c.charCodeAt(0)); },
+  async enable(){
+    if (!this.supported()){
+      const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+      toast(ios ? 'On iPhone, notifications work once the app is on your Home Screen (Share → Add to Home Screen)' : 'Notifications are not available in this browser', 5200);
+      return false;
+    }
+    let key = null;
+    try{ const r = await fetch(RELAY_HTTP + '/push-key'); if (r.ok) key = (await r.json()).key; }catch(e){}
+    if (!key){ toast('Notifications are not switched on at the relay yet', 3600); return false; }
+    let perm = 'denied';
+    try{ perm = await Notification.requestPermission(); }catch(e){}
+    if (perm !== 'granted'){ toast('Notifications were not allowed', 3000); return false; }
+    try{
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: this.b64(key)});
+      await NET.connect();
+      NET.send({t:'tbPush', sub: sub.toJSON(), tok: NET.token});
+      store('sm68-push', '1');
+      toast('You’ll be told when it’s your throw', 3000);
+      return true;
+    }catch(e){ toast('Could not subscribe to notifications', 3000); return false; }
+  },
+  async disable(){
+    store('sm68-push', null);
+    try{
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) await sub.unsubscribe();
+    }catch(e){}
+    NET.send({t:'tbPush', sub: null, tok: NET.token});
+    toast('Turn notifications off', 2200);
+  },
+  async resub(){
+    if (!this.wanted() || !this.supported()) return;
+    try{
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) NET.send({t:'tbPush', sub: sub.toJSON(), tok: NET.token});
+    }catch(e){}
   },
 };
+function renderPresence(){
+  const rl = NET.rl;
+  if (NET.mode !== 'relay') return;
+  const badge = $('liveBadge');
+  if (badge && V.online && V.g){
+    const on = rl.members.filter(m => m.on).length;
+    badge.textContent = rl.connected ? 'LIVE · ' + on + ' here' : 'RECONNECTING…';
+  }
+  document.querySelectorAll('#lobbySeats [data-tok]').forEach(el => {
+    const m = rl.members.find(x => x.tok === el.dataset.tok);
+    el.classList.toggle('on', !!(m && m.on));
+  });
+}
 
 /* ================= AUDIO — everything synthesized live ================= */
 const Snd = (() => {
@@ -1484,6 +2494,96 @@ function describeSpace(i){
   return ['', ''];
 }
 
+/* corner occupation illustrations: ink on cream, bold silhouettes */
+function cornerArt(j, x, y){
+  // Each figure is drawn in absolute coordinates inside a 100 x 33 box whose
+  // top-left is (x+5, y+4.5): the art stays above y+38 so it clears the cap
+  // height of the 13 px name line whose baseline sits at y+48.
+  const I = '#22211f', C = '#fbf7ea';
+  const X = x + 5, Y = y + 4.5;
+  const F = `fill="${I}"`, K = `fill="${C}"`;
+  const face = (cx, cy) => `<circle cx="${X+cx}" cy="${Y+cy}" r="8.5" ${K} stroke="${I}" stroke-width="2.4"/>`;
+  const eyes = (cx, cy) => `<circle cx="${X+cx-3.2}" cy="${Y+cy}" r="1.15" ${F}/><circle cx="${X+cx+3.2}" cy="${Y+cy}" r="1.15" ${F}/>`;
+  const shoulders = (l, extra) => `<path d="M${X+l} ${Y+32} q2 -8 13 -9.5 l9 -2 h16 l9 2 q11 1.5 13 9.5 z" ${extra}/>`;   // a 60-wide bust
+
+  if (j === 0){   // Deep Sea Diver — brass helmet with porthole, air hose, rising bubbles (teal glass)
+    const A = '#2f8f78';
+    const bub = (cx, cy, r) => `<circle cx="${X+cx}" cy="${Y+cy}" r="${r}" fill="${A}" stroke="${I}" stroke-width="1.3"/>`;
+    return [
+      `<path d="M${X+36} ${Y+6.4} c-7 -5 -16 -2 -18 5 c-2 7 0 13 4 20" fill="none" stroke="${I}" stroke-width="3.2" stroke-linecap="round"/>`,   // air hose
+      `<path d="M${X+20} ${Y+32} q3 -9 14 -9 h24 q11 0 14 9 z" ${F}/>`,                                  // corselet
+      `<rect x="${X+55}" y="${Y+5}" width="5" height="4" rx="1" ${F}/>`,                                 // exhaust valve
+      `<circle cx="${X+46}" cy="${Y+13}" r="12" ${F}/>`,                                                 // dome
+      `<path d="M${X+38} ${Y+24.6} h16" stroke="${C}" stroke-width="1.2"/>`,                            // neck ring
+      `<circle cx="${X+33}" cy="${Y+28.5}" r="1.1" ${K}/><circle cx="${X+46}" cy="${Y+29.5}" r="1.1" ${K}/><circle cx="${X+59}" cy="${Y+28.5}" r="1.1" ${K}/>`,   // bolts
+      `<circle cx="${X+46}" cy="${Y+13}" r="7.5" ${K}/><circle cx="${X+46}" cy="${Y+13}" r="5.2" fill="${A}"/><circle cx="${X+43.8}" cy="${Y+10.8}" r="1.5" ${K}/>`,   // front port
+      `<circle cx="${X+37}" cy="${Y+14}" r="2.2" ${K}/><circle cx="${X+55}" cy="${Y+14}" r="2.2" ${K}/><circle cx="${X+37}" cy="${Y+14}" r="1.2" fill="${A}"/><circle cx="${X+55}" cy="${Y+14}" r="1.2" fill="${A}"/>`,   // side ports
+      bub(65, 24, 1.9), bub(71, 16.5, 2.7), bub(79, 8, 3.6),
+    ].join('');
+  }
+
+  if (j === 1){   // Doctor — white coat, head mirror, stethoscope, bag with a red cross
+    const A = '#c9372c';
+    return [
+      shoulders(12, `${K} stroke="${I}" stroke-width="2.4" stroke-linejoin="round"`),                    // white coat
+      `<path d="M${X+35} ${Y+22.5} l7 9.5 l7 -9.5 z" ${F}/>`,                                            // lapels / tie
+      `<path d="M${X+34} ${Y+22.5} q-2.5 4.5 1.5 6.5 M${X+50} ${Y+22.5} q2.5 4.5 -1.5 6.5" fill="none" stroke="${I}" stroke-width="1.6" stroke-linecap="round"/>`,   // stethoscope
+      `<circle cx="${X+36.2}" cy="${Y+29.6}" r="2.1" ${F}/><circle cx="${X+48.8}" cy="${Y+29.4}" r="1.2" ${F}/>`,
+      face(42, 13.5),
+      `<path d="M${X+34.25} ${Y+10} c0 -6.5 15.5 -6.5 15.5 0 q-7.75 1.5 -15.5 0 z" ${F}/>`,             // hair
+      `<rect x="${X+33.5}" y="${Y+9.5}" width="17" height="2" ${F}/>`,                                  // mirror band
+      `<circle cx="${X+42}" cy="${Y+7}" r="4.6" ${F}/><circle cx="${X+42}" cy="${Y+7}" r="3" ${K}/><circle cx="${X+42}" cy="${Y+7}" r="1.1" ${F}/>`,   // head mirror
+      eyes(42, 14.6),
+      `<path d="M${X+40.2} ${Y+18.6} h3.6" stroke="${I}" stroke-width="1.2" stroke-linecap="round"/>`,   // mouth
+      `<path d="M${X+76} ${Y+32} v-11 q0 -4 4 -4 h14 q4 0 4 4 v11 z" ${F}/>`,                            // bag
+      `<path d="M${X+82.5} ${Y+17} v-2.5 q0 -3 4.5 -3 q4.5 0 4.5 3 v2.5" fill="none" stroke="${I}" stroke-width="2.2"/>`,   // handle
+      `<rect x="${X+81.5}" y="${Y+20}" width="11" height="10" rx="1.2" ${K}/>`,
+      `<rect x="${X+85.5}" y="${Y+21.5}" width="3" height="7" fill="${A}"/><rect x="${X+83.5}" y="${Y+23.5}" width="7" height="3" fill="${A}"/>`,   // red cross
+    ].join('');
+  }
+
+  if (j === 2){   // Policeman — peaked cap with a star, blue tunic, nightstick held high
+    const A = '#3ba4c8';
+    return [
+      `<path d="M${X+68} ${Y+27} l8 -6" stroke="${I}" stroke-width="9" stroke-linecap="round"/>`,        // raised arm
+      `<path d="M${X+68} ${Y+27} l8 -6" stroke="${A}" stroke-width="5.6" stroke-linecap="round"/>`,
+      `<path d="M${X+74.5} ${Y+26} l9 -21" stroke="${I}" stroke-width="4.6" stroke-linecap="round"/>`,   // nightstick
+      `<circle cx="${X+78}" cy="${Y+19}" r="4" ${F}/>`,                                                  // fist
+      shoulders(16, `fill="${A}" stroke="${I}" stroke-width="2" stroke-linejoin="round"`),               // tunic
+      `<path d="M${X+41} ${Y+22.5} l5 5 l5 -5 z" ${K}/>`,                                                // collar
+      `<path d="M${X+44.6} ${Y+25} h2.8 l-1.4 6.5 z" ${F}/>`,                                            // tie
+      `<circle cx="${X+40}" cy="${Y+27.5}" r="1.15" ${K}/><circle cx="${X+52}" cy="${Y+27.5}" r="1.15" ${K}/><circle cx="${X+40}" cy="${Y+30.5}" r="1.15" ${K}/><circle cx="${X+52}" cy="${Y+30.5}" r="1.15" ${K}/>`,   // buttons
+      face(46, 15),
+      eyes(46, 17.6),
+      `<path d="M${X+42.5} ${Y+20.5} q3.5 -1.7 7 0 q-3.5 1.5 -7 0 z" ${F}/>`,                            // moustache
+      `<path d="M${X+32} ${Y+9.5} q14 -14.5 28 0 z" ${F}/>`,                                             // crown
+      `<rect x="${X+34}" y="${Y+9}" width="24" height="3.6" ${F}/>`,                                    // band
+      `<path d="M${X+35.5} ${Y+12.6} h21 q-1.5 4 -10.5 4 q-9 0 -10.5 -4 z" ${F}/>`,                      // visor
+      `<path d="M${X+33} ${Y+9.4} h26 M${X+36.5} ${Y+12.9} h19" stroke="${C}" stroke-width=".9"/>`,
+      `<path d="M${X+46} ${Y+3.8} l.82 2.27 l2.41 .08 l-1.9 1.48 l.67 2.32 l-2 -1.35 l-2 1.35 l.67 -2.32 l-1.9 -1.48 l2.41 -.08 z" ${K}/>`,   // cap star
+    ].join('');
+  }
+
+  // j === 3: Prospector — slouch hat, big beard, pick over the shoulder, gold nugget held up
+  const A = '#c69b3a';
+  return [
+    `<path d="M${X+74} ${Y+32} l14 -26" stroke="${I}" stroke-width="3.4" stroke-linecap="round"/>`,      // pick handle
+    `<path d="M${X+78.3} ${Y+.8} q12.3 .4 19.4 10.4 q-9.9 -4.8 -19.4 -10.4 z" ${F}/>`,                   // pick head
+    `<path d="M${X+24} ${Y+30} l-5 -11" stroke="${I}" stroke-width="7" stroke-linecap="round"/>`,        // arm
+    `<circle cx="${X+18.5}" cy="${Y+16.5}" r="4.2" ${F}/>`,                                              // fist
+    `<path d="M${X+12.5} ${Y+9.5} l2 -5 l6 -1.5 l4 3.5 l-1.5 5.5 l-6 1.5 z" fill="${A}" stroke="${I}" stroke-width="1.4" stroke-linejoin="round"/>`,   // nugget
+    shoulders(14, F),
+    `<path d="M${X+37} ${Y+22.5} l7 8 l7 -8 z" ${K}/>`,                                                  // kerchief
+    face(44, 15),
+    eyes(44, 15.3),
+    `<path d="M${X+44} ${Y+14.8} l-1.6 3.6 h3.2 z" ${F}/>`,                                             // nose
+    `<path d="M${X+34.5} ${Y+16} q3.5 5 7.5 3.5 q2 -1.2 4 0 q4 1.5 7.5 -3.5 q3.5 11 -5 15 q-4.5 2 -9 0 q-8.5 -4 -5 -15 z" ${F}/>`,   // beard + moustache
+    `<path d="M${X+35} ${Y+9.5} q1 -9.5 9 -9.5 q8 0 9 9.5 z" ${F}/>`,                                    // crown
+    `<path d="M${X+26} ${Y+10} q18 -4.5 36 0 q-18 5 -36 0 z" ${F}/>`,                                    // brim
+    `<path d="M${X+36} ${Y+8.5} h16" stroke="${C}" stroke-width="1"/>`,                                  // hatband
+  ].join('');
+}
+
 function buildBoard(){
   const P = [];
   P.push(`<svg viewBox="0 0 ${BS} ${BS}" role="group" aria-label="Game board">`);
@@ -1506,6 +2606,7 @@ function buildBoard(){
     <filter id="barShadow" x="-15%" y="-60%" width="130%" height="240%">
       <feDropShadow dx="0" dy="2" stdDeviation="1.6" flood-color="#1a140c" flood-opacity=".35"/>
     </filter>
+    ${patDefs()}
   </defs>`);
   P.push(`<rect x="0" y="0" width="${BS}" height="${BS}" rx="10" fill="url(#feltRim)"/>`);
   P.push(`<rect x="6.5" y="6.5" width="${BS-13}" height="${BS-13}" rx="7" fill="none" stroke="rgba(227,189,98,.55)" stroke-width="1.5"/>`);
@@ -1552,7 +2653,7 @@ function buildBoard(){
   }
   // THE indicator: the black T-marker riding the white middle track, with a
   // soft reading-row highlight so every column's row is easy to pick out
-  let bar = `<g class="qknob" id="tickerBar" filter="url(#barShadow)" transform="translate(0,${yOf(CFG.M_START)})">`;
+  let bar = `<g class="qknob" id="tickerBar" role="img" aria-label="Indicator on the START row" filter="url(#barShadow)" transform="translate(0,${yOf(CFG.M_START)})">`;
   bar += `<rect x="${QT.gx0-10}" y="-8.5" width="${QT.gx1-QT.gx0+20}" height="17" fill="#e9c46a" opacity=".4"/>`;
   bar += `<line x1="${QT.gx0-10}" y1="-8.5" x2="${QT.gx1+10}" y2="-8.5" stroke="#22211f" stroke-width=".9" opacity=".55"/>`;
   bar += `<line x1="${QT.gx0-10}" y1="8.5" x2="${QT.gx1+10}" y2="8.5" stroke="#22211f" stroke-width=".9" opacity=".55"/>`;
@@ -1634,7 +2735,7 @@ function buildBoard(){
         `<path d="M ${gx} ${gy-10} l 2.9 6.2 6.8 .8 -5 4.7 1.3 6.8 -6 -3.4 -6 3.4 1.3 -6.8 -5 -4.7 6.8 -.8 z" fill="#22211f"/>`,   // policeman's star
         `<path d="M ${gx-9} ${gy-4} q 9 -7 18 0 l -1.6 2 q -7.4 -5 -14.8 0 z" fill="#22211f"/><rect x="${gx-1.3}" y="${gy-3}" width="2.6" height="14" fill="#22211f"/>`,   // prospector's pick
       ][sp.j];
-      P.push(glyph);
+      P.push(typeof cornerArt === 'function' ? cornerArt(sp.j, r.x, r.y) : glyph);
       const words = j.t.toUpperCase().split(' ');
       words.forEach((w, k) => {
         P.push(`<text x="${r.x+r.w/2}" y="${r.y+48+k*14}" text-anchor="middle" style="font:900 ${words.length>2?11:13}px Archivo,sans-serif;letter-spacing:.02em;fill:#22211f">${w}</text>`);
@@ -1696,8 +2797,8 @@ function buildBoard(){
     `<div id="diceFly"><div class="die big" id="fd1"></div><div class="die big" id="fd2"></div></div>`;
   $('boardWrap').querySelectorAll('.sp-hit').forEach(el => {
     const show = () => {
-      const [t, b] = describeSpace(+el.dataset.i);
-      toast(`${t} — ${b}`, 3200);
+      if (V.busy){ const [t, b] = describeSpace(+el.dataset.i); toast(`${t} — ${b}`, 3200); return; }
+      sheetSquare(+el.dataset.i);
     };
     el.addEventListener('click', show);
     el.addEventListener('keydown', ev => {
@@ -1730,12 +2831,15 @@ function renderPawns(){
   if (!layer.childElementCount){
     // classic peg pawns: flared base, waisted body, ball head
     const sc = matchMedia('(max-width:919px)').matches ? 1.45 : 1;
+    const pat = V.set && V.set.patterns;
     layer.innerHTML = V.g.st.players.map((p, i) =>
-      `<g class="pawn" id="pawn${i}"><g transform="scale(${sc})">` +
+      `<g class="pawn" id="pawn${i}"><title id="pawnT${i}"></title><g transform="scale(${sc})">` +
       `<ellipse cy="15.5" rx="12.5" ry="3.6" fill="rgba(15,10,5,.3)"/>` +
       `<ellipse cy="13" rx="10.5" ry="4.5" fill="${p.color}" stroke="#251f17" stroke-width="2"/>` +
       `<path d="M -7.5 13 Q -3 0 -2.4 -5.5 L 2.4 -5.5 Q 3 0 7.5 13 Z" fill="${p.color}" stroke="#251f17" stroke-width="2" stroke-linejoin="round"/>` +
+      (pat ? `<path d="M -7.5 13 Q -3 0 -2.4 -5.5 L 2.4 -5.5 Q 3 0 7.5 13 Z" fill="url(#pat${i % 8})"/>` : '') +
       `<circle cy="-10" r="6" fill="${p.color}" stroke="#251f17" stroke-width="2"/>` +
+      (pat ? `<circle cy="-10" r="5" fill="url(#pat${i % 8})"/>` : '') +
       `<ellipse cx="-2" cy="-12" rx="1.8" ry="2.4" fill="rgba(255,248,225,.55)"/>` +
       `<text y="16" text-anchor="middle" style="font:800 7.5px Archivo,sans-serif;fill:#f7efda;paint-order:stroke;stroke:rgba(0,0,0,.35);stroke-width:1.5px">${esc(p.name.trim().charAt(0).toUpperCase() || '?')}</text>` +
       `</g></g>`).join('');
@@ -1744,6 +2848,8 @@ function renderPawns(){
     const [x, y] = pawnXY(i);
     const el = document.getElementById('pawn' + i);
     if (el) el.setAttribute('transform', `translate(${x},${y})`);
+    const t = document.getElementById('pawnT' + i);
+    if (t) t.textContent = p.name + (p.mode === 'meeting' && p.meet ? ' — in the ' + STOCKS[p.meet.stock].code + ' meeting' : ' — on ' + describeSpace(p.pos)[0]);
   });
 }
 
@@ -1767,7 +2873,11 @@ function barYOf(M){
 function renderQuote(){
   if (!V.g) return;
   const bar = document.getElementById('tickerBar');
-  if (bar) bar.setAttribute('transform', `translate(0,${barYOf(V.g.st.M)})`);
+  if (bar){
+    bar.setAttribute('transform', `translate(0,${barYOf(V.g.st.M)})`);
+    const M = V.g.st.M;
+    bar.setAttribute('aria-label', 'Indicator at notch ' + M + (M === CFG.M_START ? ', the START row' : M > CFG.M_START ? ', ' + (M - CFG.M_START) + ' above START' : ', ' + (CFG.M_START - M) + ' below START'));
+  }
   V.g.st.prices.forEach((p, i) => {
     const kt = document.getElementById('qkt' + i);
     if (kt) kt.textContent = p;
@@ -1790,7 +2900,8 @@ function renderPlayers(){
   const nws = g.st.players.map(p => g.netWorth(p));
   $('players').innerHTML = g.st.players.map((p, i) =>
     `<div class="pchip${i === g.st.turn ? ' cur' : ''}${prevNW[i] !== undefined && nws[i] !== prevNW[i] ? (nws[i] > prevNW[i] ? ' gain' : ' loss') : ''}">
-      <span class="dot" style="background:${p.color}"></span>
+      <span class="dot" style="${dotStyle(p.color, i)}"></span>
+      ${g.st.teams ? `<span class="tm" title="Partners ${String.fromCharCode(65 + g.st.teams[i])}">${String.fromCharCode(65 + g.st.teams[i])}</span>` : ''}
       <span class="nm">${esc(p.name)}${p.ai ? ' ⚙' : ''}${i === me ? ' ·YOU' : ''}</span>
       <span class="nw num">${fmt(nws[i])}</span>
     </div>`).join('');
@@ -1809,7 +2920,11 @@ function renderTape(){
 }
 function renderLog(){
   if (!V.g) return;
-  $('logLines').innerHTML = V.g.st.log.slice(-30).reverse().map(l => `<div class="log-line">${esc(l)}</div>`).join('');
+  const st = V.g.st, n = st.log.length;
+  const rows = st.log.slice(-30).map((l, k, arr) => ({l, why: (st.logWhy || [])[n - arr.length + k] || ''})).reverse();
+  $('logLines').innerHTML = rows.map(({l, why}) =>
+    `<div class="log-line"><span>${esc(l)}</span>${why && RULES[why] ? `<button class="why" data-why="${why}" aria-label="Why? ${esc(RULES[why][0])}" title="${esc(RULES[why][0])}">?</button>` : ''}</div>`).join('');
+  $('logLines').querySelectorAll('[data-why]').forEach(el => el.addEventListener('click', () => sheetWhy(el.dataset.why)));
 }
 function renderHint(){
   const g = V.g; if (!g) return;
@@ -1846,6 +2961,12 @@ function renderButtons(){
   const g = V.g; if (!g) return;
   const p = g.cur();
   const mine = !p.ai && (!V.online || myOnlineSeat() === g.st.turn);
+  if (V.autoplay){
+    $('btnRoll').disabled = true;
+    $('btnEndTurn').disabled = g.st.over; $('btnEndTurn').textContent = 'Stop Autoplay';
+    return;
+  }
+  $('btnEndTurn').textContent = 'End Turn';
   $('btnRoll').disabled = !(mine && g.st.phase === 'idle' && !V.busy && !g.st.over);
   $('btnEndTurn').disabled = !(mine && g.st.phase === 'done' && !V.busy && !g.st.over);
 }
@@ -1884,7 +3005,10 @@ function renderFolio(){
 }
 
 /* ---- table talk: local table notes, or the shared online chat ---- */
-function chatList(){ return V.online ? ((NET.state && NET.state.chat) || []) : V.chat; }
+function chatList(){
+  if (!V.online) return V.chat;
+  return NET.mode === 'relay' ? NET.rl.chat : ((NET.state && NET.state.chat) || []);
+}
 function chatMe(){
   if (V.online){
     const s = NET.state, i = NET.mySeat();
@@ -1926,6 +3050,13 @@ async function sendChat(){
     renderChat(); saveGame();
     return;
   }
+  if (NET.mode === 'relay'){
+    // the relay fans chat out on its own stream — nothing reloads, nothing waits
+    if (!NET.send({t:'tbChat', n: me.n, c: me.c, x: text})){
+      toast('Not connected to the table — reconnecting…', 2600); NET.retry();
+    }
+    return;
+  }
   V.chatQueue.push(msg);
   renderChat();
   // mid-move on this device, the message rides along with the turn's own
@@ -1952,8 +3083,7 @@ function toast(msg, ms = 2200){
 }
 function cardMs(){
   if (!V.g) return 1500;
-  const p = V.g.cur();
-  if (p.ai){ return {normal:1400, fast:600, instant:0}[V.g.st.speed]; }
+  if (acting()){ return {normal:1400, fast:600, instant:0}[paceOf()]; }
   return 1600;
 }
 let cardQueue = Promise.resolve();
@@ -2005,6 +3135,8 @@ async function playEvents(events){
           `${ev.d > 0 ? 'UP' : 'DOWN'} ${Math.abs(ev.d)}${ev.bounced ? ' — bounced' : ''}`,
           `<span style="color:var(--up)">▲ ${bulls.join(' · ') || '—'}</span><br><span style="color:var(--down)">▼ ${bears.join(' · ') || '—'}</span>`);
         renderQuote(); quoteDirty = false;
+        if (!acting()) Coach.show('indicator', '#boardWrap', 'One indicator, every price',
+          'The bar in the middle sets all eight prices at once. ▲ stocks climb as it rises, ▼ stocks climb as it falls — and it bounces off the ends of the table.');
         break;
       }
       case 'salary': {
@@ -2014,10 +3146,15 @@ async function playEvents(events){
         const lines = ev.paid.map(x =>
           `<b>${esc(g.st.players[x.i].name)}</b> the ${JOBS[x.job].t} collects <b class="num">${fmt(x.amt)}</b>`);
         await showCard('Pay Day', `The Throw of ${ev.total} Pays`, lines.join('<br>') + '.');
-        renderPlayers(); break;
+        renderPlayers();
+        if (mePaid && !acting()){ buzz(12); Coach.show('salary', '#players', 'Pay day',
+          'Salaries pay on anyone’s throw of your numbers, not only your own. Bank $1,000 and you must leave for the market.'); }
+        break;
       }
       case 'direction':
         toast(`${ev.total % 2 ? 'Odd' : 'Even'} throw — off START the ${ev.total % 2 ? 'ODD' : 'EVEN'} way`, 2200);
+        if (!acting()) Coach.show('direction', '#boardWrap', 'The arrows steer you',
+          'Off START an odd throw runs the ODD arrow and an even throw the other. Everywhere else you follow the arrow printed on the square you are leaving.');
         break;
       case 'startFee':
         Snd.fee(); cashFx(-ev.amt);
@@ -2027,12 +3164,15 @@ async function playEvents(events){
         Snd.fee(); cashFx(-ev.amt);
         await showCard('Pay Broker Fee', ev.owned ? `$${CFG.BROKER_PS} on every share` : 'Nothing to Collect',
           ev.owned ? `<b>${esc(g.cur().name)}</b> holds ${ev.owned} shares — the broker takes <b class="num">${fmt(ev.amt)}</b>.` : 'No shares held — the broker goes home empty-handed.');
-        renderPlayers(); break;
+        renderPlayers();
+        if (!acting()) Coach.show('broker', '#folio', 'Carrying costs',
+          'PAY BROKER FEE charges $10 on every share you hold — a big holding costs more to carry, so keep some cash for the bills.');
+        break;
       case 'codiv':
         Snd.cash(); cashFx(ev.amt);
         await showCard('Dividend Paid', STOCKS[ev.s].name,
           `${STOCKS[ev.s].code} pays its printed <b class="num">$${STOCKS[ev.s].div}</b> a share — <b>${esc(g.cur().name)}</b> collects <b class="num">${fmt(ev.amt)}</b>.`);
-        renderPlayers(); break;
+        renderPlayers(); if (!acting()) buzz(12); break;
       case 'meetdiv': {
         Snd.gavel();
         const body = ev.gain > 0
@@ -2040,7 +3180,10 @@ async function playEvents(events){
           : `${STOCKS[ev.s].code} declares ${ev.ratio} FOR 1 — but with no shares held, there is nothing to collect.`;
         await showCard('Stockholders Meeting', `${ev.ratio} FOR 1`, body);
         if (ev.gain > 0) Snd.split();
-        renderPlayers(); break;
+        renderPlayers();
+        if (!acting()) Coach.show('meeting', '#boardWrap', 'Meetings pay in shares',
+          'Inside a meeting your throw carries you along the FOR-1 cells: where you stop pays that many extra shares for every share held. You leave through the far end onto the paired stock.');
+        break;
       }
       case 'sellall':
         if (ev.n > 0){
@@ -2050,7 +3193,10 @@ async function playEvents(events){
         } else {
           await showCard('Sell All ' + STOCKS[ev.s].code, 'Nothing to Sell', 'No ' + STOCKS[ev.s].name + ' certificates held.');
         }
-        renderPlayers(); break;
+        renderPlayers();
+        if (!acting()) Coach.show('sellall', '#boardWrap', 'The SELL ALL squares',
+          'Each stock has one SELL ALL square: land there and your whole holding goes at the very lowest board price. Tap any square to see what it would cost you.');
+        break;
       case 'forcedSale':
         toast(`Forced sale: ${ev.q} ${STOCKS[ev.s].code} at the $${ev.floor} floor to cover the bill`, 2600);
         break;
@@ -2228,6 +3374,8 @@ function sheetBuy(sIdx, limit){
     note.style.cssText = 'font:600 12px/1.5 Archivo,sans-serif;color:var(--ink-faint);text-align:center;margin-top:8px';
     note.textContent = 'Buying happens only here, the moment you land. Selling waits for the top of your own turn.';
     b.appendChild(note);
+    if (!acting()) Coach.show('buy', '#sheet', 'Buy only where you land',
+      'This is your one buying moment: this company, any amount you can pay, at the new price. Fees come later — keep some cash back.');
   }, done);
 }
 
@@ -2361,13 +3509,20 @@ function sheetLedger(){
     const certs = STOCKS.map((s, i) => {
       if (p.shares[i] < 1) return '';
       const val = p.shares[i] * g.st.prices[i];
+      const serial = 'No. ' + ((g.st.seed % 9000) + 1000) + '-' + s.code + '-' + String(sel + 1).padStart(2, '0');
+      const paid = p.basis && p.basis[i] > 0 ? `, bought for <b>${fmt(p.basis[i])}</b>` : '';
       return `<div class="cert">
-        <div class="cert-head">
-          <span class="mono-chip" style="background:${s.color};color:${s.fg}">${s.code}</span>
-          <span class="ti"><b style="font:800 13px Archivo,sans-serif">${s.name}</b><br><small style="font:600 10px Archivo,sans-serif;color:var(--ink-faint)">REGISTERED SHARE CERTIFICATES</small></span>
-          <span class="cert-shares">${p.shares[i]} sh<br>@ $${g.st.prices[i]}</span>
+        <div class="cert-in">
+          <div class="cert-kick">Stock Market 1968 · Share Certificate</div>
+          <div class="cert-name">${s.name}</div>
+          <div class="cert-sub">${s.sector} · Registered</div>
+          <div class="cert-body">
+            <span class="cert-seal${s.fg === '#fff' ? '' : ' dk'}" style="--c:${s.color}"><span>${p.shares[i]}</span><span style="font-size:7px;letter-spacing:.14em">SHARES</span></span>
+            <span class="ti">This certifies that <b>${esc(p.name)}</b> holds <b>${p.shares[i]}</b> share${p.shares[i] === 1 ? '' : 's'} of ${s.code}, quoted today at <b>$${g.st.prices[i]}</b> — value <b>${fmt(val)}</b>${paid}.</span>
+          </div>
+          <div class="lots">${lots(p.shares[i])}</div>
+          <div class="cert-serial">${serial}</div>
         </div>
-        <div class="lots">${lots(p.shares[i])}</div>
         <div class="cert-foot">
           <span class="num" style="font-weight:700">${fmt(val)}</span>
           ${mine ? `<button class="btn red" data-s="${i}">Sell</button>` : ''}
@@ -2448,9 +3603,9 @@ function onActionResolved(){ renderHint(); renderButtons(); }
 async function animatePath(steps){
   const g = V.g;
   if (!steps || !steps.length){ renderPawns(); return; }
-  const instant = (g.cur().ai && g.st.speed === 'instant') || RM;
+  const instant = (acting() && paceOf() === 'instant') || RM;
   if (instant){ renderPawns(); return; }
-  const stepMs = g.cur().ai && g.st.speed === 'fast' ? 80 : 170;
+  const stepMs = acting() && paceOf() === 'fast' ? 80 : 170;
   const pIdx = g.st.turn;
   const el = document.getElementById('pawn' + pIdx);
   const inner = el && el.firstElementChild;
@@ -2489,7 +3644,7 @@ function dieFace(el, n){
 }
 async function rollDiceAnim(d1, d2){
   const g = V.g;
-  if ((g.cur().ai && g.st.speed === 'instant') || RM){ dieFace($('die1'), d1); dieFace($('die2'), d2); return; }
+  if ((acting() && paceOf() === 'instant') || RM){ dieFace($('die1'), d1); dieFace($('die2'), d2); return; }
   Snd.dice();
   const fly = document.getElementById('diceFly');
   if (fly) fly.classList.add('on');
@@ -2529,9 +3684,9 @@ async function takeRoll(){
     await animatePath(part);
     if (V.g !== g) return null;
     let enter;
-    if (g.cur().ai){
+    if (acting()){
       enter = AI.answerDetour(g, res.s);
-      if (g.st.speed !== 'instant') toast(`${g.cur().name} ${enter ? 'turns in at' : 'passes'} the ${STOCKS[res.s].code} meeting`, 1800);
+      if (paceOf() !== 'instant') toast(`${g.cur().name} ${enter ? 'turns in at' : 'passes'} the ${STOCKS[res.s].code} meeting`, 1800);
     } else {
       enter = await askDetour(res.s);
     }
@@ -2554,7 +3709,8 @@ async function takeRoll(){
 }
 
 async function humanRoll(){
-  if (V.busy || !V.g || V.g.st.over) return;
+  if (V.busy || !V.g || V.g.st.over || V.autoplay) return;
+  Coach.hide();
   if (V.online && myOnlineSeat() !== V.g.st.turn) return;
   Snd.unlock();
   if (V.g.mustEnter()){ sheetStarts(); return; }   // the market is calling — place your piece first
@@ -2573,8 +3729,23 @@ async function humanRoll(){
 
 function humanEndTurn(){
   const g = V.g;
+  if (V.autoplay){ V.autoplay = false; renderButtons(); toast('Autoplay stops — the next human throw is yours', 2600); return; }
   if (V.busy || !g || g.st.phase !== 'done' || g.cur().ai) return;
+  Coach.hide();
   finishTurn();
+}
+/* the computer plays every seat to the end (local games) — Stop hands it back */
+function startAutoplay(){
+  const g = V.g; if (!g || V.online || g.st.over) return;
+  $('menuPop').classList.remove('on');
+  V.autoplay = true; Coach.hide();
+  if ($('sheet').classList.contains('on')) closeSheet();   // a landing choice resolves as a pass
+  toast('Autoplay — the computer plays every seat to the end. Tap Stop to take over.', 3200);
+  renderButtons();
+  if (V.busy) return;
+  if (g.st.phase === 'landed' && g.st.pending){ AI.answerLanding(g, g.st.pending); renderAll(); }
+  if (g.st.phase === 'done'){ finishTurn(); return; }
+  if (g.st.phase === 'idle') runLoop();
 }
 
 function finishTurn(){
@@ -2601,7 +3772,8 @@ function finishTurn(){
 
 async function aiTurn(){
   const g = V.g, gen = V.gen;
-  const pause = {normal:650, fast:250, instant:0}[g.st.speed];
+  const pause = {normal:650, fast:250, instant:0}[paceOf()];
+  const before = g.st.log.length;
   V.busy = true;
   renderHint(); renderButtons();
   await sleep(pause);
@@ -2619,6 +3791,7 @@ async function aiTurn(){
   await sleep(pause);
   if (gen !== V.gen) return;
   V.busy = false;
+  if (g.cur().ai && !V.autoplay) aiTalk(g, g.cur(), before);
   finishTurn();
 }
 
@@ -2631,7 +3804,7 @@ function runLoop(){
     else store(SAVE_KEY, null);
     renderAll(); showWin(); return;
   }
-  if (g.cur().ai){
+  if (g.cur().ai || (V.autoplay && !V.online)){
     if (V.online && onlineDriver() !== myOnlineSeat()){ renderHint(); renderButtons(); return; }
     aiTurn();
   }
@@ -2646,6 +3819,10 @@ function runLoop(){
     if (p.mode === 'work' && g.st.phase === 'idle'){
       if (g.mustEnter()){ sheetStarts(); }
       else if (g.st.turnCount < g.st.players.length){ sheetJobs(); }
+    }
+    if (p.mode === 'market' && g.st.phase === 'idle' && p.shares.some(n => n > 0) && g.st.turnCount >= g.st.players.length){
+      Coach.show('sell', '#btnLedger', 'Sell only now',
+        'Voluntary sales happen only before your own throw — open the Ledger to sell at board prices. Once you throw, the moment has passed.');
     }
   }
 }
@@ -2720,20 +3897,31 @@ function confetti(){
 }
 
 function showWin(){
-  const g = V.g, w = g.st.players[g.st.winner];
-  $('winName').textContent = w.name;
-  $('winSum').textContent = fmt(g.netWorth(w)) + ' · ' + (w.job >= 0 ? JOBS[w.job].t : 'Speculator');
+  const g = V.g, wi = g.st.winner, w = g.st.players[wi];
+  V.autoplay = false; Coach.hide();
+  $('winName').textContent = g.sideName(wi);
+  $('winSum').textContent = fmt(g.sideWorth(wi)) + ' · ' + (g.st.teams ? 'Partners' : (w.job >= 0 ? JOBS[w.job].t : 'Speculator'));
+  const bs = w.stats.bestSale;
   const rows = [
     ['Salary earned at work', fmt(w.stats.earned)],
     ['Cash dividends collected', fmt(w.stats.divs)],
     ['Shares won at meetings', w.stats.meetShares],
     ['Biggest single purchase', fmt(w.stats.bestTrade)],
+    ['Best sale', bs ? `${bs.q} ${STOCKS[bs.s].code} at $${bs.price} (+${fmt(bs.gain)})` : '—'],
+    ['Realized gains', (w.stats.realized < 0 ? '−' : '') + fmt(Math.abs(w.stats.realized || 0))],
+    ['Trades made', w.stats.trades || 0],
     ['Fees paid out', fmt(w.stats.spentFees)],
     ['Times gone broke', w.stats.broke],
     ['Indicator closed at', g.st.M > CFG.M_START ? 'notch ' + g.st.M + ', bull side' : g.st.M < CFG.M_START ? 'notch ' + g.st.M + ', bear side' : 'the START row'],
     ['Turns played (table)', g.st.turnCount],
   ];
   $('winStats').innerHTML = rows.map(r => `<div class="row"><span>${r[0]}</span><span>${r[1]}</span></div>`).join('');
+  $('winStand').innerHTML = standings(g).map((s, i) =>
+    `<div class="stand"><span class="rk">${i + 1}</span><span class="dot" style="background:${s.color}"></span><span>${esc(s.name)}</span><span class="nw">${fmt(s.nw)}</span></div>`).join('');
+  recordGame(g);
+  $('winRecords').innerHTML = recordsHtml(5);
+  if (w.ai && !V.online){ const q = AI.quip(w, 'win'); if (q) postChat({n: w.name, c: w.color, x: q, t: Date.now()}); }
+  buzz([40, 60, 40, 60, 120]);
   if (V.online){
     const host = NET.state && NET.state.host === NET.token;
     $('btnAgain').style.display = host ? '' : 'none';
@@ -2745,7 +3933,7 @@ function showWin(){
     $('btnToSplash').textContent = 'Main Menu';
   }
   $('win').classList.add('on');
-  drawChart();
+  drawChart(); drawChart2();
   confetti();
   Snd.win();
 }
@@ -2767,7 +3955,10 @@ function renderSeats(){
         <option value="c"${s.ai ? ' selected' : ''}>Computer</option>
       </select>
       ${V.seats.length > 2 ? `<button class="rm" data-r="${i}" aria-label="Remove investor">×</button>` : ''}
-    </div>`).join('');
+    </div>
+    ${s.ai ? `<div class="seat2"><label for="persona${i}">Style</label><select id="persona${i}" class="persona" data-p="${i}" aria-label="Investor style">${PERSONAS.map((P, k) =>
+      `<option value="${k}"${((s.persona ?? (i % PERSONAS.length)) === k) ? ' selected' : ''}>${P.name} — ${P.blurb}</option>`).join('')}</select></div>` : ''}`).join('');
+  $('seatList').querySelectorAll('[data-p]').forEach(el => el.addEventListener('change', () => { V.seats[+el.dataset.p].persona = +el.value; }));
   $('seatList').querySelectorAll('[data-n]').forEach(el => el.addEventListener('input', () => { V.seats[+el.dataset.n].name = el.value; }));
   $('seatList').querySelectorAll('[data-c]').forEach(el => el.addEventListener('click', () => {
     const i = +el.dataset.c;
@@ -2782,6 +3973,7 @@ function renderSeats(){
   $('seatList').querySelectorAll('[data-k]').forEach(el => el.addEventListener('change', () => {
     const i = +el.dataset.k; V.seats[i].ai = el.value === 'c';
     if (el.value === 'c' && /^Investor \d+$/.test(V.seats[i].name)){ V.seats[i].name = nextCompName(); }
+    if (el.value === 'c' && V.seats[i].persona === undefined) V.seats[i].persona = i % PERSONAS.length;
     renderSeats();
   }));
   $('seatList').querySelectorAll('[data-r]').forEach(el => el.addEventListener('click', () => { V.seats.splice(+el.dataset.r, 1); renderSeats(); }));
@@ -2793,17 +3985,15 @@ function showScr(name){
 }
 
 function startGame(){
+  const teams = V.teamsMode === 'pairs' ? pairTeams(V.seats.length) : null;
   V.g = new Game({
     seed: (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0,
-    target: V.target, speed: V.speed, house: V.house, rounds: V.rounds,
-    players: V.seats.map((s, i) => ({name: s.name.trim() || 'Investor ' + (i + 1), ai: s.ai, color: s.color || PAWN_COLORS[i]})),
+    target: V.target, speed: V.speed, house: V.house, rounds: V.rounds, level: V.level, teams,
+    players: V.seats.map((s, i) => ({name: s.name.trim() || 'Investor ' + (i + 1), ai: s.ai, color: s.color || PAWN_COLORS[i], persona: s.persona})),
   });
-  const goal = V.rounds ? 'richest after ' + V.rounds + ' rounds wins' : 'first to ' + fmt(V.target) + ' wins';
-  V.g.addLog(V.house
-    ? 'The market opens under house rules — everyone starts with ' + fmt(CFG.WORK_STAKE) + ' and one share of each issue; ' + goal + '.'
-    : 'The market opens. Everyone starts at work with empty pockets — ' + goal + '.');
+  V.g.addLog(openingLine(V.house, V.target, V.rounds, teams), 'open');
   V.online = false; $('liveBadge').style.display = 'none';
-  V.gen++; V.busy = false;
+  V.gen++; V.busy = false; V.autoplay = false; V.quipAt = {};
   V.chat = []; V.chatQueue = [];
   buildBoard(); buildQuote();
   lastPrices = null;
@@ -2812,19 +4002,17 @@ function startGame(){
   saveGame();
   renderAll();
   toast('The market is open — first throw: ' + V.g.cur().name, 2600);
-  if (!read('sm68-coach')){
-    store('sm68-coach', '1');
-    (async () => {
-      await showCard('How It Works · 1 of 3',
-        V.g && V.g.st.house ? 'Straight to the Floor' : 'Work, Then Invest',
-        V.g && V.g.st.house
-          ? 'House rules: everyone holds $1,000 and one share of every issue, standing on a START square. Your first throw — odd or even — picks your direction.'
-          : 'Everyone starts at work. Salaries pay on anyone’s throw of your numbers — bank $1,000 and you must enter the market.', 5200);
-      await showCard('How It Works · 2 of 3', 'One Indicator Rules All',
-        'The strip in the middle sets every price. When it slides, the ▲ stocks and the ▼ stocks move opposite ways — and it bounces off the ends.', 5200);
-      await showCard('How It Works · 3 of 3', 'First to ' + fmt(V.g ? V.g.st.target : CFG.WIN),
-        'Buy only where you land; sell only before your own throw. Cash plus stock at board prices wins — judged as you take the dice.', 5200);
-    })();
+  const talkers = V.g.st.players.filter(p => p.ai);
+  if (talkers.length && Math.random() < .7){
+    const t = talkers[Math.floor(Math.random() * talkers.length)];
+    const q = AI.quip(t, 'open');
+    if (q) setTimeout(() => { if (V.g) postChat({n: t.name, c: t.color, x: q, t: Date.now()}); }, 1200);
+  }
+  if (!V.g.cur().ai){
+    Coach.show('welcome', '#btnRoll', V.g.st.house ? 'Straight to the floor' : 'Your first throw',
+      V.g.st.house
+        ? 'House rules: you hold $1,000 and a share of every issue, standing on START. Tap the dice — odd or even picks your direction.'
+        : 'Tap the dice. You start at work: any throw of your numbers, by anyone, pays your salary. Bank $1,000 and you must go to market.');
   }
   runLoop();
 }
@@ -2835,9 +4023,10 @@ function resumeGame(saved){
   V.target = saved.target || CFG.WIN;
   V.speed = saved.speed || 'normal';
   V.house = !!saved.st.house; V.rounds = saved.st.rounds || 0;
+  V.level = saved.st.level || 'normal'; V.teamsMode = saved.st.teams ? 'pairs' : 'none';
   V.chat = saved.chat || []; V.chatQueue = [];
   V.online = false; $('liveBadge').style.display = 'none';
-  V.gen++; V.busy = false;
+  V.gen++; V.busy = false; V.autoplay = false; V.quipAt = {};
   buildBoard(); buildQuote();
   lastPrices = null;
   $('die1').textContent = '?'; $('die2').textContent = '?';
@@ -2887,13 +4076,52 @@ function hostResetTable(){
 }
 
 function hostTable(){
+  if (NET.mode === 'relay'){ NET.open('host'); return; }
   const st = netSnapshot({phase:'lobby', host: NET.token, seats: [], game: null, note: 'The table is set'});
   NET.publish(st, 'Table created');
 }
+/* join by code: a sheet with one big field */
+function sheetJoin(prefill){
+  openSheet('Join a Table', b => {
+    b.innerHTML = `<p style="font:600 13px/1.6 Archivo,sans-serif;color:var(--ink-soft);text-align:center">Type the four-letter code the host reads out.</p>
+      <input id="joinCode" type="text" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" value="${esc(prefill || '')}" aria-label="Table code">
+      <button class="btn" id="joinGo" style="width:100%">Sit Down</button>`;
+    const inp = b.querySelector('#joinCode');
+    const go = async () => {
+      const code = inp.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+      if (code.length !== 4){ toast('Codes are four letters'); return; }
+      closeSheet();
+      await NET.open('join', code);
+    };
+    b.querySelector('#joinGo').addEventListener('click', go);
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); go(); } });
+    setTimeout(() => inp.focus(), 250);
+  });
+}
+async function shareInvite(){
+  const code = NET.rl.code; if (!code) return;
+  const url = /^https?:/.test(location.protocol) ? location.origin + location.pathname + '?table=' + code : '';
+  const text = 'Join my Stock Market 1968 table — code ' + code + (url ? ' — ' + url : '');
+  try{
+    if (navigator.share){ await navigator.share(url ? {title: 'Stock Market 1968', text: 'Join my table — code ' + code, url} : {title: 'Stock Market 1968', text}); return; }
+  }catch(e){ if (e && e.name === 'AbortError') return; }
+  try{ await navigator.clipboard.writeText(text); toast('Invite copied — paste it to your friends', 3000); }
+  catch(e){ toast('Table code: ' + code, 4000); }
+}
 function routeSplashCard(){
   const s = NET.state;
-  $('onlineCard').style.display = NET.api ? '' : 'none';
-  if (!NET.api) return;
+  $('onlineCard').style.display = NET.on() ? '' : 'none';
+  if (!NET.on()) return;
+  if (NET.mode === 'relay'){
+    const c = NET.cached();
+    $('btnOnline').textContent = 'Host a Table';
+    $('btnJoin').style.display = '';
+    $('btnReturnTbl').style.display = c ? '' : 'none';
+    if (c) $('btnReturnTbl').textContent = 'Return to Table ' + c.code;
+    $('btnOnline2').style.display = 'none';
+    $('onlineHint').textContent = 'Friends on their own phones: host a table and read out the code, or join one.';
+    return;
+  }
   if (!s){
     $('btnOnline').textContent = 'Host a Table';
     $('onlineHint').textContent = 'Creates a shared table on this page. Share the page (with edit access) and every player joins from their own phone.';
@@ -2910,18 +4138,19 @@ function routeSplashCard(){
 function routeOnline(){
   const s = NET.state;
   routeSplashCard();
-  if (!NET.api || !s) return false;
+  if (!NET.on() || !s) return false;
+  const atTable = NET.mode === 'relay' && !!NET.rl.code;   // joined by code: the lobby is theirs to see
   if (s.phase === 'lobby'){
-    if (NET.mySeat() >= 0 || s.host === NET.token){ enterLobby(); return true; }
+    if (atTable || NET.mySeat() >= 0 || s.host === NET.token){ enterLobby(); return true; }
     return false;
   }
-  if ((s.phase === 'playing' || s.phase === 'over') && s.game && s.game.v !== 7){
+  if ((s.phase === 'playing' || s.phase === 'over') && s.game && !(s.game.v >= 7)){
     // a game from an older board edition: the table reforms in its lobby
     s.phase = 'lobby'; s.game = null; s.note = 'The board was rebuilt from the photographs — new game forming';
     if (NET.mySeat() >= 0 || s.host === NET.token){ enterLobby(); return true; }
     return false;
   }
-  if ((s.phase === 'playing' || s.phase === 'over') && NET.mySeat() >= 0){ enterOnlineGame(); return true; }
+  if ((s.phase === 'playing' || s.phase === 'over') && (atTable || NET.mySeat() >= 0)){ enterOnlineGame(); return true; }
   return false;
 }
 function lobbyClaimSheet(slot){
@@ -2943,16 +4172,22 @@ function lobbyClaimSheet(slot){
     }));
     b.querySelector('#clGo').addEventListener('click', () => {
       const name = (b.querySelector('#clName').value.trim() || 'Investor').slice(0, 14);
-      const st = netSnapshot({});
-      // re-check the slot is still free at claim time; append otherwise
-      st.seats = st.seats.filter(x => x.token !== NET.token);
-      if (st.seats.length >= 8){ toast('The table is full'); closeSheet(); return; }
-      st.seats.push({name, color, ai: false, token: NET.token});
-      st.note = name + ' sat down at the table';
       closeSheet();
-      NET.publish(st);
+      claimSeat(name, color, 1);
     });
   });
+}
+/* sit down: re-checked against the live table at claim time; on a relay table a
+   claim that lost a race to somebody else's publish is tried once more */
+async function claimSeat(name, color, retries){
+  const st = netSnapshot({});
+  st.seats = st.seats.filter(x => x.token !== NET.token);
+  if (st.seats.length >= 8){ toast('The table is full'); return false; }
+  st.seats.push({name, color, ai: false, token: NET.token});
+  st.note = name + ' sat down at the table';
+  const ok = await NET.publish(st);
+  if (!ok && retries > 0 && NET.mode === 'relay'){ await sleep(500); return claimSeat(name, color, retries - 1); }
+  return ok;
 }
 function enterLobby(){
   const s = NET.state;
@@ -2960,26 +4195,38 @@ function enterLobby(){
   showScr('lobby');
   const host = s.host === NET.token;
   const humans = s.seats.filter(x => !x.ai).length;
-  $('lobbyHostRow').style.display = host ? '' : 'none';
-  $('lobbyHostRow2').style.display = host ? '' : 'none';
+  const relay = NET.mode === 'relay';
+  ['lobbyHostRow', 'lobbyHostRow2', 'lobbyHostRow3', 'lobbyHostRow4'].forEach(id => { $(id).style.display = host ? '' : 'none'; });
   $('btnLobbyAI').style.display = host && s.seats.length < 8 ? '' : 'none';
   $('btnLobbyStart').style.display = host ? '' : 'none';
   $('btnLobbyStart').disabled = !(s.seats.length >= 2 && humans >= 1);
-  if (host && s.target) $('lobbyTarget').value = String(s.target);
+  if (host && s.target && [...$('lobbyTarget').options].some(o => o.value === String(s.target))) $('lobbyTarget').value = String(s.target);
   $('lobbySub').textContent = host
-    ? 'You are the host — share this page with edit access, then open the market'
+    ? (relay ? 'You are the host — read out the code or share the invite, then open the market'
+             : 'You are the host — share this page with edit access, then open the market')
     : 'Claim a seat — the host opens the market';
   $('lobbyNote').textContent = s.note || '';
+  $('lobbyCode').innerHTML = relay && NET.rl.code ? `
+    <div class="code-box">
+      <span class="code-lbl">Table code</span>
+      <span class="code-val" id="codeVal">${esc(NET.rl.code)}</span>
+      <div class="code-row">
+        <button class="btn alt small" id="btnShareCode">Share Invite</button>
+        ${Push.supported() ? `<button class="btn alt small" id="btnNotify">${Push.wanted() ? '🔔 Notifying You' : '🔔 Notify Me'}</button>` : ''}
+      </div>
+    </div>` : '';
+  const sc = $('lobbyCode').querySelector('#btnShareCode'); if (sc) sc.addEventListener('click', shareInvite);
+  const nb = $('lobbyCode').querySelector('#btnNotify'); if (nb) nb.addEventListener('click', async () => { if (Push.wanted()) await Push.disable(); else await Push.enable(); enterLobby(); });
   const rows = s.seats.map((x, i) => `
     <div class="lseat">
       <span class="seat-dot" style="background:${x.color};cursor:default"></span>
-      <span class="who"><b>${esc(x.name)}${x.ai ? ' ⚙' : ''}</b><small>${x.token === s.host ? 'Host' : x.ai ? 'Computer investor' : 'Investor'}</small></span>
+      <span class="who"><b>${relay && x.token ? `<span class="presence" data-tok="${esc(x.token)}"></span>` : ''}${esc(x.name)}${x.ai ? ' ⚙' : ''}</b><small>${x.token === s.host ? 'Host' : x.ai ? 'Computer investor' + (x.persona >= 0 ? ' · ' + PERSONAS[x.persona % PERSONAS.length].name : '') : 'Investor'}</small></span>
       ${x.token === NET.token ? '<span class="you">YOU</span><button class="rm" data-un="1" aria-label="Give up seat">×</button>' : ''}
       ${(s.host === NET.token && x.ai) ? `<button class="rm" data-unai="${i}" aria-label="Remove computer">×</button>` : ''}
     </div>`).join('');
   const open = s.seats.length < 8 && NET.mySeat() < 0
     ? `<div class="lseat"><span class="seat-dot" style="background:transparent;border-style:dashed;cursor:default"></span>
-       <span class="who"><b>Open seat</b><small>Anyone with edit access can sit</small></span>
+       <span class="who"><b>Open seat</b><small>${relay ? 'Anyone with the code can sit' : 'Anyone with edit access can sit'}</small></span>
        <button class="btn small gold" id="btnClaim">Take a Seat</button></div>` : '';
   $('lobbySeats').innerHTML = rows + open;
   const claim = $('lobbySeats').querySelector('#btnClaim');
@@ -2996,6 +4243,7 @@ function enterLobby(){
     st.seats.splice(+el.dataset.unai, 1);
     NET.publish(st);
   }));
+  renderPresence();
 }
 function lobbyAddAI(){
   const st = netSnapshot({});
@@ -3004,7 +4252,7 @@ function lobbyAddAI(){
   st.seats.push({
     name: COMP_NAMES.find(n => !usedN.includes(n)) || 'Computer',
     color: PAWN_COLORS.find(c => !usedC.includes(c)) || PAWN_COLORS[st.seats.length % 8],
-    ai: true, token: null,
+    ai: true, token: null, persona: Math.floor(Math.random() * PERSONAS.length),
   });
   NET.publish(st);
 }
@@ -3012,18 +4260,17 @@ function lobbyStart(){
   const s = NET.state;
   if (s.host !== NET.token) return;
   const tv = $('lobbyTarget').value;
-  const rounds = tv === 'timed20' ? 20 : 0;
-  const target = rounds ? 0 : (+tv || CFG.WIN);
+  const {target, rounds} = parseTarget(tv);
   const house = $('lobbyOpen').value === 'house';
+  const level = $('lobbyLevel').value;
+  const teams = $('lobbyTeams').value === 'pairs' ? pairTeams(s.seats.length) : null;
+  if ($('lobbyTeams').value === 'pairs' && !teams){ toast('Partners need an even number of seats, four or more', 3200); return; }
   const g = new Game({
     seed: (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0,
-    target, rounds, house, speed: 'fast',
-    players: s.seats.map(x => ({name: x.name, ai: x.ai, color: x.color})),
+    target, rounds, house, level, teams, speed: 'fast',
+    players: s.seats.map(x => ({name: x.name, ai: x.ai, color: x.color, persona: x.persona})),
   });
-  const goal = rounds ? 'richest after ' + rounds + ' rounds wins' : 'first to ' + fmt(target) + ' wins';
-  g.addLog(house
-    ? 'The market opens under house rules — everyone starts with ' + fmt(CFG.WORK_STAKE) + ' and one share of each issue; ' + goal + '.'
-    : 'The market opens. Everyone starts at work with empty pockets — ' + goal + '.');
+  g.addLog(openingLine(house, target, rounds, teams), 'open');
   const st = netSnapshot({phase:'playing', target, game: g.st, note: 'The market is open — first throw: ' + g.st.players[0].name});
   NET.publish(st);
 }
@@ -3046,7 +4293,8 @@ function enterOnlineGame(){
   buildBoard(); buildQuote();
   lastPrices = null;
   dieFace($('die1'), V.g.st.dice[0] || 1); dieFace($('die2'), V.g.st.dice[1] || 1);
-  $('liveBadge').style.display = '';
+  $('liveBadge').style.display = ''; $('liveBadge').textContent = 'LIVE';
+  renderPresence();
   showScr('game');
   renderAll();
   if (s.note && s.lastBy !== NET.token) toast(s.note, 3800);
@@ -3061,7 +4309,7 @@ async function onlinePublishTurn(){
   const st = netSnapshot({phase: g.st.over ? 'over' : 'playing', game: g.st, note,
     chat: (s.chat || []).concat(V.chatQueue).slice(-60)});
   const ok = await NET.publish(st);
-  if (!ok && NET.api){
+  if (!ok && NET.on()){
     // one quiet retry; after that the next tap tries again
     await sleep(1500);
     await NET.publish(st);
@@ -3076,7 +4324,7 @@ function wire(){
     Snd.unlock();
     try{
       const sv = JSON.parse(read(SAVE_KEY));
-      if (!sv || !sv.st || sv.st.v !== 7) throw new Error('old save');
+      if (!sv || !sv.st || !(sv.st.v >= 7)) throw new Error('old save');
       resumeGame(sv);
     }
     catch(e){ store(SAVE_KEY, null); toast('Saved game was from an older edition — starting fresh'); renderSeats(); showScr('setup'); }
@@ -3090,14 +4338,36 @@ function wire(){
   });
   $('btnBackSplash').addEventListener('click', () => showScr('splash'));
   $('btnStart').addEventListener('click', () => {
-    const tv = $('optTarget').value;
-    V.rounds = tv === 'timed20' ? 20 : 0;
-    V.target = V.rounds ? 0 : +tv;
+    const {target, rounds} = parseTarget($('optTarget').value);
+    V.rounds = rounds; V.target = target;
     V.speed = $('optSpeed').value;
     V.house = $('optOpen').value === 'house';
+    V.level = $('optLevel').value;
+    V.teamsMode = $('optTeams').value;
+    if (V.teamsMode === 'pairs' && !pairTeams(V.seats.length)){ toast('Partners need an even number of seats, four or more', 3200); return; }
     storeOpts();
     startGame();
   });
+  $('setup').querySelectorAll('[data-preset]').forEach(el => el.addEventListener('click', () => {
+    const p = el.dataset.preset;
+    if (p === 'printed'){ $('optOpen').value = 'classic'; $('optTarget').value = '100000'; $('optLevel').value = 'normal'; $('optTeams').value = 'none'; }
+    if (p === 'family'){ $('optOpen').value = 'classic'; $('optTarget').value = '50000'; }
+    if (p === 'short'){ $('optOpen').value = 'house'; $('optTarget').value = '25000r15'; }
+    toast({printed: 'Printed rules: work for your stake, first to $100,000', family: 'Family game: first to $50,000', short: 'Short game: house opening, $25,000 or 15 rounds'}[p], 2600);
+  }));
+  $('btnSettings0').addEventListener('click', sheetSettings);
+  $('btnRecords0').addEventListener('click', sheetRecords);
+  $('btnCoach0').addEventListener('click', () => {
+    Snd.unlock(); Coach.reset(); V.set.coach = true; saveSettings();
+    renderSeats(); restoreOpts(); showScr('setup');
+    toast('The coach will point things out through this game', 2600);
+  });
+  $('mSettings').addEventListener('click', () => { $('menuPop').classList.remove('on'); sheetSettings(); });
+  $('mRecords').addEventListener('click', () => { $('menuPop').classList.remove('on'); sheetRecords(); });
+  $('mAuto').addEventListener('click', startAutoplay);
+  $('mNotify').addEventListener('click', async () => { $('menuPop').classList.remove('on'); if (Push.wanted()) await Push.disable(); else await Push.enable(); });
+  $('coachOk').addEventListener('click', () => Coach.hide());
+  $('btnShare').addEventListener('click', shareRecap);
   $('btnRoll').addEventListener('click', humanRoll);
   $('btnEndTurn').addEventListener('click', humanEndTurn);
   $('btnLedger').addEventListener('click', () => { if (V.g && !V.busy) sheetLedger(); });
@@ -3117,6 +4387,9 @@ function wire(){
   $('btnOnline2').addEventListener('click', () => { Snd.unlock(); hostResetTable(); });
   $('btnMenu').addEventListener('click', () => {
     $('mTable').style.display = (V.online && NET.state && NET.state.host === NET.token) ? '' : 'none';
+    $('mAuto').style.display = (V.g && !V.online && !V.g.st.over && !V.autoplay) ? '' : 'none';
+    $('mNotify').style.display = (V.online && NET.mode === 'relay' && Push.supported()) ? '' : 'none';
+    $('mNotify').textContent = Push.wanted() ? 'Turn Notifications Off' : 'Notify Me on My Turn';
     $('menuPop').classList.toggle('on');
   });
   document.addEventListener('click', e => {
@@ -3133,6 +4406,7 @@ function wire(){
           <div style="display:flex;gap:10px"><button class="btn alt" id="lvNo" style="flex:1">Stay</button><button class="btn red" id="lvYes" style="flex:1">Leave</button></div>`;
         b.querySelector('#lvNo').addEventListener('click', closeSheet);
         b.querySelector('#lvYes').addEventListener('click', () => {
+          if (NET.mode === 'relay') NET.leaveTable();
           V.g = null; V.gen++; V.busy = false; V.online = false;
           $('liveBadge').style.display = 'none';
           closeSheet(); $('win').classList.remove('on'); showScr('splash'); refreshResume(); routeSplashCard();
@@ -3161,26 +4435,32 @@ function wire(){
   });
   $('btnToSplash').addEventListener('click', () => {
     confettiRun = false; $('win').classList.remove('on'); V.g = null; V.gen++; V.busy = false;
+    if (V.online && NET.mode === 'relay') NET.leaveTable();
     V.online = false; $('liveBadge').style.display = 'none';
     showScr('splash'); refreshResume(); routeSplashCard();
   });
   $('btnOnline').addEventListener('click', () => {
     Snd.unlock();
+    if (NET.mode === 'relay'){ hostTable(); return; }
     const s = NET.state;
     if (!s) hostTable();
     else if (s.phase === 'lobby') enterLobby();
     else enterOnlineGame();
   });
+  $('btnJoin').addEventListener('click', () => { Snd.unlock(); sheetJoin(''); });
+  $('btnReturnTbl').addEventListener('click', () => { Snd.unlock(); const c = NET.cached(); if (c) NET.open('join', c.code); });
   $('btnLobbyLeave').addEventListener('click', () => {
+    if (NET.mode === 'relay') NET.leaveTable();
     V.online = false; showScr('splash'); routeSplashCard();
   });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') NET.checkAlive(); });
   $('btnLobbyAI').addEventListener('click', lobbyAddAI);
   $('btnLobbyStart').addEventListener('click', lobbyStart);
   window.addEventListener('resize', () => { if ($('win').classList.contains('on')) drawChart(); });
 }
 
 function storeOpts(){
-  store('sm68-opts', JSON.stringify({t: $('optTarget').value, s: $('optSpeed').value, o: $('optOpen').value}));
+  store('sm68-opts', JSON.stringify({t: $('optTarget').value, s: $('optSpeed').value, o: $('optOpen').value, l: $('optLevel').value, p: $('optTeams').value}));
 }
 function restoreOpts(){
   try{
@@ -3189,16 +4469,19 @@ function restoreOpts(){
     if (o.t && [...$('optTarget').options].some(x => x.value === o.t)) $('optTarget').value = o.t;
     if (o.s && [...$('optSpeed').options].some(x => x.value === o.s)) $('optSpeed').value = o.s;
     if (o.o && [...$('optOpen').options].some(x => x.value === o.o)) $('optOpen').value = o.o;
+    if (o.l && [...$('optLevel').options].some(x => x.value === o.l)) $('optLevel').value = o.l;
+    if (o.p && [...$('optTeams').options].some(x => x.value === o.p)) $('optTeams').value = o.p;
   }catch(e){}
 }
 
 function refreshResume(){
   let has = false;
-  try{ const s = JSON.parse(read(SAVE_KEY)); has = !!(s && s.st && s.st.v === 7 && !s.st.over); }catch(e){}
+  try{ const s = JSON.parse(read(SAVE_KEY)); has = !!(s && s.st && s.st.v >= 7 && !s.st.over); }catch(e){}
   $('btnResume').style.display = has ? '' : 'none';
 }
 
 function boot(){
+  loadSettings(); applySettings(); Coach.load();
   wire();
   $('btnInstall').addEventListener('click', async () => {
     if (!installEvt) return;
@@ -3220,8 +4503,22 @@ function boot(){
   $('btnSound').setAttribute('aria-pressed', String(V.sound));
   refreshResume();
   showScr('splash');
-  // the online table lights up when the artifact runtime answers
-  NET.init(ok => { if (ok) routeOnline(); });
+  // the online table lights up when a transport answers: the artifact runtime,
+  // or the relay for the installed app (an invite link joins its table at once)
+  NET.init(ok => {
+    if (!ok) return;
+    if (NET.mode === 'relay'){
+      routeSplashCard();
+      let code = '';
+      try{ code = (new URLSearchParams(location.search).get('table') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4); }catch(e){}
+      if (code.length === 4){
+        try{ history.replaceState(null, '', location.pathname); }catch(e){}
+        NET.open('join', code);
+      }
+      return;
+    }
+    routeOnline();
+  });
 }
 document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', boot) : boot();
 </script>

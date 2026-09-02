@@ -1,0 +1,13 @@
+{
+  "appId": "com.paramountoutdoorliving.stockmarket1968",
+  "appName": "Stock Market 1968",
+  "webDir": "www",
+  "backgroundColor": "#0f2b21",
+  "ios": {
+    "contentInset": "always",
+    "backgroundColor": "#0f2b21"
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}

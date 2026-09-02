@@ -1,0 +1,22 @@
+{
+  "name": "stock-market-1968-shell",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Capacitor shell that bundles app/market (Stock Market 1968) as an iOS app; Android via Capacitor is an alternative to the TWA.",
+  "scripts": {
+    "sync": "node sync.mjs",
+    "ios": "npx cap open ios",
+    "android": "npx cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/ios": "^6.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
