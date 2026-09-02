@@ -194,9 +194,12 @@ function lobbyView(room) {
   };
 }
 
+const TABLE_DEBUG = !!process.env.TABLE_DEBUG;
 function send(ws, obj) {
   if (ws.readyState === 1) {
-    try { ws.send(JSON.stringify(obj)); } catch (_) { /* the socket is going away anyway */ }
+    try { ws.send(JSON.stringify(obj)); } catch (e) { if (TABLE_DEBUG) console.error('send failed', obj.t, e && e.message); }
+  } else if (TABLE_DEBUG && obj && /^tb/.test(obj.t)) {
+    console.error('send skipped: socket state', ws.readyState, obj.t, obj.rev, ws.tok);
   }
 }
 
@@ -592,6 +595,7 @@ wss.on('connection', (ws) => {
         const tb = ws.tbl;
         if (!tb) return send(ws, { t: 'err', msg: 'not at a table', code: 'notable' });
         if (!Number.isInteger(m.rev)) return send(ws, { t: 'err', msg: 'bad revision', code: 'bad' });
+        if (TABLE_DEBUG) console.error('tbState from', ws.tok, 'rev', m.rev, 'table rev', tb.rev, 'socket', ws.readyState);
         if (m.rev !== tb.rev + 1) return send(ws, { t: 'tbStale', rev: tb.rev, state: tb.state });
         if (stateSize(m.state) > TABLE_STATE_MAX) return send(ws, { t: 'err', msg: 'table state too large', code: 'big' });
         tb.rev = m.rev; tb.state = m.state === undefined ? null : m.state; tb.seen = Date.now();

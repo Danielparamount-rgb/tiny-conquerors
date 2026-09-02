@@ -1,6 +1,6 @@
 /* Stock Market 1968 — service worker.
    Bump CACHE on each release so installed apps pick up the new build. */
-const CACHE = 'sm68-v13';
+const CACHE = 'sm68-v14';
 const CORE = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-180.png'];
 
 self.addEventListener('install', e => {

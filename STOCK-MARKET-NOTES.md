@@ -113,13 +113,20 @@ tablets and desks get the board at full height.
 
 ## Documented vs. reconstructed
 
-The v12 build transcribes the board square by square from the owner's photographs — every
-square's company, printed dividend, indicator move, direction arrow and floor price; the
-two PURCHASE LIMIT ONE SHARE squares on each side that carry the STOCKHOLDERS ENTER
-wedges; and the four boxed two-row meeting tracks (a 1 FOR 1 beside each entrance on the
-outer row, seven cells across the inner row, palindromic on every side). The printed
-arrows run clockwise on squares 2–9 of every side (read from that side's seat) and
-counter-clockwise on the PAY squares and squares 10–12; START squares send odd throws
+The board is transcribed square by square from the owner's photographs. The track has
+**48 squares**: the four corner squares are the PAY BROKER FEE squares (UP 20 and DOWN 20
+alternating, each shared by the two sides it joins, each sending you on counter-clockwise),
+and eleven squares run between them on every side with a SELL ALL beside each corner. The
+four occupations (Prospector, Deep Sea Diver, Doctor, Policeman) are not track squares:
+they are panels printed inside the board at the inner corners, where working pieces wait
+for their stake — a correction the owner caught in v14 after v12 had placed them on the
+corners and added a PAY square at both ends of every side. Every square's company, printed
+dividend, indicator move, direction arrow and floor price is from the photographs; the two
+PURCHASE LIMIT ONE SHARE squares on each side (3rd and 9th from a corner) carry the
+STOCKHOLDERS ENTER wedges; the four boxed two-row meeting tracks have a 1 FOR 1 beside
+each entrance on the outer row and seven cells across the inner row, palindromic on every
+side. The printed arrows run clockwise on squares 1–8 of every side (read from that side's
+seat) and counter-clockwise on squares 9–11 and the corners; START squares send odd throws
 clockwise ("← ODD") and even the other way. Company colours follow the print (Alcoa red,
 Am. Motors yellow, J.I. Case amber, Gen. Mills light blue, Int. Shoe magenta, Maytag teal,
 Western Publishing light green, Woolworth rust).
@@ -128,9 +135,9 @@ Western Publishing light green, Woolworth rust).
 | --- | --- | --- |
 | Rules of play | see above | inside-cover transcription |
 | Price table | ALC 30–230 / AMO 10–110 / JIC 15–75 / GMI 18–42 rising with the indicator; ISH, MAY, WPC, WLW mirror them falling; 51 rows; START row 130-60-45-30 / 30-45-60-130 | board photo |
-| Square order, dividends, moves, arrows, floors | all 56 squares | board photos |
+| Square order, dividends, moves, arrows, floors | all 48 squares; PAY corners ±20 | board photos |
 | Meeting tracks | bottom WLW↔ALC 1·2·1·2·3·2·1·2·1 · left GMI↔ISH 1·3·2·3·2·3·2·3·1 · top AMO↔WPC 1·2·3·2·1·2·3·2·1 · right JIC↔MAY 1·2·3·2·3·2·3·2·1 | board photos |
-| Corners | Prospector 2/12 $400 · Deep Sea Diver 3/11 $300 · Doctor 4/10 $200 · Policeman 5/9 $100 | board photos |
+| Occupation panels (inner corners) | Prospector 2/12 $400 (bottom-right) · Deep Sea Diver 3/11 $300 (bottom-left) · Doctor 4/10 $200 (top-left) · Policeman 5/9 $100 (top-right) | board photos |
 | Win target | $100,000 printed; $50,000 / $25,000 / timed offered | transcription (other terms by agreement) |
 | Notch count | 51 (values printed every row) | board photo |
 
@@ -184,7 +191,7 @@ copying `stock-market.html` after any change.
 ## Installable app
 
 `/market/` ships as a PWA: `manifest.webmanifest`, original icons (the red slider on its
-quotation track), and a service worker (`sw.js`, cache `sm68-v13` — bump per release) that
+quotation track), and a service worker (`sw.js`, cache `sm68-v14` — bump per release) that
 serves the whole game offline, network-first for the page itself so updates land, and handles
 push (`push` shows the notification, `notificationclick` focuses or opens the table). The
 splash shows an Install button when the browser offers the prompt (Android/desktop Chrome)
