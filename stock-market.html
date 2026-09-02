@@ -899,49 +899,54 @@ const MEET_ROWS = [   // one per side, in board order; each is a U-shaped 9-cell
   {pair:[2, 5], cells:[1, 2, 3, 2, 3, 2, 3, 2, 1]},   // right:  J.I. Case ↔ Maytag
 ];
 
-/* Board: 56 squares — four occupation corners and 13 a side.
-   Every square carries a printed indicator move and a direction
-   arrow (+1 clockwise, −1 counter); START squares instead branch
-   on the throw (odd one way, even the other). Entrance squares
-   carry enter:{row, end}. Arrow layout is reconstructed. */
-/* Board: 56 squares — four occupation corners and 13 a side, transcribed
-   from the photographs. Each side is listed as printed for the player
-   seated at it, left corner → right corner. The printed direction arrows:
-   "<" runs clockwise (+1 in board order), ">" counter-clockwise (−1); START
-   squares branch on the throw (odd goes clockwise, even the other way).
-   The two PURCHASE LIMIT ONE SHARE squares on every side are that side's
-   stockholders-meeting entrances. */
+/* Board: 48 squares, transcribed from the photographs — the four corner
+   squares are the PAY BROKER FEE squares (UP 20 and DOWN 20 alternating,
+   each shared by the two sides it joins) and eleven squares run between
+   them on every side, a SELL ALL beside each corner. The four occupations
+   are not squares at all: they are panels printed inside the board at the
+   inner corners, where the working pieces wait for their stake.
+   Each side is listed as printed for the player seated at it, left corner →
+   right corner (corners excluded). The printed direction arrows: "<" runs
+   clockwise (+1 in board order), ">" counter-clockwise (−1); every corner
+   sends you on counter-clockwise; START squares branch on the throw (odd
+   goes clockwise, even the other way). The two PURCHASE LIMIT ONE SHARE
+   squares on every side are that side's stockholders-meeting entrances. */
 const BOARD = (() => {
   const S = code => STOCKS.findIndex(x => x.code === code);
   const A = a => a === '<' ? 1 : -1;
   const co = (code, d, a, opts) => Object.assign({t:'co', s:S(code), d, arrow:A(a)}, opts || {});
   const en = (code, d, a, row, end) => co(code, d, a, {limit:1, enter:{row, end}});
   const sell = (code, d, a) => ({t:'sellall', s:S(code), d, arrow:A(a)});
-  const pay = (d, a) => ({t:'payps', d, arrow:A(a)});
+  const pay = d => ({t:'payps', d, arrow:-1, corner:true});
   const start = () => ({t:'start'});
   const SEAT = [
-    { corner: 3, cells: [ // PROSPECTOR corner, then the bottom side (Deep Sea Diver … Prospector)
-      pay(-20,'>'), sell('ALC',5,'<'), co('WPC',-4,'<'), en('WLW',3,'<',0,0), co('ISH',-2,'<'), co('JIC',1,'<'),
-      start(), co('MAY',1,'<'), co('GMI',-2,'<'), en('ALC',3,'>',0,1), co('AMO',-4,'>'), sell('WLW',5,'>'), pay(20,'>') ]},
-    { corner: 0, cells: [ // DEEP SEA DIVER corner, then the left side (Doctor … Deep Sea Diver)
-      pay(20,'>'), sell('ISH',-5,'<'), co('MAY',4,'<'), en('GMI',-3,'<',1,0), co('ALC',2,'<'), co('AMO',-1,'<'),
-      start(), co('WPC',-1,'<'), co('WLW',2,'<'), en('ISH',-3,'>',1,1), co('JIC',4,'>'), sell('GMI',-5,'>'), pay(-20,'>') ]},
-    { corner: 1, cells: [ // DOCTOR corner, then the top side (Policeman … Doctor)
-      pay(-20,'>'), sell('WPC',5,'<'), co('ALC',-4,'<'), en('AMO',3,'<',2,0), co('MAY',-2,'<'), co('GMI',1,'<'),
-      start(), co('ISH',1,'<'), co('JIC',-2,'<'), en('WPC',3,'>',2,1), co('WLW',-4,'>'), sell('AMO',5,'>'), pay(20,'>') ]},
-    { corner: 2, cells: [ // POLICEMAN corner, then the right side (Prospector … Policeman)
-      pay(20,'>'), sell('MAY',-5,'<'), co('GMI',4,'<'), en('JIC',-3,'<',3,0), co('AMO',2,'<'), co('ALC',-1,'<'),
-      start(), co('WLW',-1,'<'), co('WPC',2,'<'), en('MAY',-3,'>',3,1), co('ISH',4,'>'), sell('JIC',-5,'>'), pay(-20,'>') ]},
+    { corner: pay(20), cells: [ // bottom-right corner (PAY · UP 20), then the bottom side read from its seat
+      sell('ALC',5,'<'), co('WPC',-4,'<'), en('WLW',3,'<',0,0), co('ISH',-2,'<'), co('JIC',1,'<'),
+      start(), co('MAY',1,'<'), co('GMI',-2,'<'), en('ALC',3,'>',0,1), co('AMO',-4,'>'), sell('WLW',5,'>') ]},
+    { corner: pay(-20), cells: [ // bottom-left corner (PAY · DOWN 20), then the left side
+      sell('ISH',-5,'<'), co('MAY',4,'<'), en('GMI',-3,'<',1,0), co('ALC',2,'<'), co('AMO',-1,'<'),
+      start(), co('WPC',-1,'<'), co('WLW',2,'<'), en('ISH',-3,'>',1,1), co('JIC',4,'>'), sell('GMI',-5,'>') ]},
+    { corner: pay(20), cells: [ // top-left corner (PAY · UP 20), then the top side
+      sell('WPC',5,'<'), co('ALC',-4,'<'), en('AMO',3,'<',2,0), co('MAY',-2,'<'), co('GMI',1,'<'),
+      start(), co('ISH',1,'<'), co('JIC',-2,'<'), en('WPC',3,'>',2,1), co('WLW',-4,'>'), sell('AMO',5,'>') ]},
+    { corner: pay(-20), cells: [ // top-right corner (PAY · DOWN 20), then the right side
+      sell('MAY',-5,'<'), co('GMI',4,'<'), en('JIC',-3,'<',3,0), co('AMO',2,'<'), co('ALC',-1,'<'),
+      start(), co('WLW',-1,'<'), co('WPC',2,'<'), en('MAY',-3,'>',3,1), co('ISH',4,'>'), sell('JIC',-5,'>') ]},
   ];
   const B = [];
   // board order runs clockwise; each printed side reads counter-clockwise,
   // so a side's cells go in reversed after its clockwise-first corner
-  SEAT.forEach(sd => { B.push({t:'job', j:sd.corner, arrow:1}); sd.cells.slice().reverse().forEach(c => B.push(c)); });
+  SEAT.forEach(sd => { B.push(sd.corner); sd.cells.slice().reverse().forEach(c => B.push(c)); });
   return B;
 })();
-const N_CELLS = BOARD.length;                                    // 56
+const N_CELLS = BOARD.length;                                    // 48
+const SIDE_N = 11;                                              // squares between two corners
 const START_CELLS = BOARD.map((c, i) => c.t === 'start' ? i : -1).filter(i => i >= 0);
-const CORNER_CELLS = JOBS.map((_, j) => BOARD.findIndex(c => c.t === 'job' && c.j === j));   // corner of each occupation
+const PAY_CORNERS = BOARD.map((c, i) => c.corner ? i : -1).filter(i => i >= 0);          // [0, 12, 24, 36]
+/* the occupation panels sit in the inner corners: bottom-right Prospector,
+   bottom-left Deep Sea Diver, top-left Doctor, top-right Policeman */
+const JOB_CORNER = [3, 0, 1, 2];                                 // inner corner k (clockwise from bottom-right) → job
+const OFF_TRACK = -1;                                            // a working piece waits on its panel, not the track
 const ENTRANCE_OF = {};   // stock index -> board index of its meeting entrance
 BOARD.forEach((c, i) => { if (c.enter) ENTRANCE_OF[MEET_ROWS[c.enter.row].pair[c.enter.end]] = i; });
 
@@ -961,7 +966,7 @@ class Game {
     const house = !!setup.house;          // house-rules opening: skip the working start
     const teams = Array.isArray(setup.teams) && setup.teams.length === setup.players.length ? setup.teams.slice() : null;
     this.st = {
-      v: 8,                                // save format: 8 = v13 (7 = the photographed board, read with backfill)
+      v: 9,                                // save format: 9 = the 48-square board (older saves start fresh)
       house,
       rounds: setup.rounds || 0,           // a rounds cap: richest side after N rounds wins (alone = a timed sitting)
       level: LEVELS[setup.level] ? setup.level : 'normal',   // computer skill
@@ -979,7 +984,7 @@ class Game {
         mode: house ? 'market' : 'work',     // work | market | meeting
         job: i % 4,                          // occupation while at work (and if broke)
         cash: house ? CFG.WORK_STAKE : 0,
-        pos: house ? START_CELLS[i % 4] : CORNER_CELLS[i % 4],
+        pos: house ? START_CELLS[i % 4] : OFF_TRACK,   // workers wait on their occupation's panel
         meet: null,                          // {row, idx, dir, stock} while in a meeting
         entering: house,                     // placed on a START square this turn
         shares: STOCKS.map(() => house ? 1 : 0),
@@ -1010,7 +1015,6 @@ class Game {
       p.stats = Object.assign({trades:0, bought:0, realized:0, bestGain:0, worstGain:0, bestSale:null}, p.stats || {});
       if (p.ai && !(p.persona >= 0)) p.persona = i % PERSONAS.length;
     });
-    s.v = 8;
     g.st = s;
     g._rng = makeRng(s.seed);
     for (let i = 0; i < s.rngN; i++) g._rng();
@@ -1071,7 +1075,7 @@ class Game {
   setJob(j){
     const p = this.cur();
     if (p.mode !== 'work' || this.st.phase !== 'idle') return false;
-    p.job = j; p.pos = CORNER_CELLS[j];
+    p.job = j; p.pos = OFF_TRACK;
     this.addLog(`${p.name} takes up work as a ${JOBS[j].t}`, 'job');
     return true;
   }
@@ -1272,9 +1276,6 @@ class Game {
                  canEnter: (isEntrance && !exited) ? sq.enter : null};
         break;
       }
-      case 'job':
-        events.push({kind:'visit', j:sq.j});
-        break;
     }
     st.pending = needs;
     st.phase = needs ? 'moving' : 'done';   // landing choices still open
@@ -1301,7 +1302,7 @@ class Game {
       // broke: everything goes back to the bank; back to work
       const j = p.job >= 0 ? p.job : 0;
       p.cash = 0; p.shares = STOCKS.map(() => 0); p.basis = STOCKS.map(() => 0);
-      p.mode = 'work'; p.meet = null; p.pos = CORNER_CELLS[j];
+      p.mode = 'work'; p.meet = null; p.pos = OFF_TRACK;
       p.stats.broke++;
       events.push({kind:'broke', j});
       this.addLog(`${p.name} is broke — everything returns to the bank and it's back to work as a ${JOBS[j].t}`, 'broke');
@@ -1826,12 +1827,9 @@ function sheetSquare(i){
       if (sp.t === 'payps'){ const n = me.shares.reduce((a, x) => a + x, 0); now.push(['Your broker fee', fmt(n * CFG.BROKER_PS)]); }
       if (sp.t === 'sellall') now.push(['Your forced sale', me.shares[sp.s] ? me.shares[sp.s] + ' sh → ' + fmt(me.shares[sp.s] * STOCKS[sp.s].lo) : 'nothing held']);
       if (sp.t === 'start') now.push(['Landing fee', fmt(CFG.START_FEE)]);
-      if (sp.t === 'job') now.push(['Salary', JOBS[sp.j].nums.join(' or ') + ' pays ' + fmt(JOBS[sp.j].pay)]);
-      if (sp.arrow && sp.t !== 'job') now.push(['You leave it', sp.arrow > 0 ? 'clockwise ↻' : 'counter-clockwise ↺']);
+      if (sp.arrow) now.push(['You leave it', sp.arrow > 0 ? 'clockwise ↻' : 'counter-clockwise ↺']);
     }
-    const face = sp.t === 'job'
-      ? `<b>${esc(JOBS[sp.j].t.toUpperCase())}</b><small>${JOBS[sp.j].nums.join(' OR ')} PAYS $${JOBS[sp.j].pay}</small>`
-      : `<b style="${sp.t === 'start' ? 'color:#c9372c' : ''}">${lk.l1}</b><small>${lk.l2}${lk.l2b ? '<br>' + lk.l2b : ''}</small>${lk.l3 ? `<small style="font-weight:800">${lk.l3}</small>` : ''}${sp.limit ? '<small>LIMIT 1 SHARE</small>' : ''}`;
+    const face = `<b style="${sp.t === 'start' ? 'color:#c9372c' : ''}">${lk.l1}</b><small>${lk.l2}${lk.l2b ? '<br>' + lk.l2b : ''}</small>${lk.l3 ? `<small style="font-weight:800">${lk.l3}</small>` : ''}${sp.limit ? '<small>LIMIT 1 SHARE</small>' : ''}${sp.corner ? '<small>CORNER</small>' : ''}`;
     b.innerHTML = `<div class="sq-print" style="background:${lk.bg};color:${lk.fg}">${face}</div>
       <p style="font:600 13.5px/1.6 Archivo,sans-serif;color:var(--ink-soft);margin-bottom:10px">${body}</p>` +
       (now.length ? `<div class="recap-h">For ${esc(me.name)} right now</div>` +
@@ -2449,18 +2447,26 @@ const Snd = (() => {
 })();
 
 /* ================= BOARD (SVG, drawn once) ================= */
-const BS = 1000, CO = 110, EW = (BS - 2 * CO) / 13;
+const BS = 1000, CO = 110, EW = (BS - 2 * CO) / SIDE_N;
 function cellRect(i){
   if (i === 0)  return {x: BS - CO, y: BS - CO, w: CO, h: CO};
-  if (i < 14)   return {x: BS - CO - EW * i, y: BS - CO, w: EW, h: CO};
-  if (i === 14) return {x: 0, y: BS - CO, w: CO, h: CO};
-  if (i < 28)   return {x: 0, y: BS - CO - EW * (i - 14), w: CO, h: EW};
-  if (i === 28) return {x: 0, y: 0, w: CO, h: CO};
-  if (i < 42)   return {x: CO + EW * (i - 29), y: 0, w: EW, h: CO};
-  if (i === 42) return {x: BS - CO, y: 0, w: CO, h: CO};
-  return {x: BS - CO, y: CO + EW * (i - 43), w: CO, h: EW};
+  if (i < 12)   return {x: BS - CO - EW * i, y: BS - CO, w: EW, h: CO};
+  if (i === 12) return {x: 0, y: BS - CO, w: CO, h: CO};
+  if (i < 24)   return {x: 0, y: BS - CO - EW * (i - 12), w: CO, h: EW};
+  if (i === 24) return {x: 0, y: 0, w: CO, h: CO};
+  if (i < 36)   return {x: CO + EW * (i - 25), y: 0, w: EW, h: CO};
+  if (i === 36) return {x: BS - CO, y: 0, w: CO, h: CO};
+  return {x: BS - CO, y: CO + EW * (i - 37), w: CO, h: EW};
 }
-const SIDE = i => BOARD[i].t === 'job' ? 'corner' : i < 14 ? 'bottom' : i < 28 ? 'left' : i < 42 ? 'top' : 'right';
+const SIDE = i => i % 12 === 0 ? 'corner' : i < 12 ? 'bottom' : i < 24 ? 'left' : i < 36 ? 'top' : 'right';
+/* the four occupation panels inside the board, one per inner corner (clockwise from bottom-right) */
+const JP = 2 * EW - 12;
+const JOB_PANELS = [
+  {x: BS - CO - 2 * EW + 6, y: BS - CO - 2 * EW + 6, rot: -45,  art: 'tl', flip: false},   // bottom-right: Prospector
+  {x: CO + 6,               y: BS - CO - 2 * EW + 6, rot: 45,   art: 'tr', flip: false},   // bottom-left: Deep Sea Diver
+  {x: CO + 6,               y: CO + 6,               rot: 135,  art: 'br', flip: true},    // top-left: Doctor
+  {x: BS - CO - 2 * EW + 6, y: CO + 6,               rot: -135, art: 'bl', flip: true},    // top-right: Policeman
+];
 const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 const CREAM = '#fbf7ea';
@@ -2476,12 +2482,15 @@ function spaceLook(sp){
     default:        return {bg: CREAM, fg:'#22211f', l1:'', l2:'', l3:''};
   }
 }
+function describeJob(j){
+  return [JOBS[j].t, `The ${JOBS[j].t}'s panel — your piece waits here while you work. Every throw of ${JOBS[j].nums.join(' or ')}, by anyone at the table, pays you ${fmt(JOBS[j].pay)}. Bank ${fmt(CFG.WORK_STAKE)} and you must go play the market from a START square.`];
+}
 function describeSpace(i){
   const sp = BOARD[i];
+  if (!sp) return ['Off the board', ''];
   switch (sp.t){
-    case 'job':     return [JOBS[sp.j].t, `The ${JOBS[sp.j].t}'s corner. While you work here, every throw of ${JOBS[sp.j].nums.join(' or ')} — by anyone at the table — pays you ${fmt(JOBS[sp.j].pay)}. Bank ${fmt(CFG.WORK_STAKE)} and you must go play the market.`];
     case 'start':   return ['Start', `Enter the market here, free. Land on it later and you pay a ${fmt(CFG.START_FEE)} fee. Leaving a START square, your throw picks the direction — odd one way, even the other.`];
-    case 'payps':   return ['Pay Broker Fee', `$${CFG.BROKER_PS} for every share you hold — then the indicator swings ${sp.d > 0 ? 'UP' : 'DOWN'} 20.`];
+    case 'payps':   return ['Pay Broker Fee', `The corner square: $${CFG.BROKER_PS} for every share you hold — then the indicator swings ${sp.d > 0 ? 'UP' : 'DOWN'} 20, and you carry on round the corner.`];
     case 'sellall': return [`Sell All ${STOCKS[sp.s].code}`, `Forced out — your entire ${STOCKS[sp.s].name} holding is sold at the very lowest board price, $${STOCKS[sp.s].lo} a share.`];
     case 'co': {
       let body = `${STOCKS[sp.s].code} pays holders its printed $${STOCKS[sp.s].div}-a-share dividend, the indicator moves ${sp.d > 0 ? 'UP' : 'DOWN'} ${Math.abs(sp.d)}, and you may buy ${(sp.limit || sp.enter) ? 'exactly one share' : 'any amount'} at the new price.`;
@@ -2725,23 +2734,23 @@ function buildBoard(){
     P.push(`<g>`);
     P.push(`<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="#f7f3e8" stroke="#22211f" stroke-width="1.6"/>`);
     if (side === 'corner'){
-      // the corner occupations, straight off the board
-      const j = JOBS[sp.j];
-      P.push(`<rect x="${r.x+3}" y="${r.y+3}" width="${r.w-6}" height="${r.h-6}" fill="${CREAM}" stroke="#22211f" stroke-width="1.5"/>`);
-      const gx = r.x + r.w/2, gy = r.y + 22;
-      const glyph = [
-        `<circle cx="${gx}" cy="${gy}" r="9" fill="#22211f"/><circle cx="${gx}" cy="${gy}" r="4.5" fill="${CREAM}"/><rect x="${gx-5}" y="${gy+7}" width="10" height="4" fill="#22211f"/>`,   // diver's helmet
-        `<rect x="${gx-10}" y="${gy-4}" width="20" height="13" rx="2" fill="#22211f"/><rect x="${gx-4}" y="${gy-8}" width="8" height="4" rx="1" fill="#22211f"/><rect x="${gx-1.2}" y="${gy-1}" width="2.4" height="7" fill="${CREAM}"/><rect x="${gx-3.5}" y="${gy+1.3}" width="7" height="2.4" fill="${CREAM}"/>`,   // doctor's bag
-        `<path d="M ${gx} ${gy-10} l 2.9 6.2 6.8 .8 -5 4.7 1.3 6.8 -6 -3.4 -6 3.4 1.3 -6.8 -5 -4.7 6.8 -.8 z" fill="#22211f"/>`,   // policeman's star
-        `<path d="M ${gx-9} ${gy-4} q 9 -7 18 0 l -1.6 2 q -7.4 -5 -14.8 0 z" fill="#22211f"/><rect x="${gx-1.3}" y="${gy-3}" width="2.6" height="14" fill="#22211f"/>`,   // prospector's pick
-      ][sp.j];
-      P.push(typeof cornerArt === 'function' ? cornerArt(sp.j, r.x, r.y) : glyph);
-      const words = j.t.toUpperCase().split(' ');
-      words.forEach((w, k) => {
-        P.push(`<text x="${r.x+r.w/2}" y="${r.y+48+k*14}" text-anchor="middle" style="font:900 ${words.length>2?11:13}px Archivo,sans-serif;letter-spacing:.02em;fill:#22211f">${w}</text>`);
-      });
-      P.push(`<text x="${r.x+r.w/2}" y="${r.y+r.h-22}" text-anchor="middle" style="font:800 9.5px Archivo,sans-serif;fill:#22211f">${j.nums.join(' OR ')} PAYS</text>`);
-      P.push(`<text x="${r.x+r.w/2}" y="${r.y+r.h-9}" text-anchor="middle" style="font:800 11px Archivo,sans-serif;fill:#22211f">$${j.pay} SALARY</text>`);
+      // the corner square is PAY BROKER FEE, printed on the diagonal for its seat,
+      // with the arrow that carries you on round the corner (counter-clockwise)
+      const k = i / 12, cx = r.x + r.w/2, cy = r.y + r.h/2;
+      const rot = [-45, -45, 135, 135][k];   // read from the seat beside it, as printed
+      P.push(`<rect x="${r.x+2.5}" y="${r.y+2.5}" width="${r.w-5}" height="${r.h-5}" fill="${CREAM}" stroke="#22211f" stroke-width="1.4"/>`);
+      P.push(`<g transform="rotate(${rot} ${cx} ${cy})">
+        <text x="${cx}" y="${cy-13}" text-anchor="middle" style="font:900 17px Archivo,sans-serif;letter-spacing:.04em;fill:#22211f">PAY</text>
+        <text x="${cx}" y="${cy-1}" text-anchor="middle" style="font:800 7.6px Archivo,sans-serif;letter-spacing:.06em;fill:#22211f">BROKER FEE</text>
+        <text x="${cx}" y="${cy+8}" text-anchor="middle" style="font:800 6.8px Archivo,sans-serif;letter-spacing:.04em;fill:#22211f">$${CFG.BROKER_PS} PER SHARE</text>
+        <text x="${cx}" y="${cy+21}" text-anchor="middle" style="font:800 9.5px Archivo,sans-serif;fill:#22211f">${moveText(sp.d)}</text>
+      </g>`);
+      // the way on: up the right side, right along the bottom, down the left side, left along the top
+      const [ax, ay, dx, dy] = [
+        [r.x + r.w - 15, cy, 0, -1], [cx, r.y + r.h - 15, 1, 0], [r.x + 15, cy, 0, 1], [cx, r.y + 15, -1, 0],
+      ][k];
+      P.push(`<line x1="${ax - dx*22}" y1="${ay - dy*22}" x2="${ax + dx*14}" y2="${ay + dy*14}" stroke="#22211f" stroke-width="3"/>`);
+      P.push(`<path d="M ${ax + dx*24} ${ay + dy*24} L ${ax + dx*12 - dy*6} ${ay + dy*12 - dx*6} L ${ax + dx*12 + dy*6} ${ay + dy*12 + dx*6} Z" fill="#22211f"/>`);
     } else {
       // solid vivid printed cells, three lines of type
       const lk = spaceLook(sp);
@@ -2788,6 +2797,31 @@ function buildBoard(){
     P.push(`<rect class="sp-hit" data-i="${i}" tabindex="0" role="button" aria-label="${esc(dT + ' \u2014 ' + dB)}" x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="transparent"/>`);
     P.push(`</g>`);
   }
+  // the four occupation panels inside the board, each printed on the diagonal for its seat
+  V.jobSpots = [];
+  JOB_PANELS.forEach((pn, k) => {
+    const j = JOB_CORNER[k], job = JOBS[j];
+    const cx = pn.x + JP/2, cy = pn.y + JP/2;
+    V.jobSpots[j] = {cx, cy};
+    P.push(`<g>`);
+    P.push(`<rect x="${pn.x}" y="${pn.y}" width="${JP}" height="${JP}" fill="${CREAM}" stroke="#22211f" stroke-width="2.4"/>`);
+    P.push(`<rect x="${pn.x+4}" y="${pn.y+4}" width="${JP-8}" height="${JP-8}" fill="none" stroke="#22211f" stroke-width=".8" opacity=".6"/>`);
+    // the figure in the free corner of the panel (scaled; turned round for the top seats)
+    const sc = .58, aw = 110 * sc, ah = 44 * sc;
+    const ax = pn.art === 'tl' || pn.art === 'bl' ? pn.x + 5 : pn.x + JP - 5 - aw;
+    const ay = pn.art === 'tl' || pn.art === 'tr' ? pn.y + 5 : pn.y + JP - 5 - ah;
+    const flip = pn.flip ? ` rotate(180 ${aw/2/sc} ${ah/2/sc})` : '';
+    if (typeof cornerArt === 'function') P.push(`<g transform="translate(${ax},${ay}) scale(${sc})${flip}">${cornerArt(j, 0, 0)}</g>`);
+    const words = job.t.toUpperCase();
+    P.push(`<g transform="rotate(${pn.rot} ${cx} ${cy})">
+      <text x="${cx}" y="${cy-6}" text-anchor="middle" style="font:900 ${words.length > 9 ? 11 : 13}px Archivo,sans-serif;letter-spacing:.03em;fill:#22211f">${words}</text>
+      <text x="${cx}" y="${cy+6}" text-anchor="middle" style="font:800 8.5px Archivo,sans-serif;fill:#22211f">${job.nums.join(' OR ')} PAYS</text>
+      <text x="${cx}" y="${cy+17}" text-anchor="middle" style="font:800 9.5px Archivo,sans-serif;fill:#22211f">$${job.pay} SALARY</text>
+    </g>`);
+    const [dT, dB] = describeJob(j);
+    P.push(`<rect class="sp-hit" data-j="${j}" tabindex="0" role="button" aria-label="${esc(dT + ' \u2014 ' + dB)}" x="${pn.x}" y="${pn.y}" width="${JP}" height="${JP}" fill="transparent"/>`);
+    P.push(`</g>`);
+  });
   // the fold crease every real board earns
   P.push(`<line x1="${BS/2}" y1="6" x2="${BS/2}" y2="${BS-6}" stroke="rgba(30,22,12,.10)" stroke-width="5"/>`);
   P.push(`<line x1="${BS/2+3}" y1="6" x2="${BS/2+3}" y2="${BS-6}" stroke="rgba(255,248,225,.16)" stroke-width="1.6"/>`);
@@ -2797,6 +2831,7 @@ function buildBoard(){
     `<div id="diceFly"><div class="die big" id="fd1"></div><div class="die big" id="fd2"></div></div>`;
   $('boardWrap').querySelectorAll('.sp-hit').forEach(el => {
     const show = () => {
+      if (el.dataset.j !== undefined){ const [t, b] = describeJob(+el.dataset.j); toast(`${t} — ${b}`, 3600); return; }
       if (V.busy){ const [t, b] = describeSpace(+el.dataset.i); toast(`${t} — ${b}`, 3200); return; }
       sheetSquare(+el.dataset.i);
     };
@@ -2813,6 +2848,11 @@ function pawnSpot(p){
     const row = V.mcells[p.meet.row] || [];
     const idx = Math.max(0, Math.min(row.length - 1, p.meet.idx));
     return {key: 'm' + p.meet.row + ':' + idx, c: row[idx]};
+  }
+  if (p.mode === 'work' || p.pos < 0){
+    // a working piece waits on its occupation's panel inside the board
+    const j = p.job >= 0 ? p.job : 0;
+    return {key: 'j' + j, c: (V.jobSpots || [])[j]};
   }
   return {key: 'o' + p.pos, c: V.cells[p.pos]};
 }
@@ -2849,7 +2889,7 @@ function renderPawns(){
     const el = document.getElementById('pawn' + i);
     if (el) el.setAttribute('transform', `translate(${x},${y})`);
     const t = document.getElementById('pawnT' + i);
-    if (t) t.textContent = p.name + (p.mode === 'meeting' && p.meet ? ' — in the ' + STOCKS[p.meet.stock].code + ' meeting' : ' — on ' + describeSpace(p.pos)[0]);
+    if (t) t.textContent = p.name + (p.mode === 'meeting' && p.meet ? ' — in the ' + STOCKS[p.meet.stock].code + ' meeting' : p.mode === 'work' ? ' — at work as the ' + JOBS[p.job].t : ' — on ' + describeSpace(p.pos)[0]);
   });
 }
 
@@ -3205,9 +3245,6 @@ async function playEvents(events){
         await showCard('Broke!', 'Back to Work',
           `<b>${esc(g.cur().name)}</b> can't cover the bill — stock and money return to the bank, and it's back to work as a <b>${JOBS[ev.j].t}</b>.`);
         renderAll(); break;
-      case 'visit':
-        toast(`Just visiting the ${JOBS[ev.j].t}'s corner`, 2000);
-        break;
     }
   }
   if (quoteDirty) renderQuote();
@@ -3592,7 +3629,7 @@ function sheetRules(){
       </ul>
       <h3>Going Broke</h3>
       <p>Can't cover a bill even after forced sales? Everything returns to the bank and you go back to work — earn your ${fmt(CFG.WORK_STAKE)} again and re-enter the market.</p>
-      <p class="fine">An original homage to the 1968 board-game classic: the rules follow the sheet printed inside the box lid (owner's transcription, rewritten here in our own words), and every square, arrow, entrance and meeting cell is transcribed from photographs of the board. Company names are historical references. Not affiliated with the original publishers.</p>
+      <p class="fine">An original homage to the 1968 board-game classic: the rules follow the sheet printed inside the box lid (owner's transcription, rewritten here in our own words), and every square, arrow, entrance and meeting cell is transcribed from photographs of the board — the four corners are the PAY BROKER FEE squares, and the occupations are the panels inside the board where working pieces wait. Company names are historical references. Not affiliated with the original publishers.</p>
     </div>`;
   });
 }
@@ -4144,9 +4181,9 @@ function routeOnline(){
     if (atTable || NET.mySeat() >= 0 || s.host === NET.token){ enterLobby(); return true; }
     return false;
   }
-  if ((s.phase === 'playing' || s.phase === 'over') && s.game && !(s.game.v >= 7)){
+  if ((s.phase === 'playing' || s.phase === 'over') && s.game && s.game.v !== 9){
     // a game from an older board edition: the table reforms in its lobby
-    s.phase = 'lobby'; s.game = null; s.note = 'The board was rebuilt from the photographs — new game forming';
+    s.phase = 'lobby'; s.game = null; s.note = 'The board was corrected from the photographs — new game forming';
     if (NET.mySeat() >= 0 || s.host === NET.token){ enterLobby(); return true; }
     return false;
   }
@@ -4324,7 +4361,7 @@ function wire(){
     Snd.unlock();
     try{
       const sv = JSON.parse(read(SAVE_KEY));
-      if (!sv || !sv.st || !(sv.st.v >= 7)) throw new Error('old save');
+      if (!sv || !sv.st || sv.st.v !== 9) throw new Error('old save');
       resumeGame(sv);
     }
     catch(e){ store(SAVE_KEY, null); toast('Saved game was from an older edition — starting fresh'); renderSeats(); showScr('setup'); }
@@ -4476,7 +4513,7 @@ function restoreOpts(){
 
 function refreshResume(){
   let has = false;
-  try{ const s = JSON.parse(read(SAVE_KEY)); has = !!(s && s.st && s.st.v >= 7 && !s.st.over); }catch(e){}
+  try{ const s = JSON.parse(read(SAVE_KEY)); has = !!(s && s.st && s.st.v === 9 && !s.st.over); }catch(e){}
   $('btnResume').style.display = has ? '' : 'none';
 }
 
