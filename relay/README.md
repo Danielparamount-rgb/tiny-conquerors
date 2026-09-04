@@ -128,3 +128,9 @@ table can be notified, never the sender.
 `npm run test:tables` (from the repository root) spawns the relay on a spare port and checks
 host/join, revisions, stale detection, chat, presence, oversize refusal and re-seeding after
 a restart.
+
+### Keeping it warm, tracing tables
+
+`.github/workflows/relay-warm.yml` pings `/healthz` every ten minutes so the free tier does
+not sleep between evenings. Set `TABLE_DEBUG=1` on the service to log every table publish
+(token, revision, socket state) to stderr — off by default.

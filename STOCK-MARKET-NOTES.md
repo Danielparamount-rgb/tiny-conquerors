@@ -191,7 +191,7 @@ copying `stock-market.html` after any change.
 ## Installable app
 
 `/market/` ships as a PWA: `manifest.webmanifest`, original icons (the red slider on its
-quotation track), and a service worker (`sw.js`, cache `sm68-v14` — bump per release) that
+quotation track), and a service worker (`sw.js`, cache `sm68-v15` — bump per release) that
 serves the whole game offline, network-first for the page itself so updates land, and handles
 push (`push` shows the notification, `notificationclick` focuses or opens the table). The
 splash shows an Install button when the browser offers the prompt (Android/desktop Chrome)
@@ -216,3 +216,38 @@ re-seeding, play continuing, host reset), and a 16-check feature suite (settings
 setup variants, partner play, the coach, the square sheet, the wire's `?`, autoplay, the recap
 and records, certificates, patterned pawns, spoken labels, landscape layout, table talk, the
 variant helpers, v7 saves resuming as v8, the desktop board with its corner figures).
+
+## Keeping a table alive (v15)
+
+- **Takeovers.** The host can hand any absent player's seat to the computer from *Seats &
+  Takeovers* (menu); the seat keeps its name, holdings and pawn, plays with a random
+  personality on whichever phone drives the computers, and its player takes it back from
+  their own phone at any time ("Take my seat back" on the hint line). A host may set a
+  **turn limit** in the lobby (a day, three days); once a human is overdue the host's phone
+  offers to hand that turn over. The hint line shows how long the table has been waiting.
+- **Seat PINs.** Every seat gets a four-digit PIN, shown to its owner in the lobby and under
+  Seats. Typing it on another phone at the same table moves the seat there — a reinstall or a
+  new phone no longer loses a seat.
+- **Table records** live inside the shared table state (`records`), folded in once per game
+  by the phone that publishes the final state, so every phone shows the same board and a
+  host reset keeps them. Local games keep the per-device household records.
+- **Relay keep-warm.** `.github/workflows/relay-warm.yml` pings the relay every ten minutes so
+  the free tier never sleeps between evenings.
+
+## Saved games, replay, sound (v15)
+
+- **Save slots.** Local games save into up to eight slots (`sm68-saves`); the splash's Resume
+  button counts them and a *Saved Games* sheet lists, resumes and deletes them. The earlier
+  single-slot save migrates at boot.
+- **Replay.** The engine keeps one compact record per turn (`st.hist`: who threw what, the
+  indicator, every piece, every worth, the headline — about 80 bytes a turn). *Replay the
+  Game* on the win card scrubs the finished game on the real board, playing or by slider.
+- **Sound.** An exchange-floor ambience (soft ticker chatter and the odd bell, a setting,
+  on by default) while the market is open; a heavier gavel; a longer dice rattle; a two-phrase
+  win fanfare. Everything is still synthesized.
+- **The meeting signs** now read as printed: each company's name over STOCK DIVIDENDS with an
+  arrow toward the blue STOCKHOLDERS MEETING title.
+
+Verification adds a 5-check local suite (slots, migration, replay, records merge, up-next)
+and an 8-check two-phone suite (PINs, turn limit, takeover played by the host's phone,
+reclaim, seat moved by PIN and back, table records on both phones, records surviving a reset).

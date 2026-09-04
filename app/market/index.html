@@ -538,6 +538,15 @@ html.lefty #topbar{flex-direction:row-reverse}
 #chart2{width:100%;height:60px;margin:0 0 8px}
 .recap-h{font:800 10px/1 var(--grot);letter-spacing:.24em;text-transform:uppercase;color:var(--green);margin:12px 0 4px;text-align:left}
 .win-stats{max-width:360px}
+/* the replay bar */
+#replayBar{position:fixed;left:8px;right:8px;bottom:8px;z-index:72;display:none;padding:10px 12px;max-width:640px;margin:0 auto}
+#replayBar.on{display:block}
+.rp-head{display:flex;gap:8px;align-items:baseline;font:600 12.5px/1.4 var(--grot);color:var(--ink-soft);margin-bottom:6px;min-height:18px}
+.rp-head b{font:800 11.5px var(--grot);color:var(--red);white-space:nowrap;letter-spacing:.04em}
+.rp-row{display:flex;align-items:center;gap:8px}
+#rpRange{flex:1;min-width:0;accent-color:var(--red);height:32px}
+#hint .btn{min-height:36px;padding:6px 12px;font-size:12px;margin-left:8px}
+.pin{font:700 11px var(--mono);letter-spacing:.14em;background:var(--paper);border:1px dashed var(--ink);border-radius:4px;padding:2px 6px;color:var(--ink)}
 /* the table full-size on tablets and desks; two columns on a phone turned sideways */
 @media (min-width:920px){#boardWrap{max-width:min(100%,calc(100dvh - 150px));margin:0 auto}}
 @media (max-width:919px) and (orientation:landscape) and (min-width:600px){
@@ -582,6 +591,7 @@ html.lefty #topbar{flex-direction:row-reverse}
       <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
         <button class="btn alt small" id="btnSettings0">Settings</button>
         <button class="btn alt small" id="btnRecords0">Records</button>
+        <button class="btn alt small" id="btnSaves0" style="display:none">Saved Games</button>
         <button class="btn alt small" id="btnCoach0">Guided First Game</button>
       </div>
       <button class="btn gold small" id="btnInstall" style="display:none">Install the App</button>
@@ -701,6 +711,14 @@ html.lefty #topbar{flex-direction:row-reverse}
         <option value="pairs">Pairs — seats 1&amp;2, 3&amp;4… pool their worth</option>
       </select>
     </div>
+    <div class="setup-row" id="lobbyHostRow5" style="display:none">
+      <label for="lobbyLimit">Turn limit</label>
+      <select id="lobbyLimit">
+        <option value="0" selected>None — take your time</option>
+        <option value="24">A day — then the host may hand the turn to the computer</option>
+        <option value="72">Three days</option>
+      </select>
+    </div>
     <div class="setup-actions">
       <button class="btn alt small" id="btnLobbyLeave">Back</button>
       <button class="btn alt small" id="btnLobbyAI" style="display:none">+ Computer</button>
@@ -771,6 +789,7 @@ html.lefty #topbar{flex-direction:row-reverse}
   <button class="btn alt small" id="mRecords">Records</button>
   <button class="btn alt small" id="mAuto" style="display:none">Autoplay to the End</button>
   <button class="btn alt small" id="mNotify" style="display:none">Notify Me on My Turn</button>
+  <button class="btn alt small" id="mSeats" style="display:none">Seats &amp; Takeovers</button>
   <button class="btn alt small" id="mTable" style="display:none">New Table (Lobby)</button>
   <button class="btn alt small" id="mQuit">Abandon Game</button>
 </div>
@@ -802,6 +821,15 @@ html.lefty #topbar{flex-direction:row-reverse}
 </div>
 
 <div id="toast" role="status"></div>
+<!-- the replay bar -->
+<div id="replayBar" class="card-paper" role="region" aria-label="Replay">
+  <div class="rp-head"><b id="rpTurn"></b><span id="rpLine"></span></div>
+  <div class="rp-row">
+    <button class="btn small alt" id="rpPlay">Pause</button>
+    <input type="range" id="rpRange" min="0" max="0" value="0" aria-label="Turn">
+    <button class="btn small gold" id="rpDone">Done</button>
+  </div>
+</div>
 <span id="sr" class="vh" role="status"></span>
 
 <!-- win -->
@@ -819,9 +847,10 @@ html.lefty #topbar{flex-direction:row-reverse}
     <div id="winStand" style="max-width:360px;margin:0 auto 6px"></div>
     <div class="recap-h">The winner's story</div>
     <div class="win-stats" id="winStats"></div>
-    <div class="recap-h">Household records</div>
+    <div class="recap-h" id="winRecordsH">Household records</div>
     <div id="winRecords" style="max-width:360px;margin:0 auto 14px"></div>
     <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+      <button class="btn alt small" id="btnReplay">Replay the Game</button>
       <button class="btn alt small" id="btnShare">Share the Recap</button>
     </div>
     <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:10px">
@@ -998,6 +1027,7 @@ class Game {
       mv: null,                               // in-flight movement
       dice: [0,0], turnCount: 0,
       log: [], logWhy: [], over: false, winner: -1,
+      hist: [],                              // one compact record per turn — the replay
     };
     this._rng = makeRng(this.st.seed);
     for (let i = 0; i < this.st.rngN; i++) this._rng();
@@ -1007,6 +1037,7 @@ class Game {
     const g = Object.create(Game.prototype);
     // a v7 save (the same board) reads straight in: fill what v13 added
     if (!s.mHist) s.mHist = [s.M];
+    if (!s.hist) s.hist = [];
     if (!s.logWhy) s.logWhy = (s.log || []).map(() => '');
     if (!LEVELS[s.level]) s.level = 'normal';
     if (s.teams === undefined) s.teams = null;
@@ -1042,6 +1073,18 @@ class Game {
   }
   sideWorth(i){ return this.sideSeats(i).reduce((a, k) => a + this.netWorth(this.st.players[k]), 0); }
   sideName(i){ return this.sideSeats(i).map(k => this.st.players[k].name).join(' & '); }
+  /* where a piece is, in one number: a track square, -1-job while at work,
+     or 100 + row*10 + cell inside a meeting */
+  static encPos(p){
+    if (p.mode === 'meeting' && p.meet) return 100 + p.meet.row * 10 + Math.max(0, Math.min(8, p.meet.idx));
+    if (p.mode === 'work' || p.pos < 0) return -1 - (p.job >= 0 ? p.job : 0);
+    return p.pos;
+  }
+  static decPos(code){
+    if (code >= 100){ const row = Math.floor((code - 100) / 10); return {mode: 'meeting', pos: -1, meet: {row, idx: (code - 100) % 10, dir: 1, stock: MEET_ROWS[row].pair[0]}, job: -1}; }
+    if (code < 0) return {mode: 'work', pos: -1, meet: null, job: -1 - code};
+    return {mode: 'market', pos: code, meet: null, job: -1};
+  }
   /* selling shares at a price: cash in, cost basis out, the gain remembered */
   _realize(p, s, q, price){
     const held = p.shares[s];
@@ -1359,6 +1402,12 @@ class Game {
     st.turnCount++;
     st.players.forEach(pl => pl.nwHist.push(this.netWorth(pl)));
     st.mHist.push(st.M);
+    // the replay record: who threw what, the indicator, every piece, every worth, the headline
+    if (st.hist.length < 2000){
+      st.hist.push([st.turn, st.dice[0], st.dice[1], st.M,
+        st.players.map(pl => Game.encPos(pl)), st.players.map(pl => this.netWorth(pl)),
+        String(st.log[st.log.length - 1] || '').slice(0, 110)]);
+    }
     st.turn = (st.turn + 1) % st.players.length;
     st.phase = 'idle';
     // the bell: after the last throw of the final round, the richest side wins
@@ -1656,9 +1705,60 @@ const paceOf = () => V.autoplay ? 'instant' : (V.g ? V.g.st.speed : 'normal');
 /* ---------------- storage (never let a blocked store crash the game) --- */
 function store(k, v){ try{ if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); }catch(e){} }
 function read(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+/* ---------------- saved games: several slots on this device ---------------- */
+const SAVES_KEY = 'sm68-saves';
+function loadSaves(){
+  try{ const a = JSON.parse(read(SAVES_KEY) || '[]'); return Array.isArray(a) ? a.filter(s => s && s.st && s.st.v === 9) : []; }
+  catch(e){ return []; }
+}
+function storeSaves(a){ store(SAVES_KEY, JSON.stringify(a)); }
+function migrateSave(){
+  // the single-slot save from earlier builds becomes the first slot
+  try{
+    const sv = JSON.parse(read(SAVE_KEY) || 'null');
+    if (sv && sv.st && sv.st.v === 9 && !sv.st.over){
+      const a = loadSaves();
+      sv.id = 'legacy' + sv.st.seed; sv.at = sv.at || Date.now();
+      if (!a.some(s => s.id === sv.id)) a.unshift(sv);
+      storeSaves(a);
+    }
+  }catch(e){}
+  store(SAVE_KEY, null);
+}
 function saveGame(){
-  if (V.online || !V.g || V.g.st.over) return;   // online tables live in the artifact, not this device
-  store(SAVE_KEY, JSON.stringify({st: V.g.st, seats: V.seats, target: V.target, speed: V.speed, chat: V.chat}));
+  if (V.online || !V.g || V.g.st.over) return;   // online tables live on the relay / in the artifact
+  if (!V.saveId) V.saveId = 's' + V.g.st.seed.toString(36);
+  const a = loadSaves();
+  const rec = {id: V.saveId, at: Date.now(), st: V.g.st, seats: V.seats, target: V.target, speed: V.speed, chat: V.chat};
+  const i = a.findIndex(s => s.id === V.saveId);
+  if (i >= 0) a[i] = rec; else a.unshift(rec);
+  while (a.length > 8) a.pop();
+  storeSaves(a);
+}
+function deleteSave(id){ if (!id) return; storeSaves(loadSaves().filter(s => s.id !== id)); }
+function liveSaves(){ return loadSaves().filter(s => !s.st.over); }
+function saveLabel(s){
+  const ps = s.st.players.map(p => p.name).join(', ');
+  const when = s.at ? new Date(s.at).toLocaleDateString(undefined, {month: 'short', day: 'numeric'}) : '';
+  const sub = (s.st.house ? 'House rules' : 'Classic') + ' · ' + (s.st.target ? 'to ' + fmt(s.st.target) : s.st.rounds + ' rounds') +
+    ' · turn ' + s.st.turnCount + (when ? ' · ' + when : '');
+  return {ps, sub};
+}
+function sheetSaves(){
+  openSheet('Saved Games', b => {
+    const a = liveSaves();
+    b.innerHTML = (a.length ? a.map(s => { const l = saveLabel(s); return `<div class="trow">
+        <span class="ti"><b>${esc(l.ps)}</b><small>${esc(l.sub)}</small></span>
+        <button class="btn small" data-res="${s.id}">Resume</button>
+        <button class="rm" data-del="${s.id}" aria-label="Delete this saved game">×</button></div>`; }).join('')
+      : '<div class="fempty">No saved games on this device.</div>') +
+      `<p style="font:600 11.5px/1.5 Archivo,sans-serif;color:var(--ink-faint);margin-top:10px">Every local game saves itself after each turn; up to eight can be in progress at once.</p>`;
+    b.querySelectorAll('[data-res]').forEach(el => el.addEventListener('click', () => {
+      const s = loadSaves().find(x => x.id === el.dataset.res);
+      closeSheet(); if (s) resumeGame(s);
+    }));
+    b.querySelectorAll('[data-del]').forEach(el => el.addEventListener('click', () => { deleteSave(el.dataset.del); refreshResume(); sheetSaves(); }));
+  });
 }
 
 /* ---------------- table variants ---------------- */
@@ -1679,7 +1779,7 @@ function openingLine(house, target, rounds, teams){
 
 /* ---------------- settings ---------------- */
 const SET_KEY = 'sm68-set';
-const SET_DEF = {patterns: false, big: false, lefty: false, haptics: true, coach: true, motion: 'auto'};
+const SET_DEF = {patterns: false, big: false, lefty: false, haptics: true, coach: true, motion: 'auto', ambience: true};
 function loadSettings(){
   try{ V.set = Object.assign({}, SET_DEF, JSON.parse(read(SET_KEY) || '{}') || {}); }catch(e){ V.set = Object.assign({}, SET_DEF); }
 }
@@ -1701,6 +1801,7 @@ function sheetSettings(){
       ['sound', 'Sound', 'Dice, cash and the gavel — all synthesized', () => V.sound, v => {
         V.sound = v; $('btnSound').setAttribute('aria-pressed', String(v)); $('btnSound').textContent = v ? '♬' : '♪';
         store('sm68-sound', v ? '1' : '0'); if (v) Snd.unlock(); }],
+      ['ambience', 'Exchange-floor ambience', 'A soft ticker chatter and the odd bell while the market is open', () => V.set.ambience, v => { V.set.ambience = v; }],
       ['haptics', 'Haptics', 'A buzz on the dice and when money moves, where the phone allows', () => V.set.haptics, v => { V.set.haptics = v; }],
       ['patterns', 'Patterned pawns', 'Stripes, dots and checks on every pawn — colour is never the only clue', () => V.set.patterns, v => { V.set.patterns = v; }],
       ['big', 'Large type', 'Everything about 15% bigger', () => V.set.big, v => { V.set.big = v; }],
@@ -1857,23 +1958,44 @@ function recordGame(g){
   });
   store(REC_KEY, JSON.stringify(R));
 }
-function recordsRows(limit){
-  const R = loadRecords();
-  return Object.keys(R).map(k => Object.assign({name: k}, R[k]))
+/* an online table keeps its own records inside the shared state, so every phone sees them */
+function mergeRecords(R0, g){
+  const R = JSON.parse(JSON.stringify(R0 || {}));
+  if (!g || !g.st.over || g.st.winner < 0) return R;
+  if (R.__last === g.st.seed) return R;          // this game is already folded in
+  const winners = g.sideSeats(g.st.winner);
+  g.st.players.forEach((p, i) => {
+    const k = (p.name || '').trim() || 'Investor';
+    const r = R[k] || {games: 0, wins: 0, best: 0, fastest: 0};
+    r.games++; r.ai = !!p.ai;
+    const nw = g.netWorth(p); if (nw > r.best) r.best = nw;
+    if (winners.includes(i)){ r.wins++; if (!r.fastest || g.st.turnCount < r.fastest) r.fastest = g.st.turnCount; }
+    R[k] = r;
+  });
+  R.__last = g.st.seed;
+  return R;
+}
+function tableRecords(){ return V.online && NET.state ? mergeRecords(NET.state.records || {}, V.g && V.g.st.over ? V.g : null) : null; }
+function recordsRows(limit, R){
+  R = R || loadRecords();
+  return Object.keys(R).filter(k => k !== '__last').map(k => Object.assign({name: k}, R[k]))
     .sort((a, b) => b.wins - a.wins || b.best - a.best).slice(0, limit || 50);
 }
-function recordsHtml(limit){
-  const rows = recordsRows(limit);
+function recordsHtml(limit, R){
+  const rows = recordsRows(limit, R);
   if (!rows.length) return '<div class="fempty">No games on record on this device yet.</div>';
   return rows.map((r, i) => `<div class="stand"><span class="rk">${i + 1}</span><span>${esc(r.name)}${r.ai ? ' ⚙' : ''}</span>
     <small style="color:var(--ink-faint);font:600 10.5px Archivo,sans-serif">${r.wins} win${r.wins === 1 ? '' : 's'} · ${r.games} game${r.games === 1 ? '' : 's'}${r.fastest ? ' · best ' + r.fastest + ' turns' : ''}</small>
     <span class="nw">${fmt(r.best)}</span></div>`).join('');
 }
 function sheetRecords(){
-  openSheet('Household Records', b => {
-    b.innerHTML = `<p style="font:600 12px/1.5 Archivo,sans-serif;color:var(--ink-faint);margin-bottom:8px">Wins, games and best net worth for everyone who has played on this device.</p>
-      ${recordsHtml(50)}<button class="btn alt small" id="recClear" style="width:100%;margin-top:14px">Clear the Records</button>`;
-    b.querySelector('#recClear').addEventListener('click', () => { store(REC_KEY, null); toast('Records cleared'); closeSheet(); });
+  const T = tableRecords();
+  openSheet(T ? 'Table Records' : 'Household Records', b => {
+    b.innerHTML = `<p style="font:600 12px/1.5 Archivo,sans-serif;color:var(--ink-faint);margin-bottom:8px">${T
+        ? 'Wins, games and best net worth at this table — kept with the table, so every phone sees the same board.'
+        : 'Wins, games and best net worth for everyone who has played on this device.'}</p>
+      ${recordsHtml(50, T || undefined)}${T ? '' : '<button class="btn alt small" id="recClear" style="width:100%;margin-top:14px">Clear the Records</button>'}`;
+    const c = b.querySelector('#recClear'); if (c) c.addEventListener('click', () => { store(REC_KEY, null); toast('Records cleared'); closeSheet(); });
   });
 }
 
@@ -1957,6 +2079,67 @@ function drawChart2(){
   x.stroke();
   x.fillStyle = '#bf3527'; x.beginPath(); x.arc(px(h.length - 1), py(h[h.length - 1]), 3, 0, 7); x.fill();
 }
+
+/* ---------------- the replay: every turn of a finished game, scrubbable ---------------- */
+const Replay = {
+  on: false, g0: null, g: null, i: 0, t: 0,
+  start(){
+    const g0 = V.g;
+    if (!g0 || !g0.st.hist || !g0.st.hist.length){ toast('No record to replay'); return; }
+    this.g0 = g0; this.g = Game.fromSave(JSON.parse(JSON.stringify(g0.st))); this.on = true;
+    V.g = this.g; V.gen++; confettiRun = false;
+    $('win').classList.remove('on'); $('replayBar').classList.add('on');
+    $('rpRange').max = g0.st.hist.length; $('rpRange').value = 0;
+    this.show(0); this.play();
+  },
+  show(i){
+    const H = this.g0.st.hist, g = this.g;
+    this.i = i = Math.max(0, Math.min(H.length, i));
+    if (i === 0){
+      const house = this.g0.st.house;
+      g.st.players.forEach((p, k) => {
+        p.mode = house ? 'market' : 'work'; p.pos = house ? START_CELLS[k % 4] : -1; p.meet = null;
+        p.cash = house ? CFG.WORK_STAKE + STOCKS.reduce((a, s, si) => a + priceAt(si, CFG.M_START), 0) : 0;
+        p.shares = STOCKS.map(() => 0);
+      });
+      g.st.M = CFG.M_START; g.st.turn = 0;
+      $('rpTurn').textContent = 'The opening'; $('rpLine').textContent = this.g0.st.log[0] || '';
+    } else {
+      const r = H[i - 1];
+      g.st.players.forEach((p, k) => {
+        const d = Game.decPos(r[4][k]);
+        p.mode = d.mode; p.pos = d.pos; p.meet = d.meet; if (d.job >= 0) p.job = d.job;
+        p.cash = r[5][k]; p.shares = STOCKS.map(() => 0);
+      });
+      g.st.M = r[3]; g.st.turn = r[0]; g.st.dice = [r[1], r[2]];
+      dieFace($('die1'), r[1]); dieFace($('die2'), r[2]);
+      $('rpTurn').textContent = 'Turn ' + i + ' of ' + H.length + ' · ' + g.st.players[r[0]].name + ' throws ' + (r[1] + r[2]);
+      $('rpLine').textContent = r[6] || '';
+    }
+    g.st.prices = STOCKS.map((_, k) => priceAt(k, g.st.M));
+    renderPawns(); renderQuote(); renderPlayers();
+    $('rpRange').value = i;
+  },
+  play(){
+    this.stop(); $('rpPlay').textContent = 'Pause';
+    this.t = setInterval(() => { if (this.i >= this.g0.st.hist.length){ this.stop(); return; } this.show(this.i + 1); }, RM ? 350 : 650);
+  },
+  stop(){ clearInterval(this.t); this.t = 0; $('rpPlay').textContent = 'Play'; },
+  toggle(){
+    if (this.t){ this.stop(); return; }
+    if (this.i >= this.g0.st.hist.length) this.show(0);
+    this.play();
+  },
+  end(){
+    this.stop();
+    if (!this.on) return;
+    this.on = false;
+    $('replayBar').classList.remove('on');
+    V.g = this.g0; V.gen++; lastPrices = null;
+    renderAll();
+    $('win').classList.add('on'); drawChart(); drawChart2();
+  },
+};
 
 /* ---------------- patterned pawns: colour is never the only clue ---------------- */
 const PAT_INK = 'rgba(255,248,225,.78)';
@@ -2264,7 +2447,7 @@ const NET = {
     rl.rev = rev; this.state = state; this.cache();
     if (own){
       const same = V.g && state && state.phase === 'playing' && $('game').classList.contains('on');
-      if (same){ renderAll(); return; }
+      if (same){ renderAll(); runLoop(); return; }
       routeOnline(); return;
     }
     if (!V.online && V.g) return;      // playing a local game: the table waits on the splash
@@ -2314,6 +2497,7 @@ const NET = {
     const url = (/^https?:/.test(location.protocol) ? location.origin + location.pathname : '') + (this.rl.code ? '?table=' + this.rl.code : '');
     const out = [], seats = state.seats || [];
     const everyone = (title, body) => seats.forEach(x => { if (x && x.token && x.token !== this.token) out.push({tok: x.token, title, body, url}); });
+    if (Array.isArray(state.wake)) state.wake.forEach(w => { if (w && w.tok && w.tok !== this.token) out.push({tok: w.tok, title: w.title, body: w.body, url}); });
     if (state.phase === 'playing' && state.game){
       const g = state.game;
       if (g.over){
@@ -2401,7 +2585,7 @@ function renderPresence(){
 
 /* ================= AUDIO — everything synthesized live ================= */
 const Snd = (() => {
-  let ctx = null;
+  let ctx = null, amb = 0;
   const ac = () => {
     if (!ctx){ const AC = window.AudioContext || window.webkitAudioContext; if (AC) ctx = new AC(); }
     if (ctx && ctx.state === 'suspended') ctx.resume();
@@ -2432,7 +2616,7 @@ const Snd = (() => {
   }
   return {
     unlock(){ ac(); },
-    dice(){ thud(.05, 2200, .14); thud(.05, 1800, .12, .07); thud(.06, 1500, .1, .15); buzz([15, 40, 15]); },
+    dice(){ [0, .06, .11, .17, .24, .3].forEach((w, i) => thud(.045, 2500 - i * 230, .15 - i * .017, w)); buzz([15, 40, 15]); },
     hop(){ tone(560, .05, 'triangle', .06); },
     tick(){ tone(1250, .03, 'square', .04); },
     cash(){ tone(880, .12, 'triangle', .1); tone(1318, .18, 'triangle', .09, .06); },
@@ -2441,8 +2625,24 @@ const Snd = (() => {
     fee(){ tone(330, .12, 'square', .06); tone(262, .18, 'square', .06, .1); },
     split(){ [523, 659, 784, 1047].forEach((f, i) => tone(f, .22, 'triangle', .1, i * .09)); },
     bust(){ [392, 311, 247, 175].forEach((f, i) => tone(f, .3, 'sawtooth', .08, i * .14, -30)); },
-    gavel(){ thud(.08, 700, .2); thud(.08, 700, .16, .16); },
-    win(){ [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => tone(f, .3, 'triangle', .11, i * .13)); },
+    gavel(){ thud(.13, 380, .28); thud(.05, 1700, .12, .005); thud(.13, 380, .22, .2); thud(.05, 1700, .1, .205); },
+    win(){
+      [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => tone(f, .3, 'triangle', .11, i * .13));
+      [1319, 1568, 1319, 1760, 2093].forEach((f, i) => tone(f, .34, 'triangle', .09, 1.05 + i * .16));
+    },
+    /* the exchange floor: a soft ticker chatter and the odd bell while the market is open */
+    ambience(on){
+      clearTimeout(amb); amb = 0;
+      if (!on) return;
+      const loop = () => {
+        if (V.sound && V.set && V.set.ambience){
+          thud(.016, 4200 + Math.random() * 1600, .022);
+          if (Math.random() < .05) tone(1760 + Math.random() * 240, .2, 'sine', .014);
+        }
+        amb = setTimeout(loop, 130 + Math.random() * 260);
+      };
+      amb = setTimeout(loop, 400);
+    },
   };
 })();
 
@@ -2720,9 +2920,21 @@ function buildBoard(){
       const mx = mid.x + mid.w/2, my = mid.y + mid.h/2, rot = horiz ? 0 : (ri === 1 ? -90 : 90);
       const [pa, pb] = row.pair;
       const left = dir > 0 ? pa : pb, right = dir > 0 ? pb : pa;   // which company's end reads on the left
+      // as printed: each company's name over STOCK DIVIDENDS with an arrow toward the
+      // blue title in the middle — its dividends flow in from that end of the track
+      const SIGN_NAME = {AMO: 'AM. MOTORS', JIC: 'J. I. CASE', GMI: 'GEN. MILLS', ISH: 'INT. SHOE', WPC: 'WESTERN PUBL.'};
+      const sname = i => SIGN_NAME[STOCKS[i].code] || STOCKS[i].name.toUpperCase();
+      const sf = 'font:800 7.2px Archivo,sans-serif;letter-spacing:.03em;fill:#22211f';
       P.push(`<g transform="rotate(${rot} ${mx} ${my})">
-        <text x="${mx}" y="${my-1}" text-anchor="middle" style="font:800 10.5px Archivo,sans-serif;letter-spacing:.08em;fill:#2f7fa8">STOCKHOLDERS MEETING</text>
-        <text x="${mx}" y="${my+13}" text-anchor="middle" style="font:700 7px Archivo,sans-serif;letter-spacing:.04em;fill:#22211f">${STOCKS[left].code} STOCK DIVIDENDS ⟶ &nbsp;·&nbsp; ⟵ ${STOCKS[right].code} STOCK DIVIDENDS</text>
+        <text x="${mx}" y="${my+4}" text-anchor="middle" style="font:800 11px Archivo,sans-serif;letter-spacing:.06em;fill:#2f7fa8">STOCKHOLDERS MEETING</text>
+        <text x="${mx-122}" y="${my-3}" text-anchor="middle" style="${sf}">${sname(left)}</text>
+        <text x="${mx-122}" y="${my+8}" text-anchor="middle" style="${sf}">STOCK DIVIDENDS</text>
+        <line x1="${mx-160}" y1="${my+13}" x2="${mx-84}" y2="${my+13}" stroke="#22211f" stroke-width="1.4"/>
+        <path d="M ${mx-80} ${my+13} l -6 -3.5 v 7 z" fill="#22211f"/>
+        <text x="${mx+122}" y="${my-3}" text-anchor="middle" style="${sf}">${sname(right)}</text>
+        <text x="${mx+122}" y="${my+8}" text-anchor="middle" style="${sf}">STOCK DIVIDENDS</text>
+        <line x1="${mx+160}" y1="${my+13}" x2="${mx+84}" y2="${my+13}" stroke="#22211f" stroke-width="1.4"/>
+        <path d="M ${mx+80} ${my+13} l 6 -3.5 v 7 z" fill="#22211f"/>
       </g>`);
       V.mcells.push(cells);
     });
@@ -2970,8 +3182,19 @@ function renderHint(){
   const g = V.g; if (!g) return;
   const p = g.cur();
   if (g.st.over){ $('hint').innerHTML = 'The market has closed.'; return; }
-  if (V.online && myOnlineSeat() !== g.st.turn && !p.ai){
-    $('hint').innerHTML = `<span>Waiting for <b>${esc(p.name)}</b> to play — the board updates when they finish.</span>`;
+  const me = myOnlineSeat(), S = NET.state;
+  const nextOf = () => { const n = g.st.players.length; for (let k = 1; k < n; k++){ const i = (g.st.turn + k) % n; return g.st.players[i].name; } return ''; };
+  const upNext = g.st.players.length > 2 ? ` <span style="opacity:.7">· up next: ${esc(nextOf())}</span>` : '';
+  if (V.online && me >= 0 && S && S.seats[me] && S.seats[me].away){
+    $('hint').innerHTML = `<span>The computer is playing your seat while you were away.<button class="btn small gold" id="btnReclaim">Take my seat back</button></span>`;
+    return;
+  }
+  if (V.online && me !== g.st.turn && !p.ai){
+    const since = S && S.at ? Date.now() - S.at : 0;
+    const host = S && S.host === NET.token;
+    const overdue = host && S.limitH && since > S.limitH * 3600e3;
+    $('hint').innerHTML = `<span>Waiting for <b>${esc(p.name)}</b> to play${since > 60000 ? ' · ' + waitStr(since) : ''} — the board updates when they finish.${upNext}` +
+      (overdue ? `<button class="btn small alt" data-hand="${g.st.turn}">Hand this turn to the computer</button>` : '') + `</span>`;
     return;
   }
   if (V.online && p.ai && onlineDriver() !== myOnlineSeat()){
@@ -2987,11 +3210,11 @@ function renderHint(){
     } else if (p.mode === 'meeting'){
       $('hint').innerHTML = `<span><b>${esc(p.name)}</b> — inside the ${STOCKS[p.meet.stock].code} meeting. Throw to move on through.</span>`;
     } else {
-      $('hint').innerHTML = `<span><b>${esc(p.name)}</b> — your throw. Selling? Only now, from the Ledger, before you throw.</span>`;
+      $('hint').innerHTML = `<span><b>${esc(p.name)}</b> — your throw. Selling? Only now, from the Ledger, before you throw.${upNext}</span>`;
     }
   }
   else if (g.st.pending){ $('hint').innerHTML = `<span><b>${esc(p.name)}</b> — resolve your landing.</span>`; }
-  else { $('hint').innerHTML = `<span><b>${esc(p.name)}</b> — end your turn when ready.</span>`; }
+  else { $('hint').innerHTML = `<span><b>${esc(p.name)}</b> — end your turn when ready.${upNext}</span>`; }
   if (g.st.rounds && !g.st.over){
     const rd = Math.min(g.st.rounds, Math.floor(g.st.turnCount / g.st.players.length) + 1);
     $('hint').innerHTML = `<span style="opacity:.8">R${rd}/${g.st.rounds}</span> · ` + $('hint').innerHTML;
@@ -3790,7 +4013,7 @@ function finishTurn(){
   g.endTurn();
   if (g.st.over){   // a timed sitting calls time at the end of the final round
     if (V.online){ onlinePublishTurn(); }
-    else store(SAVE_KEY, null);
+    else deleteSave(V.saveId);
     renderAll(); showWin(); return;
   }
   if (V.online){
@@ -3834,11 +4057,11 @@ async function aiTurn(){
 
 function runLoop(){
   const g = V.g;
-  if (!g || g.st.over) return;
+  if (!g || g.st.over || V.busy || Replay.on) return;
   // the win is judged at your own turn to throw: cash plus stock at board prices
   if (g.st.phase === 'idle' && g.checkWin()){
     if (V.online){ onlinePublishTurn(); }
-    else store(SAVE_KEY, null);
+    else deleteSave(V.saveId);
     renderAll(); showWin(); return;
   }
   if (g.cur().ai || (V.autoplay && !V.online)){
@@ -3955,8 +4178,9 @@ function showWin(){
   $('winStats').innerHTML = rows.map(r => `<div class="row"><span>${r[0]}</span><span>${r[1]}</span></div>`).join('');
   $('winStand').innerHTML = standings(g).map((s, i) =>
     `<div class="stand"><span class="rk">${i + 1}</span><span class="dot" style="background:${s.color}"></span><span>${esc(s.name)}</span><span class="nw">${fmt(s.nw)}</span></div>`).join('');
-  recordGame(g);
-  $('winRecords').innerHTML = recordsHtml(5);
+  if (V.online){ $('winRecordsH').textContent = 'Table records'; $('winRecords').innerHTML = recordsHtml(5, tableRecords() || {}); }
+  else { $('winRecordsH').textContent = 'Household records'; recordGame(g); $('winRecords').innerHTML = recordsHtml(5); }
+  $('btnReplay').style.display = g.st.hist && g.st.hist.length ? '' : 'none';
   if (w.ai && !V.online){ const q = AI.quip(w, 'win'); if (q) postChat({n: w.name, c: w.color, x: q, t: Date.now()}); }
   buzz([40, 60, 40, 60, 120]);
   if (V.online){
@@ -4019,6 +4243,7 @@ function renderSeats(){
 
 function showScr(name){
   SCREENS.forEach(s => $(s).classList.toggle('on', s === name));
+  Snd.ambience(name === 'game');
 }
 
 function startGame(){
@@ -4029,6 +4254,7 @@ function startGame(){
     players: V.seats.map((s, i) => ({name: s.name.trim() || 'Investor ' + (i + 1), ai: s.ai, color: s.color || PAWN_COLORS[i], persona: s.persona})),
   });
   V.g.addLog(openingLine(V.house, V.target, V.rounds, teams), 'open');
+  V.saveId = 's' + V.g.st.seed.toString(36) + Date.now().toString(36).slice(-3);
   V.online = false; $('liveBadge').style.display = 'none';
   V.gen++; V.busy = false; V.autoplay = false; V.quipAt = {};
   V.chat = []; V.chatQueue = [];
@@ -4056,6 +4282,7 @@ function startGame(){
 
 function resumeGame(saved){
   V.g = Game.fromSave(saved.st);
+  V.saveId = saved.id || ('s' + saved.st.seed.toString(36));
   V.seats = saved.seats || V.seats;
   V.target = saved.target || CFG.WIN;
   V.speed = saved.speed || 'normal';
@@ -4087,6 +4314,7 @@ function netSnapshot(extra){
   return Object.assign({
     v: 3, phase: s.phase, host: s.host, target: s.target || CFG.WIN,
     seats: s.seats || [], game: s.game || null, chat: s.chat || [],
+    records: s.records || {}, limitH: s.limitH || 0, at: Date.now(),
     lastBy: NET.token, note: '',
   }, extra || {});
 }
@@ -4220,7 +4448,7 @@ async function claimSeat(name, color, retries){
   const st = netSnapshot({});
   st.seats = st.seats.filter(x => x.token !== NET.token);
   if (st.seats.length >= 8){ toast('The table is full'); return false; }
-  st.seats.push({name, color, ai: false, token: NET.token});
+  st.seats.push({name, color, ai: false, token: NET.token, pin: String(1000 + Math.floor(Math.random() * 9000))});
   st.note = name + ' sat down at the table';
   const ok = await NET.publish(st);
   if (!ok && retries > 0 && NET.mode === 'relay'){ await sleep(500); return claimSeat(name, color, retries - 1); }
@@ -4233,7 +4461,7 @@ function enterLobby(){
   const host = s.host === NET.token;
   const humans = s.seats.filter(x => !x.ai).length;
   const relay = NET.mode === 'relay';
-  ['lobbyHostRow', 'lobbyHostRow2', 'lobbyHostRow3', 'lobbyHostRow4'].forEach(id => { $(id).style.display = host ? '' : 'none'; });
+  ['lobbyHostRow', 'lobbyHostRow2', 'lobbyHostRow3', 'lobbyHostRow4', 'lobbyHostRow5'].forEach(id => { $(id).style.display = host ? '' : 'none'; });
   $('btnLobbyAI').style.display = host && s.seats.length < 8 ? '' : 'none';
   $('btnLobbyStart').style.display = host ? '' : 'none';
   $('btnLobbyStart').disabled = !(s.seats.length >= 2 && humans >= 1);
@@ -4257,9 +4485,10 @@ function enterLobby(){
   const rows = s.seats.map((x, i) => `
     <div class="lseat">
       <span class="seat-dot" style="background:${x.color};cursor:default"></span>
-      <span class="who"><b>${relay && x.token ? `<span class="presence" data-tok="${esc(x.token)}"></span>` : ''}${esc(x.name)}${x.ai ? ' ⚙' : ''}</b><small>${x.token === s.host ? 'Host' : x.ai ? 'Computer investor' + (x.persona >= 0 ? ' · ' + PERSONAS[x.persona % PERSONAS.length].name : '') : 'Investor'}</small></span>
+      <span class="who"><b>${relay && x.token ? `<span class="presence" data-tok="${esc(x.token)}"></span>` : ''}${esc(x.name)}${x.ai ? ' ⚙' : ''}</b><small>${x.token === s.host ? 'Host' : x.ai ? 'Computer investor' + (x.persona >= 0 ? ' · ' + PERSONAS[x.persona % PERSONAS.length].name : '') : 'Investor'}${x.token === NET.token && x.pin ? ` · seat PIN <span class="pin">${esc(x.pin)}</span>` : ''}</small></span>
       ${x.token === NET.token ? '<span class="you">YOU</span><button class="rm" data-un="1" aria-label="Give up seat">×</button>' : ''}
       ${(s.host === NET.token && x.ai) ? `<button class="rm" data-unai="${i}" aria-label="Remove computer">×</button>` : ''}
+      ${(!x.ai && x.token && x.token !== NET.token && NET.mySeat() < 0 && x.pin) ? `<button class="btn small alt" data-mine="${i}">This is my seat</button>` : ''}
     </div>`).join('');
   const open = s.seats.length < 8 && NET.mySeat() < 0
     ? `<div class="lseat"><span class="seat-dot" style="background:transparent;border-style:dashed;cursor:default"></span>
@@ -4280,7 +4509,80 @@ function enterLobby(){
     st.seats.splice(+el.dataset.unai, 1);
     NET.publish(st);
   }));
+  $('lobbySeats').querySelectorAll('[data-mine]').forEach(el => el.addEventListener('click', () => sheetPin(+el.dataset.mine)));
+  if (host && $('lobbyLimit')) $('lobbyLimit').value = String(s.limitH || 0);
   renderPresence();
+}
+/* a seat moves to another phone with its PIN (shown to its owner in the lobby and under Seats) */
+function sheetPin(i){
+  const s = NET.state; if (!s || !s.seats[i]) return;
+  const seat = s.seats[i];
+  openSheet('Take Over ' + seat.name + '’s Seat', b => {
+    b.innerHTML = `<p style="font:600 13px/1.6 Archivo,sans-serif;color:var(--ink-soft);text-align:center">Type the four-digit seat PIN this player was shown when they sat down. The seat moves to this phone.</p>
+      <input id="pinIn" type="text" inputmode="numeric" maxlength="4" autocomplete="off" aria-label="Seat PIN" value="">
+      <button class="btn" id="pinGo" style="width:100%">Take the Seat</button>`;
+    const inp = b.querySelector('#pinIn'); inp.className = ''; inp.id = 'joinCode';
+    const go = async () => {
+      if (inp.value.replace(/\D/g, '') !== String(seat.pin)){ toast('That is not this seat’s PIN'); return; }
+      closeSheet();
+      await takeSeat(i);
+    };
+    b.querySelector('#pinGo').addEventListener('click', go);
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); go(); } });
+    setTimeout(() => inp.focus(), 250);
+  });
+}
+async function takeSeat(i){
+  const st = netSnapshot({});
+  st.seats = st.seats.map((x, k) => k === i ? Object.assign({}, x, {token: NET.token, away: false}) : (x.token === NET.token ? Object.assign({}, x, {token: null}) : x));
+  if (st.game && st.game.players[i]) st.game.players[i].ai = false;
+  st.note = st.seats[i].name + ' is playing from another phone now';
+  return NET.publish(st);
+}
+/* the host hands an absent player's seat to the computer (and back); the player
+   can always reclaim it from their own phone */
+async function handSeat(i, toAI){
+  const s = NET.state; if (!s || !s.game) return false;
+  const st = netSnapshot({});
+  if (V.g && V.online) st.game = V.g.st;          // the live game on this device
+  const p = st.game.players[i], seat = st.seats[i];
+  if (!p || !seat) return false;
+  p.ai = toAI;
+  if (toAI && !(p.persona >= 0)) p.persona = Math.floor(Math.random() * PERSONAS.length);
+  seat.away = toAI; seat.ai = false;
+  st.note = toAI ? p.name + '’s seat goes to the computer for now' : p.name + ' is back at the table';
+  if (toAI && seat.token) st.wake = [{tok: seat.token, title: 'Your seat went to the computer', body: 'Take it back any time from the table'}];
+  if ($('sheet').classList.contains('on')) closeSheet();
+  const ok = await NET.publish(st);
+  if (ok) toast(st.note, 2600);
+  return ok;
+}
+function sheetSeats(){
+  const s = NET.state; if (!s) return;
+  openSheet('Seats & Takeovers', b => {
+    const host = s.host === NET.token, me = NET.mySeat(), playing = !!s.game && s.phase !== 'over';
+    b.innerHTML = s.seats.map((x, i) => {
+      const status = x.away ? 'away — the computer plays this seat' : x.ai ? 'computer investor' : x.token === s.host ? 'host' : 'investor';
+      let act = '';
+      if (playing && host && !x.ai && !x.away && i !== me) act = `<button class="btn small alt" data-hand="${i}">Hand to the computer</button>`;
+      else if (playing && host && x.away && i !== me) act = `<button class="btn small gold" data-back="${i}">Give the seat back</button>`;
+      if (i === me && x.away) act = `<button class="btn small gold" data-back="${i}">Take my seat back</button>`;
+      if (me < 0 && !x.ai && x.token && x.token !== NET.token && x.pin) act = `<button class="btn small alt" data-mine="${i}">This is my seat</button>`;
+      return `<div class="trow"><span class="seat-dot" style="background:${x.color};cursor:default"></span>
+        <span class="ti"><b>${esc(x.name)}${i === me ? ' · you' : ''}</b><small>${status}${i === me && x.pin ? ` · your seat PIN <span class="pin">${esc(x.pin)}</span>` : ''}</small></span>${act}</div>`;
+    }).join('') + `<p style="font:600 11.5px/1.5 Archivo,sans-serif;color:var(--ink-faint);margin-top:10px">A seat handed to the computer keeps its name and holdings; its player takes it back from their own phone at any time. Your seat PIN moves your seat to another phone.</p>`;
+    b.querySelectorAll('[data-hand]').forEach(el => el.addEventListener('click', () => handSeat(+el.dataset.hand, true)));
+    b.querySelectorAll('[data-back]').forEach(el => el.addEventListener('click', () => handSeat(+el.dataset.back, false)));
+    b.querySelectorAll('[data-mine]').forEach(el => el.addEventListener('click', () => { closeSheet(); sheetPin(+el.dataset.mine); }));
+  });
+}
+function waitStr(ms){
+  const m = Math.floor(ms / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return m + ' min';
+  const h = Math.floor(m / 60);
+  if (h < 48) return h + ' h' + (m % 60 ? ' ' + (m % 60) + ' min' : '');
+  return Math.floor(h / 24) + ' days';
 }
 function lobbyAddAI(){
   const st = netSnapshot({});
@@ -4308,7 +4610,8 @@ function lobbyStart(){
     players: s.seats.map(x => ({name: x.name, ai: x.ai, color: x.color, persona: x.persona})),
   });
   g.addLog(openingLine(house, target, rounds, teams), 'open');
-  const st = netSnapshot({phase:'playing', target, game: g.st, note: 'The market is open — first throw: ' + g.st.players[0].name});
+  const st = netSnapshot({phase:'playing', target, game: g.st, limitH: +($('lobbyLimit') ? $('lobbyLimit').value : 0) || 0,
+    note: 'The market is open — first throw: ' + g.st.players[0].name});
   NET.publish(st);
 }
 /* whose device runs the computers: the next human seat in turn order */
@@ -4344,7 +4647,8 @@ async function onlinePublishTurn(){
     (g.st.over ? '' : ' — next: ' + g.cur().name);
   const s = NET.state || {};
   const st = netSnapshot({phase: g.st.over ? 'over' : 'playing', game: g.st, note,
-    chat: (s.chat || []).concat(V.chatQueue).slice(-60)});
+    chat: (s.chat || []).concat(V.chatQueue).slice(-60),
+    records: g.st.over ? mergeRecords(s.records || {}, g) : (s.records || {})});
   const ok = await NET.publish(st);
   if (!ok && NET.on()){
     // one quiet retry; after that the next tap tries again
@@ -4359,12 +4663,10 @@ function wire(){
   $('btnRules0').addEventListener('click', sheetRules);
   $('btnResume').addEventListener('click', () => {
     Snd.unlock();
-    try{
-      const sv = JSON.parse(read(SAVE_KEY));
-      if (!sv || !sv.st || sv.st.v !== 9) throw new Error('old save');
-      resumeGame(sv);
-    }
-    catch(e){ store(SAVE_KEY, null); toast('Saved game was from an older edition — starting fresh'); renderSeats(); showScr('setup'); }
+    const a = liveSaves();
+    if (a.length === 1) resumeGame(a[0]);
+    else if (a.length > 1) sheetSaves();
+    else { toast('No saved game to resume — starting fresh'); renderSeats(); restoreOpts(); showScr('setup'); }
   });
   $('btnAddSeat').addEventListener('click', () => {
     if (V.seats.length < 8){
@@ -4394,6 +4696,7 @@ function wire(){
   }));
   $('btnSettings0').addEventListener('click', sheetSettings);
   $('btnRecords0').addEventListener('click', sheetRecords);
+  $('btnSaves0').addEventListener('click', sheetSaves);
   $('btnCoach0').addEventListener('click', () => {
     Snd.unlock(); Coach.reset(); V.set.coach = true; saveSettings();
     renderSeats(); restoreOpts(); showScr('setup');
@@ -4405,6 +4708,17 @@ function wire(){
   $('mNotify').addEventListener('click', async () => { $('menuPop').classList.remove('on'); if (Push.wanted()) await Push.disable(); else await Push.enable(); });
   $('coachOk').addEventListener('click', () => Coach.hide());
   $('btnShare').addEventListener('click', shareRecap);
+  $('btnReplay').addEventListener('click', () => Replay.start());
+  $('rpPlay').addEventListener('click', () => Replay.toggle());
+  $('rpDone').addEventListener('click', () => Replay.end());
+  $('rpRange').addEventListener('input', () => { Replay.stop(); Replay.show(+$('rpRange').value); });
+  $('mSeats').addEventListener('click', () => { $('menuPop').classList.remove('on'); sheetSeats(); });
+  $('hint').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.id === 'btnReclaim') handSeat(myOnlineSeat(), false);
+    else if (b.dataset.hand !== undefined) handSeat(+b.dataset.hand, true);
+  });
+  setInterval(() => { if (V.online && V.g && !V.busy && !Replay.on && $('game').classList.contains('on')) renderHint(); }, 60000);
   $('btnRoll').addEventListener('click', humanRoll);
   $('btnEndTurn').addEventListener('click', humanEndTurn);
   $('btnLedger').addEventListener('click', () => { if (V.g && !V.busy) sheetLedger(); });
@@ -4426,6 +4740,7 @@ function wire(){
     $('mTable').style.display = (V.online && NET.state && NET.state.host === NET.token) ? '' : 'none';
     $('mAuto').style.display = (V.g && !V.online && !V.g.st.over && !V.autoplay) ? '' : 'none';
     $('mNotify').style.display = (V.online && NET.mode === 'relay' && Push.supported()) ? '' : 'none';
+    $('mSeats').style.display = (V.online && NET.state && NET.state.seats && NET.state.seats.length) ? '' : 'none';
     $('mNotify').textContent = Push.wanted() ? 'Turn Notifications Off' : 'Notify Me on My Turn';
     $('menuPop').classList.toggle('on');
   });
@@ -4456,12 +4771,13 @@ function wire(){
         <div style="display:flex;gap:10px"><button class="btn alt" id="qNo" style="flex:1">Keep Playing</button><button class="btn red" id="qYes" style="flex:1">Abandon</button></div>`;
       b.querySelector('#qNo').addEventListener('click', closeSheet);
       b.querySelector('#qYes').addEventListener('click', () => {
-        store(SAVE_KEY, null); V.g = null; V.gen++; V.busy = false; confettiRun = false;
+        deleteSave(V.saveId); V.saveId = null; V.g = null; V.gen++; V.busy = false; confettiRun = false;
         closeSheet(); $('win').classList.remove('on'); showScr('splash'); refreshResume();
       });
     });
   });
   $('btnAgain').addEventListener('click', () => {
+    if (Replay.on) Replay.end();
     confettiRun = false; $('win').classList.remove('on');
     if (V.online){
       // host resets the table to its lobby, seats kept
@@ -4471,6 +4787,7 @@ function wire(){
     startGame();
   });
   $('btnToSplash').addEventListener('click', () => {
+    if (Replay.on) Replay.end();
     confettiRun = false; $('win').classList.remove('on'); V.g = null; V.gen++; V.busy = false;
     if (V.online && NET.mode === 'relay') NET.leaveTable();
     V.online = false; $('liveBadge').style.display = 'none';
@@ -4512,13 +4829,14 @@ function restoreOpts(){
 }
 
 function refreshResume(){
-  let has = false;
-  try{ const s = JSON.parse(read(SAVE_KEY)); has = !!(s && s.st && s.st.v === 9 && !s.st.over); }catch(e){}
-  $('btnResume').style.display = has ? '' : 'none';
+  const n = liveSaves().length;
+  $('btnResume').style.display = n ? '' : 'none';
+  $('btnResume').textContent = n > 1 ? 'Resume Game (' + n + ' saved)' : 'Resume Game';
+  $('btnSaves0').style.display = n ? '' : 'none';
 }
 
 function boot(){
-  loadSettings(); applySettings(); Coach.load();
+  loadSettings(); applySettings(); Coach.load(); migrateSave();
   wire();
   $('btnInstall').addEventListener('click', async () => {
     if (!installEvt) return;
